@@ -15,7 +15,7 @@ import * as XLSX from 'xlsx';
 import { useAuth } from '@/hooks/useAuth';
 import type { Database } from '@/integrations/supabase/types';
 import type React from 'react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu';
 
 interface IncidentsModuleProps {
   projectId: string;
@@ -101,7 +101,7 @@ export default function IncidentsModule({ projectId }: IncidentsModuleProps) {
 
 const [incidents, setIncidents] = useState<any[]>([]);
 const [loading, setLoading] = useState(false);
-const [statusFilter, setStatusFilter] = useState<IncidentStatus | null>(null);
+const [statusFilters, setStatusFilters] = useState<IncidentStatus[]>([]);
 const [categoryFilter, setCategoryFilter] = useState<IncidentCategory | null>(null);
 
 const [search, setSearch] = useState('');
@@ -136,7 +136,7 @@ const [commentText, setCommentText] = useState('');
 const filtered = useMemo(() => {
   const term = search.trim().toLowerCase();
   return incidents.filter((i) =>
-    (statusFilter ? i.status === statusFilter : true) &&
+    (statusFilters.length ? statusFilters.includes(i.status) : true) &&
     (categoryFilter ? i.category === categoryFilter : true) &&
     (term
       ? [i.name, i.description, i.environment, i.device, i.status, i.category, i.additional_comments]
@@ -144,7 +144,7 @@ const filtered = useMemo(() => {
           .some((v: any) => String(v).toLowerCase().includes(term))
       : true)
   );
-}, [incidents, statusFilter, categoryFilter, search]);
+}, [incidents, statusFilters, categoryFilter, search]);
 
 const sorted = useMemo(() => {
   const arr = [...filtered];
@@ -171,7 +171,7 @@ const fetchIncidents = async () => {
       .select('*')
       .eq('project_id', projectId)
       .order('occurred_at', { ascending: true });
-    if (statusFilter) query = query.eq('status', statusFilter);
+    if (statusFilters.length) query = query.in('status', statusFilters as any);
     if (categoryFilter) query = query.eq('category', categoryFilter);
     const { data, error } = await query;
     if (error) throw error;
@@ -183,7 +183,7 @@ const fetchIncidents = async () => {
   }
 };
 
-  useEffect(() => { fetchIncidents(); }, [projectId, statusFilter, categoryFilter]);
+  useEffect(() => { fetchIncidents(); }, [projectId, statusFilters, categoryFilter]);
 
   const resetForm = () => {
     setForm({
@@ -378,24 +378,36 @@ return (
   <div className="space-y-6">
     <Card>
       <CardHeader>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <CardTitle>Gestión de Incidencias</CardTitle>
-            <CardDescription>Listado de incidencias del proyecto</CardDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle>Gestión de Incidencias</CardTitle>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={() => { resetForm(); setCreateOpen(true); }}>
+                <Plus className="h-4 w-4 mr-2" /> Crear tarea
+              </Button>
+              {/* Hidden file input for Importar */}
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) importFromExcel(f); }}
+              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" aria-label="Más acciones">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={downloadTemplate}>Plantilla</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={exportCurrent}>Exportar</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => importInputRef.current?.click()}>Importar</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={() => { resetForm(); setCreateOpen(true); }}>
-              <Plus className="h-4 w-4 mr-2" /> Crear tarea
-            </Button>
-            <Button type="button" variant="outline" className="flex items-center gap-2" onClick={downloadTemplate}>
-              <Download className="h-4 w-4" /> Plantilla
-            </Button>
-            <Button type="button" variant="outline" className="flex items-center gap-2" onClick={exportCurrent}>
-              <Download className="h-4 w-4" /> Exportar
-            </Button>
-            <ImportButton onFile={(f) => importFromExcel(f)} />
-          </div>
-        </div>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
@@ -405,13 +417,35 @@ return (
           </div>
           <div>
             <Label>Estado</Label>
-            <Select value={statusFilter ?? 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? null : (v as IncidentStatus))}>
-              <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {STATUS_OPTIONS.map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
-              </SelectContent>
-            </Select>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="w-full justify-between">
+                  {statusFilters.length ? `${statusFilters.length} seleccionados` : 'Todos'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="start">
+                <DropdownMenuCheckboxItem
+                  checked={statusFilters.length === 0}
+                  onCheckedChange={() => setStatusFilters([])}
+                >
+                  Todos
+                </DropdownMenuCheckboxItem>
+                {STATUS_OPTIONS.map((s) => (
+                  <DropdownMenuCheckboxItem
+                    key={s.value}
+                    checked={statusFilters.includes(s.value as IncidentStatus)}
+                    onCheckedChange={(checked) => {
+                      setStatusFilters((prev) => {
+                        if (checked) return [...prev, s.value as IncidentStatus];
+                        return prev.filter((v) => v !== (s.value as IncidentStatus));
+                      });
+                    }}
+                  >
+                    {s.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <div>
             <Label>Categoría</Label>
@@ -474,7 +508,7 @@ return (
                   <Button variant="ghost" size="icon" onClick={async () => { setSelected(i); setDetailsOpen(true); await loadComments(i.id); }} aria-label="Ver más">
                     <Eye className="h-4 w-4" />
                   </Button>
-                  <Button variant="outline" size="icon" onClick={() => onDelete(i.id)} aria-label="Borrar" className="text-destructive">
+                  <Button variant="ghost" size="icon" onClick={() => onDelete(i.id)} aria-label="Eliminar" className="text-foreground">
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TableCell>
