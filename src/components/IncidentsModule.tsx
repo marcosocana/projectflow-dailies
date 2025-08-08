@@ -418,18 +418,19 @@ setDetailForm({
     if (!selected) return;
     if (isInitialDetailLoad.current) { isInitialDetailLoad.current = false; return; }
     const handler = setTimeout(async () => {
-const payload: any = {
-  name: detailForm.name,
-  description: detailForm.description,
-  environment: detailForm.env,
-  device: detailForm.dev,
-  occurred_at: new Date(detailForm.occurredAt).toISOString(),
-  status: detailForm.status,
-  category: detailForm.category,
-  additional_comments: detailForm.additionalComments,
-};
+      const payload: any = {
+        name: detailForm.name,
+        description: detailForm.description,
+        environment: detailForm.env,
+        device: detailForm.dev,
+        occurred_at: new Date(detailForm.occurredAt).toISOString(),
+        status: detailForm.status,
+        category: detailForm.category,
+        additional_comments: detailForm.additionalComments,
+      };
       await supabase.from('incidents').update(payload).eq('id', selected.id);
-      setSelected((prev: any) => prev ? { ...prev, ...payload } : prev);
+      setSelected((prev: any) => (prev ? { ...prev, ...payload } : prev));
+      setIncidents((prev) => prev.map((i) => (i.id === selected.id ? { ...i, ...payload } : i)));
     }, 500);
     return () => clearTimeout(handler);
   }, [detailForm, selected]);
