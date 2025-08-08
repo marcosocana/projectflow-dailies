@@ -96,7 +96,7 @@ export default function DailiesModule({
     setIncidents(incs || []);
   };
   const ensureDaily = async (d: Date) => {
-    const isoDate = d.toISOString().slice(0, 10);
+    const isoDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const {
       data,
       error
@@ -231,7 +231,7 @@ export default function DailiesModule({
     try {
       if (!date) return;
       const todayId = await ensureDaily(date);
-      const todayStr = date.toISOString().slice(0, 10);
+      const todayStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       // Find the most recent previous day with tasks
       const {
         data: prevDays
