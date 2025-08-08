@@ -13,8 +13,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { es } from 'date-fns/locale';
-import type { TablesInsert, Database } from '@/integrations/supabase/types';
+import type { TablesInsert } from '@/integrations/supabase/types';
 import { Trash2 } from 'lucide-react';
+
+type TaskStatus = 'pending' | 'in_progress' | 'resolved';
 
 interface DailiesModuleProps {
   projectId: string;
@@ -42,7 +44,7 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
   const [incidents, setIncidents] = useState<any[]>([]);
 
   const [personForm, setPersonForm] = useState({ name: '', role: '', color: '#3B82F6' });
-  const [taskForm, setTaskForm] = useState({ title: '', description: '', personId: '', incidentId: '', status: 'pending' });
+  const [taskForm, setTaskForm] = useState<{ title: string; description: string; personId: string; incidentId: string; status: TaskStatus }>({ title: '', description: '', personId: '', incidentId: '', status: 'pending' });
 
   const loadBaseData = async () => {
     const [{ data: ppl }, { data: incs }] = await Promise.all([
@@ -102,14 +104,14 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!dailyId) return;
-    const payload: any = {
+    const payload: TablesInsert<'tasks'> = {
       title: taskForm.title,
       description: taskForm.description || null,
       project_id: projectId,
       daily_id: dailyId,
       person_id: taskForm.personId || null,
       incident_id: taskForm.incidentId || null,
-      status: taskForm.status || 'pending',
+      status: taskForm.status ?? 'pending',
     };
     const { error } = await supabase.from('tasks').insert(payload);
     if (error) return toast({ title: 'Error', description: 'No se pudo crear la tarea', variant: 'destructive' });
@@ -143,14 +145,14 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
         .eq('daily_id', yesterdayId);
       if (error) throw error;
 
-      const toInsert = (yTasks || []).map((t) => ({
+      const toInsert: TablesInsert<'tasks'>[] = (yTasks || []).map((t) => ({
         title: t.title,
         description: t.description,
         project_id: projectId,
         daily_id: todayId,
         person_id: t.person_id,
         incident_id: t.incident_id,
-        status: 'pending',
+        status: 'pending' as const,
       }));
 
       if (toInsert.length > 0) {
@@ -279,7 +281,7 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
             </div>
             <div>
               <Label>Estado</Label>
-              <Select value={taskForm.status} onValueChange={(v) => setTaskForm((f) => ({ ...f, status: v as any }))}>
+              <Select value={taskForm.status} onValueChange={(v) => setTaskForm((f) => ({ ...f, status: v as TaskStatus }))}>
                 <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pending">Pendiente</SelectItem>
