@@ -14,7 +14,245 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      dailies: {
+        Row: {
+          content: Json | null
+          created_at: string
+          date: string
+          id: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          content?: Json | null
+          created_at?: string
+          date: string
+          id?: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          content?: Json | null
+          created_at?: string
+          date?: string
+          id?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dailies_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      incidents: {
+        Row: {
+          additional_comments: string | null
+          category: Database["public"]["Enums"]["incident_category"]
+          created_at: string
+          created_by: string | null
+          description: string | null
+          device: string | null
+          environment: string | null
+          evidence: string | null
+          id: string
+          incident_number: number
+          name: string
+          occurred_at: string
+          project_id: string
+          status: Database["public"]["Enums"]["incident_status"]
+          updated_at: string
+        }
+        Insert: {
+          additional_comments?: string | null
+          category?: Database["public"]["Enums"]["incident_category"]
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          device?: string | null
+          environment?: string | null
+          evidence?: string | null
+          id?: string
+          incident_number?: number
+          name: string
+          occurred_at?: string
+          project_id: string
+          status?: Database["public"]["Enums"]["incident_status"]
+          updated_at?: string
+        }
+        Update: {
+          additional_comments?: string | null
+          category?: Database["public"]["Enums"]["incident_category"]
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          device?: string | null
+          environment?: string | null
+          evidence?: string | null
+          id?: string
+          incident_number?: number
+          name?: string
+          occurred_at?: string
+          project_id?: string
+          status?: Database["public"]["Enums"]["incident_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "incidents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      people: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          project_id: string
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          project_id: string
+          role: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          project_id?: string
+          role?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "people_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dailies_password: string
+          id: string
+          logo_url: string | null
+          name: string
+          project_number: number
+          project_password: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dailies_password: string
+          id?: string
+          logo_url?: string | null
+          name: string
+          project_number?: number
+          project_password: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dailies_password?: string
+          id?: string
+          logo_url?: string | null
+          name?: string
+          project_number?: number
+          project_password?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tasks: {
+        Row: {
+          created_at: string
+          daily_id: string | null
+          description: string | null
+          id: string
+          incident_id: string | null
+          is_completed: boolean
+          person_id: string | null
+          project_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          daily_id?: string | null
+          description?: string | null
+          id?: string
+          incident_id?: string | null
+          is_completed?: boolean
+          person_id?: string | null
+          project_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          daily_id?: string | null
+          description?: string | null
+          id?: string
+          incident_id?: string | null
+          is_completed?: boolean
+          person_id?: string | null
+          project_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_daily_id_fkey"
+            columns: ["daily_id"]
+            isOneToOne: false
+            referencedRelation: "dailies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "incidents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +261,13 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      incident_category: "incident" | "improvement"
+      incident_status:
+        | "pending"
+        | "in_progress"
+        | "closed"
+        | "in_qa"
+        | "resolved"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +394,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      incident_category: ["incident", "improvement"],
+      incident_status: [
+        "pending",
+        "in_progress",
+        "closed",
+        "in_qa",
+        "resolved",
+      ],
+    },
   },
 } as const
