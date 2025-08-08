@@ -76,66 +76,88 @@ const Dashboard = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        <div className="max-w-2xl mx-auto space-y-6">
-          {/* Project Access */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Acceder a Proyecto</CardTitle>
-              <CardDescription>
-                Introduce la contraseña del proyecto para acceder
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleProjectAccess} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="project-password">Contraseña del Proyecto</Label>
-                  <Input
-                    id="project-password"
-                    type="password"
-                    value={projectPassword}
-                    onChange={(e) => setProjectPassword(e.target.value)}
-                    placeholder="Introduce la contraseña del proyecto"
-                    required
-                  />
-                </div>
-                <Button type="submit" disabled={isAccessing} className="w-full">
-                  {isAccessing ? 'Accediendo...' : 'Acceder al Proyecto'}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+        {!currentProject ? (
+          <div className="max-w-2xl mx-auto space-y-6">
+            {/* Project Access */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Acceder a Proyecto</CardTitle>
+                <CardDescription>
+                  Introduce la contraseña del proyecto para acceder
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleProjectAccess} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="project-password">Contraseña del Proyecto</Label>
+                    <Input
+                      id="project-password"
+                      type="password"
+                      value={projectPassword}
+                      onChange={(e) => setProjectPassword(e.target.value)}
+                      placeholder="Introduce la contraseña del proyecto"
+                      required
+                    />
+                  </div>
+                  <Button type="submit" disabled={isAccessing} className="w-full">
+                    {isAccessing ? 'Accediendo...' : 'Acceder al Proyecto'}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
 
-          {/* Create New Project */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Plus className="h-5 w-5" />
-                Crear Nuevo Proyecto
-              </CardTitle>
-              <CardDescription>
-                Crea un nuevo proyecto para compartir con tu equipo
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                onClick={() => setShowCreateProject(!showCreateProject)}
-                variant="outline"
-                className="w-full"
-              >
-                {showCreateProject ? 'Ocultar' : 'Crear Proyecto'}
-              </Button>
-              
-              {showCreateProject && (
-                <div className="mt-4">
-                  <CreateProjectForm 
-                    onProjectCreated={handleProjectCreated}
-                    onClose={() => setShowCreateProject(false)}
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+            {/* Create New Project */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  Crear Nuevo Proyecto
+                </CardTitle>
+                <CardDescription>
+                  Crea un nuevo proyecto para compartir con tu equipo
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  onClick={() => setShowCreateProject(!showCreateProject)}
+                  variant="outline"
+                  className="w-full"
+                >
+                  {showCreateProject ? 'Ocultar' : 'Crear Proyecto'}
+                </Button>
+                {showCreateProject && (
+                  <div className="mt-4">
+                    <CreateProjectForm 
+                      onProjectCreated={handleProjectCreated}
+                      onClose={() => setShowCreateProject(false)}
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Módulos del proyecto</CardTitle>
+                <CardDescription>Gestiona incidencias y dailies</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <section className="space-y-6">
+                  <div>
+                    <h2 className="text-xl font-semibold mb-4">Incidencias</h2>
+                    <IncidentsModule projectId={currentProject.id} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold mb-4">Dailies</h2>
+                    <DailiesModule projectId={currentProject.id} />
+                  </div>
+                </section>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </main>
     </div>
   );
