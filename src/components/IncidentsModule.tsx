@@ -129,6 +129,7 @@ const [form, setForm] = useState({
   additionalComments: '',
 });
 const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+const [detailEvidenceFile, setDetailEvidenceFile] = useState<File | null>(null);
 // Editable detail modal form
 const [detailForm, setDetailForm] = useState({
   name: '',
@@ -139,6 +140,7 @@ const [detailForm, setDetailForm] = useState({
   additionalComments: '',
   env: '' as string,
   dev: '' as string,
+  evidenceLink: '',
 });
 const isInitialDetailLoad = useRef(true);
 
@@ -210,11 +212,12 @@ const fetchIncidents = async () => {
     setEditingId(null);
   };
 
-  const handleUploadEvidence = async (incidentId: string) => {
-    if (!evidenceFile) return null;
-    const ext = evidenceFile.name.split('.').pop();
+  const handleUploadEvidence = async (incidentId: string, file?: File) => {
+    const fileToUpload = file || evidenceFile || detailEvidenceFile;
+    if (!fileToUpload) return null;
+    const ext = fileToUpload.name.split('.').pop();
     const filePath = `incidents/${incidentId}/${crypto.randomUUID()}.${ext}`;
-    const { error } = await supabase.storage.from('project-files').upload(filePath, evidenceFile);
+    const { error } = await supabase.storage.from('project-files').upload(filePath, fileToUpload);
     if (error) throw error;
     return filePath;
   };
@@ -410,6 +413,7 @@ setDetailForm({
   additionalComments: selected.additional_comments || '',
   env: pick(selected.environment || '', ENV_OPTIONS),
   dev: pick(selected.device || '', DEVICE_OPTIONS),
+  evidenceLink: selected.evidence && !selected.evidence.startsWith('incidents/') ? selected.evidence : '',
 });
   }, [selected]);
 
@@ -426,14 +430,26 @@ setDetailForm({
         occurred_at: new Date(detailForm.occurredAt).toISOString(),
         status: detailForm.status,
         category: detailForm.category,
-        additional_comments: detailForm.additionalComments,
+        evidence: detailForm.evidenceLink || selected.evidence,
       };
+      
+      // Handle file upload if there's a new file
+      if (detailEvidenceFile) {
+        try {
+          const path = await handleUploadEvidence(selected.id);
+          payload.evidence = path;
+          setDetailEvidenceFile(null); // Clear after upload
+        } catch (e) {
+          console.error('Error uploading file:', e);
+        }
+      }
+      
       await supabase.from('incidents').update(payload).eq('id', selected.id);
       setSelected((prev: any) => (prev ? { ...prev, ...payload } : prev));
       setIncidents((prev) => prev.map((i) => (i.id === selected.id ? { ...i, ...payload } : i)));
     }, 500);
     return () => clearTimeout(handler);
-  }, [detailForm, selected]);
+  }, [detailForm, selected, detailEvidenceFile]);
 
   return (
   <div className="space-y-6">
@@ -734,17 +750,37 @@ setDetailForm({
               </div>
             </div>
 
-            <div className="pt-2">
-              <Label className="text-xs text-muted-foreground">Evidencia</Label>
-              {selected.evidence ? (
-                selected.evidence.startsWith('incidents/') ? (
-                  <a className="text-primary underline" href="#" onClick={async (e) => { e.preventDefault(); const url = await getUrl(selected.evidence); if (url) window.open(url, '_blank'); }}>Ver archivo</a>
-                ) : (
-                  <a className="text-primary underline" href={selected.evidence} target="_blank" rel="noreferrer">Ver enlace</a>
-                )
-              ) : (
-                <span className="text-muted-foreground">—</span>
-              )}
+            <div className="pt-2 space-y-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Evidencia (archivo)</Label>
+                <Input 
+                  type="file" 
+                  accept="image/*,application/pdf" 
+                  onChange={(e) => setDetailEvidenceFile(e.target.files?.[0] ?? null)} 
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Evidencia (link)</Label>
+                <Input 
+                  placeholder="https://..." 
+                  value={detailForm.evidenceLink} 
+                  onChange={(e) => setDetailForm((f) => ({ ...f, evidenceLink: e.target.value }))} 
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Evidencia actual</Label>
+                <div>
+                  {selected.evidence ? (
+                    selected.evidence.startsWith('incidents/') ? (
+                      <a className="text-primary underline" href="#" onClick={async (e) => { e.preventDefault(); const url = await getUrl(selected.evidence); if (url) window.open(url, '_blank'); }}>Ver archivo</a>
+                    ) : (
+                      <a className="text-primary underline" href={selected.evidence} target="_blank" rel="noreferrer">Ver enlace</a>
+                    )
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="pt-4 border-t">
