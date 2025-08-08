@@ -14,7 +14,7 @@ import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, MoreVertical 
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/hooks/useAuth';
 import type { Database } from '@/integrations/supabase/types';
-import React, { useRef } from 'react';
+import type React from 'react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface IncidentsModuleProps {
