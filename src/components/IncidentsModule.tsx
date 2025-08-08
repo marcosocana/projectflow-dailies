@@ -705,53 +705,103 @@ setDevSelected(parseMulti(incident.device || '', DEVICE_OPTIONS));
 
     {/* Ver más */}
     <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Detalle de incidencia</DialogTitle>
+          <DialogDescription>Ver información completa y comentarios</DialogDescription>
         </DialogHeader>
         {selected && (
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs text-muted-foreground">Nombre</Label>
-              <div className="font-medium">{selected.name}</div>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Estado</Label>
-              <StatusBadge status={selected.status} />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Categoría</Label>
-              <CategoryIcon category={selected.category} />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Fecha</Label>
-              <div>{new Date(selected.occurred_at).toLocaleString()}</div>
-            </div>
-            {selected.environment && (
-              <div>
-                <Label className="text-xs text-muted-foreground">Entorno</Label>
-                <div>{selected.environment}</div>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="md:col-span-2">
+                <Label>Nombre</Label>
+                <Input value={detailForm.name} onChange={(e) => setDetailForm((f) => ({ ...f, name: e.target.value }))} />
               </div>
-            )}
-            {selected.device && (
               <div>
-                <Label className="text-xs text-muted-foreground">Dispositivo</Label>
-                <div>{selected.device}</div>
+                <Label>Estado</Label>
+                <Select value={detailForm.status} onValueChange={(v) => setDetailForm((f) => ({ ...f, status: v as IncidentStatus }))}>
+                  <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-            {selected.description && (
               <div>
-                <Label className="text-xs text-muted-foreground">Descripción</Label>
-                <div className="whitespace-pre-wrap">{selected.description}</div>
+                <Label>Categoría</Label>
+                <Select value={detailForm.category} onValueChange={(v) => setDetailForm((f) => ({ ...f, category: v as IncidentCategory }))}>
+                  <SelectTrigger><SelectValue placeholder="Categoría" /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORY_OPTIONS.map((c) => (<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-            {selected.additional_comments && (
               <div>
-                <Label className="text-xs text-muted-foreground">Comentarios adicionales</Label>
-                <div className="whitespace-pre-wrap">{selected.additional_comments}</div>
+                <Label>Fecha</Label>
+                <Input type="datetime-local" value={new Date(detailForm.occurredAt).toISOString().slice(0,16)} onChange={(e) => setDetailForm((f) => ({ ...f, occurredAt: new Date(e.target.value).toISOString() }))} />
               </div>
-            )}
-            <div>
+              <div>
+                <Label>Entorno</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="justify-between">
+                      {detailForm.envMulti.length ? detailForm.envMulti.join(', ') : 'Seleccionar'}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56" align="start">
+                    {ENV_OPTIONS.map((opt) => (
+                      <DropdownMenuCheckboxItem
+                        key={opt}
+                        checked={detailForm.envMulti.includes(opt)}
+                        onCheckedChange={(checked) => {
+                          setDetailForm((f) => ({
+                            ...f,
+                            envMulti: checked ? [...f.envMulti, opt] : f.envMulti.filter((v) => v !== opt),
+                          }));
+                        }}
+                      >
+                        {opt}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <div>
+                <Label>Dispositivo</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="justify-between">
+                      {detailForm.devMulti.length ? detailForm.devMulti.join(', ') : 'Seleccionar'}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56" align="start">
+                    {DEVICE_OPTIONS.map((opt) => (
+                      <DropdownMenuCheckboxItem
+                        key={opt}
+                        checked={detailForm.devMulti.includes(opt)}
+                        onCheckedChange={(checked) => {
+                          setDetailForm((f) => ({
+                            ...f,
+                            devMulti: checked ? [...f.devMulti, opt] : f.devMulti.filter((v) => v !== opt),
+                          }));
+                        }}
+                      >
+                        {opt}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <div className="md:col-span-2">
+                <Label>Descripción</Label>
+                <Textarea value={detailForm.description} onChange={(e) => setDetailForm((f) => ({ ...f, description: e.target.value }))} />
+              </div>
+              <div className="md:col-span-2">
+                <Label>Comentarios adicionales</Label>
+                <Textarea value={detailForm.additionalComments} onChange={(e) => setDetailForm((f) => ({ ...f, additionalComments: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="pt-2">
               <Label className="text-xs text-muted-foreground">Evidencia</Label>
               {selected.evidence ? (
                 selected.evidence.startsWith('incidents/') ? (
@@ -763,6 +813,7 @@ setDevSelected(parseMulti(incident.device || '', DEVICE_OPTIONS));
                 <span className="text-muted-foreground">—</span>
               )}
             </div>
+
             <div className="pt-4 border-t">
               <Label className="text-xs text-muted-foreground">Comentarios</Label>
               <div className="space-y-3 max-h-48 overflow-auto mt-2 pr-1">
@@ -782,10 +833,10 @@ setDevSelected(parseMulti(incident.device || '', DEVICE_OPTIONS));
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                 />
-                <Button type="submit">Enviar</Button>
+                <Button type="submit" disabled={!user}>Enviar</Button>
               </form>
             </div>
-            </div>
+          </div>
           )}
         </DialogContent>
       </Dialog>
