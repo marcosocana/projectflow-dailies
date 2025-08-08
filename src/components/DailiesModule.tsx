@@ -193,7 +193,7 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
             <Table className="mt-6">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Hecha</TableHead>
+                  <TableHead>Estado</TableHead>
                   <TableHead>Tarea</TableHead>
                   <TableHead>Persona</TableHead>
                   <TableHead>Incidencia</TableHead>
@@ -207,7 +207,7 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
                   return (
                     <TableRow key={t.id}>
                       <TableCell>
-                        <Checkbox checked={t.is_completed} onCheckedChange={() => toggleTask(t)} />
+                        {t.status === 'in_progress' ? 'En curso' : t.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
                       </TableCell>
                       <TableCell>
                         <div className="font-medium">{t.title}</div>
