@@ -190,10 +190,10 @@ export default function DailiesModule({ projectId }: DailiesModuleProps) {
               </div>
               <div>
                 <Label>Persona</Label>
-                <Select value={taskForm.personId} onValueChange={(v) => setTaskForm((f) => ({ ...f, personId: v }))}>
+                <Select value={taskForm.personId || 'none'} onValueChange={(v) => setTaskForm((f) => ({ ...f, personId: v === 'none' ? '' : v }))}>
                   <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Sin asignar</SelectItem>
+                    <SelectItem value="none">Sin asignar</SelectItem>
                     {people.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}
                   </SelectContent>
                 </Select>
@@ -204,10 +204,10 @@ export default function DailiesModule({ projectId }: DailiesModuleProps) {
               </div>
               <div>
                 <Label>Vincular a incidencia</Label>
-                <Select value={taskForm.incidentId} onValueChange={(v) => setTaskForm((f) => ({ ...f, incidentId: v }))}>
+                <Select value={taskForm.incidentId || 'none'} onValueChange={(v) => setTaskForm((f) => ({ ...f, incidentId: v === 'none' ? '' : v }))}>
                   <SelectTrigger><SelectValue placeholder="Ninguna" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Ninguna</SelectItem>
+                    <SelectItem value="none">Ninguna</SelectItem>
                     {incidents.map((i) => (<SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>))}
                   </SelectContent>
                 </Select>

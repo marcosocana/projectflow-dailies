@@ -341,20 +341,20 @@ export default function IncidentsModule({ projectId }: IncidentsModuleProps) {
           <div className="flex flex-col md:flex-row gap-3 mb-4">
             <div className="flex-1">
               <Label>Estado</Label>
-              <Select value={statusFilter ?? ''} onValueChange={(v) => setStatusFilter(v ? (v as IncidentStatus) : null)}>
+              <Select value={statusFilter ?? 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? null : (v as IncidentStatus))}>
                 <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
                   {STATUS_OPTIONS.map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
             <div className="flex-1">
               <Label>Categoría</Label>
-              <Select value={categoryFilter ?? ''} onValueChange={(v) => setCategoryFilter(v ? (v as IncidentCategory) : null)}>
+              <Select value={categoryFilter ?? 'all'} onValueChange={(v) => setCategoryFilter(v === 'all' ? null : (v as IncidentCategory))}>
                 <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas</SelectItem>
+                  <SelectItem value="all">Todas</SelectItem>
                   {CATEGORY_OPTIONS.map((c) => (<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
                 </SelectContent>
               </Select>
