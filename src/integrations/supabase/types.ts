@@ -227,6 +227,7 @@ export type Database = {
           is_completed: boolean
           person_id: string | null
           project_id: string
+          status: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at: string
         }
@@ -239,6 +240,7 @@ export type Database = {
           is_completed?: boolean
           person_id?: string | null
           project_id: string
+          status?: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at?: string
         }
@@ -251,6 +253,7 @@ export type Database = {
           is_completed?: boolean
           person_id?: string | null
           project_id?: string
+          status?: Database["public"]["Enums"]["task_status"]
           title?: string
           updated_at?: string
         }
@@ -300,6 +303,7 @@ export type Database = {
         | "closed"
         | "in_qa"
         | "resolved"
+      task_status: "pending" | "in_progress" | "resolved"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -435,6 +439,7 @@ export const Constants = {
         "in_qa",
         "resolved",
       ],
+      task_status: ["pending", "in_progress", "resolved"],
     },
   },
 } as const
