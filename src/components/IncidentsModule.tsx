@@ -109,6 +109,11 @@ const [search, setSearch] = useState('');
 const [sortKey, setSortKey] = useState<'name' | 'status' | 'category' | 'occurred_at'>('occurred_at');
 const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
+const toggleSort = (key: 'name' | 'status' | 'category' | 'occurred_at') => {
+  setSortDir((d) => (sortKey === key ? (d === 'asc' ? 'desc' : 'asc') : 'asc'));
+  setSortKey(key);
+};
+
 const [editingId, setEditingId] = useState<string | null>(null);
 const [form, setForm] = useState({
   name: '',
