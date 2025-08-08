@@ -150,11 +150,12 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
       <div className="flex items-center justify-end">
         <Button variant="outline" onClick={() => setTeamOpen(true)}>Gestionar equipo</Button>
       </div>
-          <CardHeader>
-            <CardTitle>Tareas del día</CardTitle>
-            <CardDescription>Crear y gestionar tareas</CardDescription>
-          </CardHeader>
-          <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle>Tareas del día</CardTitle>
+          <CardDescription>Crear y gestionar tareas</CardDescription>
+        </CardHeader>
+        <CardContent>
             <form onSubmit={addTask} className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <Label>Título</Label>
@@ -235,9 +236,7 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
             </Table>
           </CardContent>
         </Card>
-      </div>
-      </div>
-
+      {/* Modal de equipo */}
       <Dialog open={teamOpen} onOpenChange={setTeamOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -278,3 +277,5 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
         </DialogContent>
       </Dialog>
     </div>
+  );
+}

@@ -651,6 +651,10 @@ return (
                 <Button type="submit">Enviar</Button>
               </form>
             </div>
-  </div>
-);
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 }
