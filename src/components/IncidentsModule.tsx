@@ -37,8 +37,8 @@ const CATEGORY_OPTIONS = [
   { value: 'improvement', label: 'Mejora' },
 ];
 
-const ENV_OPTIONS = ['DEV','PRE','PRO'] as const;
-const DEVICE_OPTIONS = ['Web','APP'] as const;
+const ENV_OPTIONS = ['DEV','PRE','PRO','Otro'] as const;
+const DEVICE_OPTIONS = ['Web','APP','Otro'] as const;
 
 /* UI helpers */
 function StatusBadge({ status }: { status: IncidentStatus }) {
@@ -130,11 +130,20 @@ const [form, setForm] = useState({
 });
 const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
 const [envSelected, setEnvSelected] = useState<string[]>([]);
-const [envUseOther, setEnvUseOther] = useState(false);
-const [envOther, setEnvOther] = useState('');
 const [devSelected, setDevSelected] = useState<string[]>([]);
-const [devUseOther, setDevUseOther] = useState(false);
-const [devOther, setDevOther] = useState('');
+
+// Editable detail modal form
+const [detailForm, setDetailForm] = useState({
+  name: '',
+  description: '',
+  occurredAt: new Date().toISOString(),
+  status: 'pending' as IncidentStatus,
+  category: 'incident' as IncidentCategory,
+  additionalComments: '',
+  envMulti: [] as string[],
+  devMulti: [] as string[],
+});
+const isInitialDetailLoad = useRef(true);
 
 const [createOpen, setCreateOpen] = useState(false);
 const [detailsOpen, setDetailsOpen] = useState(false);
@@ -202,8 +211,8 @@ const fetchIncidents = async () => {
     });
     setEvidenceFile(null);
     setEditingId(null);
-    setEnvSelected([]); setEnvUseOther(false); setEnvOther('');
-    setDevSelected([]); setDevUseOther(false); setDevOther('');
+setEnvSelected([]);
+setDevSelected([]);
   };
 
   const handleUploadEvidence = async (incidentId: string) => {
@@ -220,9 +229,9 @@ const fetchIncidents = async () => {
     try {
       let id = editingId ?? crypto.randomUUID();
 
-      // Compose environment/device values from multi-selects
-      const environmentValue = envUseOther ? envOther.trim() : envSelected.join(',');
-      const deviceValue = devUseOther ? devOther.trim() : devSelected.join(',');
+// Compose environment/device values from multi-selects
+const environmentValue = envSelected.join(',');
+const deviceValue = devSelected.join(',');
 
       // If creating, insert with provided id to bind evidence path
       if (!editingId) {
@@ -295,19 +304,11 @@ const fetchIncidents = async () => {
     });
     setEvidenceFile(null);
 
-    // Initialize multi-select states from stored text
-    const initMulti = (raw: string, allowed: readonly string[]) => {
-      const val = (raw || '').trim();
-      if (!val) return { selected: [] as string[], useOther: false, other: '' };
-      const parts = val.split(',').map((s) => s.trim()).filter(Boolean);
-      const allAllowed = parts.length > 0 && parts.every((p) => allowed.includes(p));
-      if (allAllowed) return { selected: parts, useOther: false, other: '' };
-      return { selected: [], useOther: true, other: val };
-    };
-    const env = initMulti(incident.environment || '', ENV_OPTIONS);
-    setEnvSelected(env.selected); setEnvUseOther(env.useOther); setEnvOther(env.other);
-    const dev = initMulti(incident.device || '', DEVICE_OPTIONS);
-    setDevSelected(dev.selected); setDevUseOther(dev.useOther); setDevOther(dev.other);
+// Initialize multi-select states from stored text
+const parseMulti = (raw: string, allowed: readonly string[]) =>
+  (raw || '').split(',').map((s) => s.trim()).filter((v) => allowed.includes(v));
+setEnvSelected(parseMulti(incident.environment || '', ENV_OPTIONS));
+setDevSelected(parseMulti(incident.device || '', DEVICE_OPTIONS));
   };
 
   const onDelete = async (id: string) => {
@@ -404,7 +405,46 @@ const fetchIncidents = async () => {
     }
   };
 
-return (
+  // Initialize detail form when an incident is selected
+  useEffect(() => {
+    if (!selected) return;
+    isInitialDetailLoad.current = true;
+    const parse = (raw: string, allowed: readonly string[]) =>
+      (raw || '').split(',').map((s) => s.trim()).filter((v) => allowed.includes(v));
+    setDetailForm({
+      name: selected.name || '',
+      description: selected.description || '',
+      occurredAt: selected.occurred_at ? new Date(selected.occurred_at).toISOString() : new Date().toISOString(),
+      status: (selected.status || 'pending') as IncidentStatus,
+      category: (selected.category || 'incident') as IncidentCategory,
+      additionalComments: selected.additional_comments || '',
+      envMulti: parse(selected.environment || '', ENV_OPTIONS),
+      devMulti: parse(selected.device || '', DEVICE_OPTIONS),
+    });
+  }, [selected]);
+
+  // Autosave detail form (500ms debounce)
+  useEffect(() => {
+    if (!selected) return;
+    if (isInitialDetailLoad.current) { isInitialDetailLoad.current = false; return; }
+    const handler = setTimeout(async () => {
+      const payload: any = {
+        name: detailForm.name,
+        description: detailForm.description,
+        environment: detailForm.envMulti.join(','),
+        device: detailForm.devMulti.join(','),
+        occurred_at: new Date(detailForm.occurredAt).toISOString(),
+        status: detailForm.status,
+        category: detailForm.category,
+        additional_comments: detailForm.additionalComments,
+      };
+      await supabase.from('incidents').update(payload).eq('id', selected.id);
+      setSelected((prev: any) => prev ? { ...prev, ...payload } : prev);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [detailForm, selected]);
+
+  return (
   <div className="space-y-6">
     <Card>
       <CardHeader>
@@ -571,72 +611,46 @@ return (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="justify-between">
-                  {envUseOther ? (envOther || 'Otro...') : (envSelected.length ? envSelected.join(', ') : 'Seleccionar')}
+                  {envSelected.length ? envSelected.join(', ') : 'Seleccionar'}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="start">
                 {ENV_OPTIONS.map((opt) => (
                   <DropdownMenuCheckboxItem
                     key={opt}
-                    checked={!envUseOther && envSelected.includes(opt)}
+                    checked={envSelected.includes(opt)}
                     onCheckedChange={(checked) => {
-                      setEnvUseOther(false);
                       setEnvSelected((prev) => checked ? [...prev, opt] : prev.filter((v) => v !== opt));
                     }}
                   >
                     {opt}
                   </DropdownMenuCheckboxItem>
                 ))}
-                <DropdownMenuCheckboxItem
-                  checked={envUseOther}
-                  onCheckedChange={(checked) => {
-                    setEnvUseOther(!!checked);
-                    if (checked) setEnvSelected([]);
-                  }}
-                >
-                  Otro
-                </DropdownMenuCheckboxItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            {envUseOther && (
-              <Input placeholder="Especifica el entorno" value={envOther} onChange={(e) => setEnvOther(e.target.value)} />
-            )}
           </div>
           <div className="space-y-2">
             <Label>Dispositivo</Label>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="justify-between">
-                  {devUseOther ? (devOther || 'Otro...') : (devSelected.length ? devSelected.join(', ') : 'Seleccionar')}
+                  {devSelected.length ? devSelected.join(', ') : 'Seleccionar'}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="start">
                 {DEVICE_OPTIONS.map((opt) => (
                   <DropdownMenuCheckboxItem
                     key={opt}
-                    checked={!devUseOther && devSelected.includes(opt)}
+                    checked={devSelected.includes(opt)}
                     onCheckedChange={(checked) => {
-                      setDevUseOther(false);
                       setDevSelected((prev) => checked ? [...prev, opt] : prev.filter((v) => v !== opt));
                     }}
                   >
                     {opt}
                   </DropdownMenuCheckboxItem>
                 ))}
-                <DropdownMenuCheckboxItem
-                  checked={devUseOther}
-                  onCheckedChange={(checked) => {
-                    setDevUseOther(!!checked);
-                    if (checked) setDevSelected([]);
-                  }}
-                >
-                  Otro
-                </DropdownMenuCheckboxItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            {devUseOther && (
-              <Input placeholder="Especifica el dispositivo" value={devOther} onChange={(e) => setDevOther(e.target.value)} />
-            )}
           </div>
           <div className="space-y-2">
             <Label>Fecha (ISO)</Label>
@@ -690,19 +704,7 @@ return (
     <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle>Detalle de incidencia</DialogTitle>
-            {selected && (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Editar"
-                onClick={() => { onEdit(selected); setCreateOpen(true); setDetailsOpen(false); }}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
+          <DialogTitle>Detalle de incidencia</DialogTitle>
         </DialogHeader>
         {selected && (
           <div className="space-y-3">
