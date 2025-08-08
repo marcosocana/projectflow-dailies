@@ -12,7 +12,7 @@ import CreateProjectForm from '@/components/CreateProjectForm';
 import IncidentsModule from '@/components/IncidentsModule';
 import DailiesModule from '@/components/DailiesModule';
 import { LogOut } from 'lucide-react';
-
+import { useNavigate } from 'react-router-dom';
 const Dashboard = () => {
   const [projectPassword, setProjectPassword] = useState('');
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
@@ -23,7 +23,7 @@ const Dashboard = () => {
   const { user, signOut } = useAuth();
   const { toast } = useToast();
   const { accessProject, accessDailies, currentProject, isAccessing } = useProjectAccess();
-
+  const navigate = useNavigate();
   const handleSignOut = async () => {
     await signOut();
     toast({
@@ -35,6 +35,11 @@ const Dashboard = () => {
   const handleProjectAccess = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      if (projectPassword === 'AdminProyectos') {
+        setProjectPassword('');
+        navigate('/admin');
+        return;
+      }
       await accessProject(projectPassword);
       // Reset form on success
       setProjectPassword('');
@@ -42,7 +47,6 @@ const Dashboard = () => {
       // Error is handled in the hook
     }
   };
-
 const handleProjectCreated = (projectId: string, projectNumber: number) => {
   setCreateProjectOpen(false);
   toast({
@@ -72,9 +76,8 @@ const handleProjectCreated = (projectId: string, projectNumber: number) => {
             <span className="text-sm text-muted-foreground">
               {user?.email}
             </span>
-            <Button variant="outline" size="sm" onClick={handleSignOut}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Cerrar Sesión
+            <Button variant="outline" size="sm" onClick={handleSignOut} aria-label="Cerrar sesión">
+              <LogOut className="h-4 w-4" />
             </Button>
           </div>
         </div>

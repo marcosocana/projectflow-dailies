@@ -14,8 +14,8 @@ import { useProjectAccess } from '@/hooks/useProjectAccess';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { es } from 'date-fns/locale';
 import type { TablesInsert } from '@/integrations/supabase/types';
-import { Trash2 } from 'lucide-react';
-
+import { Trash2, Eye, Pencil } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 type TaskStatus = 'pending' | 'in_progress' | 'resolved';
 
 interface DailiesModuleProps {
@@ -30,7 +30,13 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
   const [pass, setPass] = useState('');
   const [teamOpen, setTeamOpen] = useState(false);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
-
+  const { user } = useAuth();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<any | null>(null);
+  const [taskComments, setTaskComments] = useState<any[]>([]);
+  const [commentText, setCommentText] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState<{ title: string; description: string; personId: string; incidentId: string; status: TaskStatus }>({ title: '', description: '', personId: '', incidentId: '', status: 'pending' });
   // Sync when parent unlocks via modal
   useEffect(() => {
     if (initiallyUnlocked) setUnlocked(true);
@@ -166,6 +172,68 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
     }
   };
 
+  const loadTaskComments = async (taskId: string) => {
+    const { data } = await supabase
+      .from('task_comments')
+      .select('*')
+      .eq('task_id', taskId)
+      .order('created_at', { ascending: true });
+    setTaskComments(data || []);
+  };
+
+  const openDetails = async (task: any) => {
+    setSelectedTask(task);
+    setEditForm({
+      title: task.title || '',
+      description: task.description || '',
+      personId: task.person_id || '',
+      incidentId: task.incident_id || '',
+      status: (task.status as TaskStatus) || 'pending',
+    });
+    setEditing(false);
+    setDetailsOpen(true);
+    await loadTaskComments(task.id);
+  };
+
+  const addTaskComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTask || !user || !commentText.trim()) return;
+    const { error } = await supabase
+      .from('task_comments')
+      .insert({ task_id: selectedTask.id, user_id: user.id, user_email: user.email, content: commentText.trim() });
+    if (!error) {
+      setCommentText('');
+      loadTaskComments(selectedTask.id);
+    } else {
+      toast({ title: 'Error', description: 'No se pudo añadir el comentario', variant: 'destructive' });
+    }
+  };
+
+  const saveTaskEdits = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTask) return;
+    const { error } = await supabase
+      .from('tasks')
+      .update({
+        title: editForm.title,
+        description: editForm.description || null,
+        person_id: editForm.personId || null,
+        incident_id: editForm.incidentId || null,
+        status: editForm.status,
+      })
+      .eq('id', selectedTask.id);
+    if (error) {
+      toast({ title: 'Error', description: 'No se pudo actualizar la tarea', variant: 'destructive' });
+      return;
+    }
+    // refresh list and close editing
+    await loadTasks(date);
+    setEditing(false);
+    // also update selectedTask to show fresh data
+    const fresh = (await supabase.from('tasks').select('*').eq('id', selectedTask.id).single()).data;
+    if (fresh) setSelectedTask(fresh);
+  };
+
   if (!unlocked) {
     return (
       <Card>
@@ -241,7 +309,8 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
                     <TableCell>
                       {inc ? inc.name : <span className="text-muted-foreground">—</span>}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="flex gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openDetails(t)} aria-label="Ver"><Eye className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" onClick={() => deleteTask(t.id)} aria-label="Eliminar"><Trash2 className="h-4 w-4" /></Button>
                     </TableCell>
                   </TableRow>
@@ -311,6 +380,120 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
         </DialogContent>
       </Dialog>
 
+      {/* Modal Detalle de Tarea */}
+      <Dialog open={detailsOpen} onOpenChange={(o) => { setDetailsOpen(o); if (!o) { setSelectedTask(null); setEditing(false); } }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Detalle de tarea</DialogTitle>
+            <DialogDescription>Ver información completa y comentarios</DialogDescription>
+          </DialogHeader>
+
+          {selectedTask && (
+            <div className="space-y-4">
+              {!editing ? (
+                <div className="space-y-2">
+                  <div>
+                    <Label>Título</Label>
+                    <div className="font-medium">{selectedTask.title}</div>
+                  </div>
+                  <div>
+                    <Label>Descripción</Label>
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedTask.description || '—'}</div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <Label>Estado</Label>
+                      <div>{selectedTask.status === 'in_progress' ? 'En curso' : selectedTask.status === 'resolved' ? 'Resuelta' : 'Pendiente'}</div>
+                    </div>
+                    <div>
+                      <Label>Persona</Label>
+                      <div>{people.find((p) => p.id === selectedTask.person_id)?.name || '—'}</div>
+                    </div>
+                    <div>
+                      <Label>Incidencia</Label>
+                      <div>{incidents.find((i) => i.id === selectedTask.incident_id)?.name || '—'}</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <Button variant="outline" onClick={() => setEditing(true)}>
+                      <Pencil className="h-4 w-4 mr-2" /> Editar
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={saveTaskEdits} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="md:col-span-2">
+                    <Label>Título</Label>
+                    <Input value={editForm.title} onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))} required />
+                  </div>
+                  <div>
+                    <Label>Persona</Label>
+                    <Select value={editForm.personId || 'none'} onValueChange={(v) => setEditForm((f) => ({ ...f, personId: v === 'none' ? '' : v }))}>
+                      <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sin asignar</SelectItem>
+                        {people.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Estado</Label>
+                    <Select value={editForm.status} onValueChange={(v) => setEditForm((f) => ({ ...f, status: v as TaskStatus }))}>
+                      <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pendiente</SelectItem>
+                        <SelectItem value="in_progress">En curso</SelectItem>
+                        <SelectItem value="resolved">Resuelta</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Descripción</Label>
+                    <Textarea value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Vincular a incidencia</Label>
+                    <Select value={editForm.incidentId || 'none'} onValueChange={(v) => setEditForm((f) => ({ ...f, incidentId: v === 'none' ? '' : v }))}>
+                      <SelectTrigger><SelectValue placeholder="Ninguna" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Ninguna</SelectItem>
+                        {incidents.map((i) => (<SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="md:col-span-2 flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
+                    <Button type="submit">Guardar cambios</Button>
+                  </div>
+                </form>
+              )}
+
+              <div className="pt-2">
+                <h4 className="font-medium mb-2">Comentarios</h4>
+                <div className="space-y-2 max-h-60 overflow-auto pr-1">
+                  {taskComments.map((c) => (
+                    <div key={c.id} className="rounded border p-2">
+                      <div className="text-xs text-muted-foreground mb-1">{c.user_email || 'Anónimo'} • {new Date(c.created_at).toLocaleString()}</div>
+                      <div className="text-sm whitespace-pre-wrap">{c.content}</div>
+                    </div>
+                  ))}
+                  {taskComments.length === 0 && (
+                    <div className="text-sm text-muted-foreground">Sin comentarios aún</div>
+                  )}
+                </div>
+                <form onSubmit={addTaskComment} className="mt-3 space-y-2">
+                  <Label>Nuevo comentario</Label>
+                  <Textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Escribe un comentario" />
+                  <div className="text-right">
+                    <Button type="submit" disabled={!user}>Comentar</Button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Modal de equipo */}
       <Dialog open={teamOpen} onOpenChange={setTeamOpen}>
         <DialogContent className="max-w-lg">
@@ -345,8 +528,8 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
                       <div className="text-xs text-muted-foreground">{p.role}</div>
                     </div>
                   </div>
-                  <Button variant="destructive" size="sm" onClick={() => deletePerson(p.id)} aria-label="Eliminar">
-                    <Trash2 className="h-4 w-4 mr-1" /> Eliminar
+                  <Button variant="destructive" size="icon" onClick={() => deletePerson(p.id)} aria-label="Eliminar">
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               ))}
