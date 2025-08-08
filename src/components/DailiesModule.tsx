@@ -11,8 +11,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { es } from 'date-fns/locale';
+import type { TablesInsert, Database } from '@/integrations/supabase/types';
 import { Trash2 } from 'lucide-react';
 
 interface DailiesModuleProps {
@@ -26,6 +27,7 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
   const [unlocked, setUnlocked] = useState<boolean>(initiallyUnlocked);
   const [pass, setPass] = useState('');
   const [teamOpen, setTeamOpen] = useState(false);
+  const [createTaskOpen, setCreateTaskOpen] = useState(false);
 
   // Sync when parent unlocks via modal
   useEffect(() => {
@@ -40,7 +42,7 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
   const [incidents, setIncidents] = useState<any[]>([]);
 
   const [personForm, setPersonForm] = useState({ name: '', role: '', color: '#3B82F6' });
-  const [taskForm, setTaskForm] = useState({ title: '', description: '', personId: '', incidentId: '' });
+  const [taskForm, setTaskForm] = useState({ title: '', description: '', personId: '', incidentId: '', status: 'pending' });
 
   const loadBaseData = async () => {
     const [{ data: ppl }, { data: incs }] = await Promise.all([
@@ -91,6 +93,12 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
     loadBaseData();
   };
 
+  const deletePerson = async (id: string) => {
+    const { error } = await supabase.from('people').delete().eq('id', id);
+    if (error) return toast({ title: 'Error', description: 'No se pudo eliminar la persona', variant: 'destructive' });
+    loadBaseData();
+  };
+
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!dailyId) return;
@@ -101,10 +109,12 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
       daily_id: dailyId,
       person_id: taskForm.personId || null,
       incident_id: taskForm.incidentId || null,
+      status: taskForm.status || 'pending',
     };
     const { error } = await supabase.from('tasks').insert(payload);
     if (error) return toast({ title: 'Error', description: 'No se pudo crear la tarea', variant: 'destructive' });
-    setTaskForm({ title: '', description: '', personId: '', incidentId: '' });
+    setTaskForm({ title: '', description: '', personId: '', incidentId: '', status: 'pending' });
+    setCreateTaskOpen(false);
     loadTasks(date);
   };
 
@@ -116,6 +126,42 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
   const deleteTask = async (id: string) => {
     const { error } = await supabase.from('tasks').delete().eq('id', id);
     if (!error) setTasks((t) => t.filter((x) => x.id !== id));
+  };
+
+  const cloneYesterdayTasks = async () => {
+    try {
+      if (!date) return;
+      const todayId = await ensureDaily(date);
+      const y = new Date(date);
+      y.setDate(y.getDate() - 1);
+      const yesterdayId = await ensureDaily(y);
+
+      const { data: yTasks, error } = await supabase
+        .from('tasks')
+        .select('title, description, person_id, incident_id, project_id')
+        .eq('project_id', projectId)
+        .eq('daily_id', yesterdayId);
+      if (error) throw error;
+
+      const toInsert = (yTasks || []).map((t) => ({
+        title: t.title,
+        description: t.description,
+        project_id: projectId,
+        daily_id: todayId,
+        person_id: t.person_id,
+        incident_id: t.incident_id,
+        status: 'pending',
+      }));
+
+      if (toInsert.length > 0) {
+        const { error: insErr } = await supabase.from('tasks').insert(toInsert);
+        if (insErr) throw insErr;
+      }
+      await loadTasks(date);
+      toast({ title: 'Tareas cargadas', description: 'Se copiaron las tareas del día anterior como Pendiente.' });
+    } catch (e) {
+      toast({ title: 'Error', description: 'No se pudieron cargar las tareas del día anterior', variant: 'destructive' });
+    }
   };
 
   if (!unlocked) {
@@ -136,7 +182,7 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
   }
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-6 md:grid-cols-5">
       <Card>
         <CardHeader>
           <CardTitle>Calendario</CardTitle>
@@ -147,100 +193,128 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
         </CardContent>
       </Card>
 
-      <div className="flex items-center justify-end">
-        <Button variant="outline" onClick={() => setTeamOpen(true)}>Gestionar equipo</Button>
-      </div>
-      <Card>
+      <Card className="md:col-span-3">
         <CardHeader>
-          <CardTitle>Tareas del día</CardTitle>
-          <CardDescription>Crear y gestionar tareas</CardDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle>Tareas del día</CardTitle>
+              <CardDescription>Crear y gestionar tareas</CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => setCreateTaskOpen(true)}>Crear tarea</Button>
+              <Button variant="outline" onClick={cloneYesterdayTasks}>Cargar tareas día anterior</Button>
+              <Button variant="outline" onClick={() => setTeamOpen(true)}>Gestionar equipo</Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-            <form onSubmit={addTask} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <Label>Título</Label>
-                <Input value={taskForm.title} onChange={(e) => setTaskForm((f) => ({ ...f, title: e.target.value }))} required />
-              </div>
-              <div>
-                <Label>Persona</Label>
-                <Select value={taskForm.personId || 'none'} onValueChange={(v) => setTaskForm((f) => ({ ...f, personId: v === 'none' ? '' : v }))}>
-                  <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin asignar</SelectItem>
-                    {people.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="md:col-span-2">
-                <Label>Descripción</Label>
-                <Textarea value={taskForm.description} onChange={(e) => setTaskForm((f) => ({ ...f, description: e.target.value }))} />
-              </div>
-              <div>
-                <Label>Vincular a incidencia</Label>
-                <Select value={taskForm.incidentId || 'none'} onValueChange={(v) => setTaskForm((f) => ({ ...f, incidentId: v === 'none' ? '' : v }))}>
-                  <SelectTrigger><SelectValue placeholder="Ninguna" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Ninguna</SelectItem>
-                    {incidents.map((i) => (<SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="md:col-span-2">
-                <Button type="submit">Añadir tarea</Button>
-              </div>
-            </form>
-
-            <Table className="mt-6">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Tarea</TableHead>
-                  <TableHead>Persona</TableHead>
-                  <TableHead>Incidencia</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tasks.map((t) => {
-                  const person = people.find((p) => p.id === t.person_id);
-                  const inc = incidents.find((i) => i.id === t.incident_id);
-                  return (
-                    <TableRow key={t.id}>
-                      <TableCell>
-                        {t.status === 'in_progress' ? 'En curso' : t.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{t.title}</div>
-                        {t.description && <div className="text-xs text-muted-foreground">{t.description}</div>}
-                      </TableCell>
-                      <TableCell>
-                        {person ? (
-                          <div className="flex items-center gap-2"><span className="h-3 w-3 rounded" style={{ backgroundColor: person.color }} />{person.name}</div>
-                        ) : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell>
-                        {inc ? inc.name : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="icon" onClick={() => deleteTask(t.id)} aria-label="Eliminar"><Trash2 className="h-4 w-4" /></Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {tasks.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">Sin tareas para este día</TableCell>
+          <Table className="mt-0">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Estado</TableHead>
+                <TableHead>Tarea</TableHead>
+                <TableHead>Persona</TableHead>
+                <TableHead>Incidencia</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tasks.map((t) => {
+                const person = people.find((p) => p.id === t.person_id);
+                const inc = incidents.find((i) => i.id === t.incident_id);
+                return (
+                  <TableRow key={t.id}>
+                    <TableCell>
+                      {t.status === 'in_progress' ? 'En curso' : t.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium">{t.title}</div>
+                      {t.description && <div className="text-xs text-muted-foreground">{t.description}</div>}
+                    </TableCell>
+                    <TableCell>
+                      {person ? (
+                        <div className="flex items-center gap-2"><span className="h-3 w-3 rounded" style={{ backgroundColor: person.color }} />{person.name}</div>
+                      ) : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell>
+                      {inc ? inc.name : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="icon" onClick={() => deleteTask(t.id)} aria-label="Eliminar"><Trash2 className="h-4 w-4" /></Button>
+                    </TableCell>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                );
+              })}
+              {tasks.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">Sin tareas para este día</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Modal Crear Tarea */}
+      <Dialog open={createTaskOpen} onOpenChange={setCreateTaskOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Crear tarea</DialogTitle>
+            <DialogDescription>Completa la información de la nueva tarea</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={addTask} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="md:col-span-2">
+              <Label>Título</Label>
+              <Input value={taskForm.title} onChange={(e) => setTaskForm((f) => ({ ...f, title: e.target.value }))} required />
+            </div>
+            <div>
+              <Label>Persona</Label>
+              <Select value={taskForm.personId || 'none'} onValueChange={(v) => setTaskForm((f) => ({ ...f, personId: v === 'none' ? '' : v }))}>
+                <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin asignar</SelectItem>
+                  {people.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Estado</Label>
+              <Select value={taskForm.status} onValueChange={(v) => setTaskForm((f) => ({ ...f, status: v as any }))}>
+                <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pendiente</SelectItem>
+                  <SelectItem value="in_progress">En curso</SelectItem>
+                  <SelectItem value="resolved">Resuelta</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="md:col-span-2">
+              <Label>Descripción</Label>
+              <Textarea value={taskForm.description} onChange={(e) => setTaskForm((f) => ({ ...f, description: e.target.value }))} />
+            </div>
+            <div className="md:col-span-2">
+              <Label>Vincular a incidencia</Label>
+              <Select value={taskForm.incidentId || 'none'} onValueChange={(v) => setTaskForm((f) => ({ ...f, incidentId: v === 'none' ? '' : v }))}>
+                <SelectTrigger><SelectValue placeholder="Ninguna" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Ninguna</SelectItem>
+                  {incidents.map((i) => (<SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="md:col-span-2">
+              <Button type="submit" disabled={!dailyId}>Crear</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal de equipo */}
       <Dialog open={teamOpen} onOpenChange={setTeamOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Gestionar equipo</DialogTitle>
+            <DialogDescription>Añade o elimina miembros del equipo</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <form onSubmit={addPerson} className="space-y-3">
@@ -269,6 +343,9 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
                       <div className="text-xs text-muted-foreground">{p.role}</div>
                     </div>
                   </div>
+                  <Button variant="destructive" size="sm" onClick={() => deletePerson(p.id)} aria-label="Eliminar">
+                    <Trash2 className="h-4 w-4 mr-1" /> Eliminar
+                  </Button>
                 </div>
               ))}
               {people.length === 0 && <div className="text-sm text-muted-foreground">Sin personas aún</div>}
