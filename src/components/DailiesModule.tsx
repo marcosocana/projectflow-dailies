@@ -184,8 +184,8 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-5">
-      <Card>
+    <div className="grid gap-6 md:grid-cols-3">
+      <Card className="md:col-span-1">
         <CardHeader>
           <CardTitle>Calendario</CardTitle>
           <CardDescription>Selecciona un día para gestionar</CardDescription>
@@ -195,7 +195,7 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
         </CardContent>
       </Card>
 
-      <Card className="md:col-span-3">
+      <Card className="md:col-span-2">
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -203,9 +203,9 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
               <CardDescription>Crear y gestionar tareas</CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => setCreateTaskOpen(true)}>Crear tarea</Button>
-              <Button variant="outline" onClick={cloneYesterdayTasks}>Cargar tareas día anterior</Button>
-              <Button variant="outline" onClick={() => setTeamOpen(true)}>Gestionar equipo</Button>
+              <Button onClick={() => setCreateTaskOpen(true)} aria-label="Crear tarea" title="Crear tarea">+</Button>
+              <Button variant="outline" onClick={cloneYesterdayTasks}>Persistir tareas</Button>
+              <Button variant="outline" onClick={() => setTeamOpen(true)}>Equipo</Button>
             </div>
           </div>
         </CardHeader>
