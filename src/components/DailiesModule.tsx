@@ -116,10 +116,10 @@ export default function DailiesModule({
   const loadTasks = async (d: Date) => {
     const id = await ensureDaily(d);
     setDailyId(id);
-    const { data, error } = await supabase
-      .from('daily_tasks')
-      .select('tasks(*)')
-      .eq('daily_id', id);
+    const {
+      data,
+      error
+    } = await supabase.from('daily_tasks').select('tasks(*)').eq('daily_id', id);
     if (!error) {
       const list = (data || []).map((r: any) => r.tasks).filter(Boolean);
       list.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -184,14 +184,22 @@ export default function DailiesModule({
       incident_id: taskForm.incidentId || null,
       status: taskForm.status ?? 'pending'
     };
-    const { data: created, error } = await supabase.from('tasks').insert(payload).select().single();
+    const {
+      data: created,
+      error
+    } = await supabase.from('tasks').insert(payload).select().single();
     if (error || !created) return toast({
       title: 'Error',
       description: 'No se pudo crear la tarea',
       variant: 'destructive'
     });
     // Map task to current daily
-    await supabase.from('daily_tasks').upsert({ daily_id: dailyId, task_id: created.id } as any, { onConflict: 'daily_id,task_id' } as any);
+    await supabase.from('daily_tasks').upsert({
+      daily_id: dailyId,
+      task_id: created.id
+    } as any, {
+      onConflict: 'daily_id,task_id'
+    } as any);
     setTaskForm({
       title: '',
       description: '',
@@ -225,45 +233,49 @@ export default function DailiesModule({
       const todayId = await ensureDaily(date);
       const todayStr = date.toISOString().slice(0, 10);
       // Find the most recent previous day with tasks
-      const { data: prevDays } = await supabase
-        .from('dailies')
-        .select('id, date')
-        .eq('project_id', projectId)
-        .lt('date', todayStr)
-        .order('date', { ascending: false });
-
+      const {
+        data: prevDays
+      } = await supabase.from('dailies').select('id, date').eq('project_id', projectId).lt('date', todayStr).order('date', {
+        ascending: false
+      });
       let sourceDailyId: string | null = null;
       if (prevDays && prevDays.length) {
         for (const d of prevDays) {
-          const { data: links } = await supabase
-            .from('daily_tasks')
-            .select('task_id')
-            .eq('daily_id', d.id);
+          const {
+            data: links
+          } = await supabase.from('daily_tasks').select('task_id').eq('daily_id', d.id);
           if (links && links.length) {
             sourceDailyId = d.id as string;
             break;
           }
         }
       }
-
       if (!sourceDailyId) {
-        toast({ title: 'Sin tareas previas', description: 'No se encontraron tareas en días anteriores' });
+        toast({
+          title: 'Sin tareas previas',
+          description: 'No se encontraron tareas en días anteriores'
+        });
         return;
       }
 
       // Get task ids from source and map them to today
-      const { data: toLink } = await supabase
-        .from('daily_tasks')
-        .select('task_id')
-        .eq('daily_id', sourceDailyId);
-
-      const rows = (toLink || []).map((r: any) => ({ daily_id: todayId, task_id: r.task_id }));
+      const {
+        data: toLink
+      } = await supabase.from('daily_tasks').select('task_id').eq('daily_id', sourceDailyId);
+      const rows = (toLink || []).map((r: any) => ({
+        daily_id: todayId,
+        task_id: r.task_id
+      }));
       if (rows.length) {
-        await supabase.from('daily_tasks').upsert(rows as any, { onConflict: 'daily_id,task_id' } as any);
+        await supabase.from('daily_tasks').upsert(rows as any, {
+          onConflict: 'daily_id,task_id'
+        } as any);
       }
-
       await loadTasks(date);
-      toast({ title: 'Tareas persistidas', description: 'Se cargaron las tareas del último día con tareas.' });
+      toast({
+        title: 'Tareas persistidas',
+        description: 'Se cargaron las tareas del último día con tareas.'
+      });
     } catch (e) {
       toast({
         title: 'Error',
@@ -315,25 +327,33 @@ export default function DailiesModule({
       });
     }
   };
-// Autosave task edits (500ms debounce)
-useEffect(() => {
-  if (!selectedTask) return;
-  const handler = setTimeout(async () => {
-    const update = {
-      title: editForm.title,
-      description: editForm.description || null,
-      person_id: editForm.personId || null,
-      incident_id: editForm.incidentId || null,
-      status: editForm.status,
-    };
-    const { error } = await supabase.from('tasks').update(update).eq('id', selectedTask.id);
-    if (!error) {
-      setTasks((t) => t.map((x) => (x.id === selectedTask.id ? { ...x, ...update } : x)));
-      setSelectedTask((prev) => (prev ? { ...prev, ...update } : prev));
-    }
-  }, 500);
-  return () => clearTimeout(handler);
-}, [editForm, selectedTask]);
+  // Autosave task edits (500ms debounce)
+  useEffect(() => {
+    if (!selectedTask) return;
+    const handler = setTimeout(async () => {
+      const update = {
+        title: editForm.title,
+        description: editForm.description || null,
+        person_id: editForm.personId || null,
+        incident_id: editForm.incidentId || null,
+        status: editForm.status
+      };
+      const {
+        error
+      } = await supabase.from('tasks').update(update).eq('id', selectedTask.id);
+      if (!error) {
+        setTasks(t => t.map(x => x.id === selectedTask.id ? {
+          ...x,
+          ...update
+        } : x));
+        setSelectedTask(prev => prev ? {
+          ...prev,
+          ...update
+        } : prev);
+      }
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [editForm, selectedTask]);
   if (!unlocked) {
     return <Card>
         <CardHeader>
@@ -355,7 +375,7 @@ useEffect(() => {
           
         </CardHeader>
         <CardContent>
-          <Calendar mode="single" selected={date} onSelect={d => d && setDate(d)} className="rounded-md border p-3 pointer-events-auto" locale={es} />
+          <Calendar mode="single" selected={date} onSelect={d => d && setDate(d)} locale={es} className="rounded-md border p-3 pointer-events-auto px-[30px]" />
         </CardContent>
       </Card>
 
@@ -367,7 +387,10 @@ useEffect(() => {
               
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="ghost" size="icon" onClick={() => { loadBaseData(); loadTasks(date); }} aria-label="Actualizar" title="Actualizar">
+              <Button variant="ghost" size="icon" onClick={() => {
+              loadBaseData();
+              loadTasks(date);
+            }} aria-label="Actualizar" title="Actualizar">
                 <RefreshCcw className="h-4 w-4" />
               </Button>
               <Button onClick={() => setCreateTaskOpen(true)} aria-label="Crear tarea" title="Crear tarea">+</Button>
@@ -509,16 +532,16 @@ useEffect(() => {
                 <div className="md:col-span-2">
                   <Label>Título</Label>
                   <Input value={editForm.title} onChange={e => setEditForm(f => ({
-              ...f,
-              title: e.target.value
-            }))} required />
+                ...f,
+                title: e.target.value
+              }))} required />
                 </div>
                 <div>
                   <Label>Persona</Label>
                   <Select value={editForm.personId || 'none'} onValueChange={v => setEditForm(f => ({
-              ...f,
-              personId: v === 'none' ? '' : v
-            }))}>
+                ...f,
+                personId: v === 'none' ? '' : v
+              }))}>
                     <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Sin asignar</SelectItem>
@@ -529,9 +552,9 @@ useEffect(() => {
                 <div>
                   <Label>Estado</Label>
                   <Select value={editForm.status} onValueChange={v => setEditForm(f => ({
-              ...f,
-              status: v as TaskStatus
-            }))}>
+                ...f,
+                status: v as TaskStatus
+              }))}>
                     <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="pending">Pendiente</SelectItem>
@@ -543,16 +566,16 @@ useEffect(() => {
                 <div className="md:col-span-2">
                   <Label>Descripción</Label>
                   <Textarea value={editForm.description} onChange={e => setEditForm(f => ({
-              ...f,
-              description: e.target.value
-            }))} />
+                ...f,
+                description: e.target.value
+              }))} />
                 </div>
                 <div className="md:col-span-2">
                   <Label>Vincular a incidencia</Label>
                   <Select value={editForm.incidentId || 'none'} onValueChange={v => setEditForm(f => ({
-              ...f,
-              incidentId: v === 'none' ? '' : v
-            }))}>
+                ...f,
+                incidentId: v === 'none' ? '' : v
+              }))}>
                     <SelectTrigger><SelectValue placeholder="Ninguna" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Ninguna</SelectItem>
