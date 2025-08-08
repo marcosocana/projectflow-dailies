@@ -132,6 +132,7 @@ const [detailsOpen, setDetailsOpen] = useState(false);
 const [selected, setSelected] = useState<any | null>(null);
 const [comments, setComments] = useState<any[]>([]);
 const [commentText, setCommentText] = useState('');
+const importInputRef = useRef<HTMLInputElement>(null);
 
 const filtered = useMemo(() => {
   const term = search.trim().toLowerCase();
