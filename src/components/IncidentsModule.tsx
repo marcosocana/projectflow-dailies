@@ -37,6 +37,9 @@ const CATEGORY_OPTIONS = [
   { value: 'improvement', label: 'Mejora' },
 ];
 
+const ENV_OPTIONS = ['DEV','PRE','PRO'] as const;
+const DEVICE_OPTIONS = ['Web','APP'] as const;
+
 /* UI helpers */
 function StatusBadge({ status }: { status: IncidentStatus }) {
   const label = STATUS_OPTIONS.find((s) => s.value === status)?.label ?? status;
@@ -126,6 +129,12 @@ const [form, setForm] = useState({
   additionalComments: '',
 });
 const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+const [envSelected, setEnvSelected] = useState<string[]>([]);
+const [envUseOther, setEnvUseOther] = useState(false);
+const [envOther, setEnvOther] = useState('');
+const [devSelected, setDevSelected] = useState<string[]>([]);
+const [devUseOther, setDevUseOther] = useState(false);
+const [devOther, setDevOther] = useState('');
 
 const [createOpen, setCreateOpen] = useState(false);
 const [detailsOpen, setDetailsOpen] = useState(false);
@@ -140,7 +149,7 @@ const filtered = useMemo(() => {
     (statusFilters.length ? statusFilters.includes(i.status) : true) &&
     (categoryFilter ? i.category === categoryFilter : true) &&
     (term
-      ? [i.name, i.description, i.environment, i.device, i.status, i.category, i.additional_comments]
+      ? [i.id, `T${String(i.incident_number ?? 0).padStart(5, '0')}`, i.name, i.description, i.environment, i.device, i.status, i.category, i.additional_comments]
           .filter(Boolean)
           .some((v: any) => String(v).toLowerCase().includes(term))
       : true)
@@ -193,6 +202,8 @@ const fetchIncidents = async () => {
     });
     setEvidenceFile(null);
     setEditingId(null);
+    setEnvSelected([]); setEnvUseOther(false); setEnvOther('');
+    setDevSelected([]); setDevUseOther(false); setDevOther('');
   };
 
   const handleUploadEvidence = async (incidentId: string) => {
@@ -209,14 +220,18 @@ const fetchIncidents = async () => {
     try {
       let id = editingId ?? crypto.randomUUID();
 
+      // Compose environment/device values from multi-selects
+      const environmentValue = envUseOther ? envOther.trim() : envSelected.join(',');
+      const deviceValue = devUseOther ? devOther.trim() : devSelected.join(',');
+
       // If creating, insert with provided id to bind evidence path
       if (!editingId) {
         const insertPayload: any = {
           id,
           name: form.name,
           description: form.description,
-          environment: form.environment,
-          device: form.device,
+          environment: environmentValue,
+          device: deviceValue,
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
           category: form.category,
@@ -237,8 +252,8 @@ const fetchIncidents = async () => {
         const updatePayload: any = {
           name: form.name,
           description: form.description,
-          environment: form.environment,
-          device: form.device,
+          environment: environmentValue,
+          device: deviceValue,
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
           category: form.category,
@@ -279,6 +294,20 @@ const fetchIncidents = async () => {
       additionalComments: incident.additional_comments || '',
     });
     setEvidenceFile(null);
+
+    // Initialize multi-select states from stored text
+    const initMulti = (raw: string, allowed: readonly string[]) => {
+      const val = (raw || '').trim();
+      if (!val) return { selected: [] as string[], useOther: false, other: '' };
+      const parts = val.split(',').map((s) => s.trim()).filter(Boolean);
+      const allAllowed = parts.length > 0 && parts.every((p) => allowed.includes(p));
+      if (allAllowed) return { selected: parts, useOther: false, other: '' };
+      return { selected: [], useOther: true, other: val };
+    };
+    const env = initMulti(incident.environment || '', ENV_OPTIONS);
+    setEnvSelected(env.selected); setEnvUseOther(env.useOther); setEnvOther(env.other);
+    const dev = initMulti(incident.device || '', DEVICE_OPTIONS);
+    setDevSelected(dev.selected); setDevUseOther(dev.useOther); setDevOther(dev.other);
   };
 
   const onDelete = async (id: string) => {
@@ -366,7 +395,7 @@ const fetchIncidents = async () => {
     if (!selected || !user || !commentText.trim()) return;
     const { error } = await supabase
       .from('incident_comments')
-      .insert({ incident_id: selected.id, user_id: user.id, content: commentText.trim() });
+      .insert({ incident_id: selected.id, user_id: user.id, user_email: user.email, content: commentText.trim() });
     if (!error) {
       setCommentText('');
       loadComments(selected.id);
@@ -414,7 +443,7 @@ return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
           <div>
             <Label>Buscar</Label>
-            <Input placeholder="Buscar en todos los campos" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input placeholder="Buscar por texto o ID" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <div>
             <Label>Estado</Label>
@@ -539,11 +568,75 @@ return (
           </div>
           <div className="space-y-2">
             <Label>Entorno</Label>
-            <Input value={form.environment} onChange={(e) => setForm((f) => ({ ...f, environment: e.target.value }))} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="justify-between">
+                  {envUseOther ? (envOther || 'Otro...') : (envSelected.length ? envSelected.join(', ') : 'Seleccionar')}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="start">
+                {ENV_OPTIONS.map((opt) => (
+                  <DropdownMenuCheckboxItem
+                    key={opt}
+                    checked={!envUseOther && envSelected.includes(opt)}
+                    onCheckedChange={(checked) => {
+                      setEnvUseOther(false);
+                      setEnvSelected((prev) => checked ? [...prev, opt] : prev.filter((v) => v !== opt));
+                    }}
+                  >
+                    {opt}
+                  </DropdownMenuCheckboxItem>
+                ))}
+                <DropdownMenuCheckboxItem
+                  checked={envUseOther}
+                  onCheckedChange={(checked) => {
+                    setEnvUseOther(!!checked);
+                    if (checked) setEnvSelected([]);
+                  }}
+                >
+                  Otro
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {envUseOther && (
+              <Input placeholder="Especifica el entorno" value={envOther} onChange={(e) => setEnvOther(e.target.value)} />
+            )}
           </div>
           <div className="space-y-2">
             <Label>Dispositivo</Label>
-            <Input value={form.device} onChange={(e) => setForm((f) => ({ ...f, device: e.target.value }))} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="justify-between">
+                  {devUseOther ? (devOther || 'Otro...') : (devSelected.length ? devSelected.join(', ') : 'Seleccionar')}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="start">
+                {DEVICE_OPTIONS.map((opt) => (
+                  <DropdownMenuCheckboxItem
+                    key={opt}
+                    checked={!devUseOther && devSelected.includes(opt)}
+                    onCheckedChange={(checked) => {
+                      setDevUseOther(false);
+                      setDevSelected((prev) => checked ? [...prev, opt] : prev.filter((v) => v !== opt));
+                    }}
+                  >
+                    {opt}
+                  </DropdownMenuCheckboxItem>
+                ))}
+                <DropdownMenuCheckboxItem
+                  checked={devUseOther}
+                  onCheckedChange={(checked) => {
+                    setDevUseOther(!!checked);
+                    if (checked) setDevSelected([]);
+                  }}
+                >
+                  Otro
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {devUseOther && (
+              <Input placeholder="Especifica el dispositivo" value={devOther} onChange={(e) => setDevOther(e.target.value)} />
+            )}
           </div>
           <div className="space-y-2">
             <Label>Fecha (ISO)</Label>
@@ -670,7 +763,7 @@ return (
               <div className="space-y-3 max-h-48 overflow-auto mt-2 pr-1">
                 {comments.map((c) => (
                   <div key={c.id} className="rounded-md border p-2">
-                    <div className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">{(c.user_email || 'Anónimo')} • {new Date(c.created_at).toLocaleString()}</div>
                     <div className="text-sm whitespace-pre-wrap">{c.content}</div>
                   </div>
                 ))}

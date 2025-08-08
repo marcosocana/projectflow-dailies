@@ -49,12 +49,46 @@ export type Database = {
           },
         ]
       }
+      daily_tasks: {
+        Row: {
+          created_at: string
+          daily_id: string
+          task_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_id: string
+          task_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_tasks_daily_id_fkey"
+            columns: ["daily_id"]
+            isOneToOne: false
+            referencedRelation: "dailies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_tasks_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       incident_comments: {
         Row: {
           content: string
           created_at: string
           id: string
           incident_id: string
+          user_email: string | null
           user_id: string
         }
         Insert: {
@@ -62,6 +96,7 @@ export type Database = {
           created_at?: string
           id?: string
           incident_id: string
+          user_email?: string | null
           user_id: string
         }
         Update: {
@@ -69,6 +104,7 @@ export type Database = {
           created_at?: string
           id?: string
           incident_id?: string
+          user_email?: string | null
           user_id?: string
         }
         Relationships: [

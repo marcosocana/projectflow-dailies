@@ -116,13 +116,15 @@ export default function DailiesModule({
   const loadTasks = async (d: Date) => {
     const id = await ensureDaily(d);
     setDailyId(id);
-    const {
-      data,
-      error
-    } = await supabase.from('tasks').select('*').eq('project_id', projectId).eq('daily_id', id).order('created_at', {
-      ascending: true
-    });
-    if (!error) setTasks(data || []);
+    const { data, error } = await supabase
+      .from('daily_tasks')
+      .select('tasks(*)')
+      .eq('daily_id', id);
+    if (!error) {
+      const list = (data || []).map((r: any) => r.tasks).filter(Boolean);
+      list.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      setTasks(list);
+    }
   };
   useEffect(() => {
     if (unlocked) {
@@ -182,14 +184,14 @@ export default function DailiesModule({
       incident_id: taskForm.incidentId || null,
       status: taskForm.status ?? 'pending'
     };
-    const {
-      error
-    } = await supabase.from('tasks').insert(payload);
-    if (error) return toast({
+    const { data: created, error } = await supabase.from('tasks').insert(payload).select().single();
+    if (error || !created) return toast({
       title: 'Error',
       description: 'No se pudo crear la tarea',
       variant: 'destructive'
     });
+    // Map task to current daily
+    await supabase.from('daily_tasks').upsert({ daily_id: dailyId, task_id: created.id } as any, { onConflict: 'daily_id,task_id' } as any);
     setTaskForm({
       title: '',
       description: '',
@@ -221,34 +223,47 @@ export default function DailiesModule({
     try {
       if (!date) return;
       const todayId = await ensureDaily(date);
-      const y = new Date(date);
-      y.setDate(y.getDate() - 1);
-      const yesterdayId = await ensureDaily(y);
-      const {
-        data: yTasks,
-        error
-      } = await supabase.from('tasks').select('title, description, person_id, incident_id, project_id').eq('project_id', projectId).eq('daily_id', yesterdayId);
-      if (error) throw error;
-      const toInsert: TablesInsert<'tasks'>[] = (yTasks || []).map(t => ({
-        title: t.title,
-        description: t.description,
-        project_id: projectId,
-        daily_id: todayId,
-        person_id: t.person_id,
-        incident_id: t.incident_id,
-        status: 'pending' as const
-      }));
-      if (toInsert.length > 0) {
-        const {
-          error: insErr
-        } = await supabase.from('tasks').insert(toInsert);
-        if (insErr) throw insErr;
+      const todayStr = date.toISOString().slice(0, 10);
+      // Find the most recent previous day with tasks
+      const { data: prevDays } = await supabase
+        .from('dailies')
+        .select('id, date')
+        .eq('project_id', projectId)
+        .lt('date', todayStr)
+        .order('date', { ascending: false });
+
+      let sourceDailyId: string | null = null;
+      if (prevDays && prevDays.length) {
+        for (const d of prevDays) {
+          const { data: links } = await supabase
+            .from('daily_tasks')
+            .select('task_id')
+            .eq('daily_id', d.id);
+          if (links && links.length) {
+            sourceDailyId = d.id as string;
+            break;
+          }
+        }
       }
+
+      if (!sourceDailyId) {
+        toast({ title: 'Sin tareas previas', description: 'No se encontraron tareas en días anteriores' });
+        return;
+      }
+
+      // Get task ids from source and map them to today
+      const { data: toLink } = await supabase
+        .from('daily_tasks')
+        .select('task_id')
+        .eq('daily_id', sourceDailyId);
+
+      const rows = (toLink || []).map((r: any) => ({ daily_id: todayId, task_id: r.task_id }));
+      if (rows.length) {
+        await supabase.from('daily_tasks').upsert(rows as any, { onConflict: 'daily_id,task_id' } as any);
+      }
+
       await loadTasks(date);
-      toast({
-        title: 'Tareas cargadas',
-        description: 'Se copiaron las tareas del día anterior como Pendiente.'
-      });
+      toast({ title: 'Tareas persistidas', description: 'Se cargaron las tareas del último día con tareas.' });
     } catch (e) {
       toast({
         title: 'Error',
