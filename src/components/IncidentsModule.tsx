@@ -12,15 +12,19 @@ import { Badge } from '@/components/ui/badge';
 import { Download, FileUp, Pencil, Plus, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/hooks/useAuth';
+import type { Database } from '@/integrations/supabase/types';
 
 interface IncidentsModuleProps {
   projectId: string;
 }
 
+type IncidentStatus = Database['public']['Enums']['incident_status'];
+type IncidentCategory = Database['public']['Enums']['incident_category'];
+
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
   { value: 'in_progress', label: 'En curso' },
-  { value: 'qa', label: 'En pruebas (QA)' },
+  { value: 'in_qa', label: 'En pruebas (QA)' },
   { value: 'resolved', label: 'Resuelto (PRO)' },
   { value: 'closed', label: 'Cerrado' },
 ];
@@ -50,8 +54,8 @@ export default function IncidentsModule({ projectId }: IncidentsModuleProps) {
 
   const [incidents, setIncidents] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<IncidentStatus | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<IncidentCategory | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -337,7 +341,7 @@ export default function IncidentsModule({ projectId }: IncidentsModuleProps) {
           <div className="flex flex-col md:flex-row gap-3 mb-4">
             <div className="flex-1">
               <Label>Estado</Label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={statusFilter ?? ''} onValueChange={(v) => setStatusFilter(v ? (v as IncidentStatus) : null)}>
                 <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Todos</SelectItem>
@@ -347,7 +351,7 @@ export default function IncidentsModule({ projectId }: IncidentsModuleProps) {
             </div>
             <div className="flex-1">
               <Label>Categoría</Label>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <Select value={categoryFilter ?? ''} onValueChange={(v) => setCategoryFilter(v ? (v as IncidentCategory) : null)}>
                 <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Todas</SelectItem>

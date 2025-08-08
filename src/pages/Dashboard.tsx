@@ -7,6 +7,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
 import CreateProjectForm from '@/components/CreateProjectForm';
+import IncidentsModule from '@/components/IncidentsModule';
+import DailiesModule from '@/components/DailiesModule';
 import { LogOut, Plus } from 'lucide-react';
 
 const Dashboard = () => {
