@@ -732,10 +732,6 @@ setDetailForm({
                 <Label>Descripción</Label>
                 <Textarea value={detailForm.description} onChange={(e) => setDetailForm((f) => ({ ...f, description: e.target.value }))} />
               </div>
-              <div className="md:col-span-2">
-                <Label>Comentarios adicionales</Label>
-                <Textarea value={detailForm.additionalComments} onChange={(e) => setDetailForm((f) => ({ ...f, additionalComments: e.target.value }))} />
-              </div>
             </div>
 
             <div className="pt-2">
