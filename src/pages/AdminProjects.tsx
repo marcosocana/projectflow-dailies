@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { Trash2, ArrowLeft } from "lucide-react";
+import { Trash2, ArrowLeft, RefreshCcw } from "lucide-react";
 
 interface ProjectRow {
   id: string;
@@ -78,9 +78,14 @@ export default function AdminProjects() {
             <CardDescription>Visualiza y elimina proyectos (requiere rol admin)</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="max-w-sm mb-4">
-              <Label>Buscar</Label>
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, nº o contraseña" />
+            <div className="max-w-sm mb-4 flex items-end gap-2">
+              <div className="flex-1">
+                <Label>Buscar</Label>
+                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, nº o contraseña" />
+              </div>
+              <Button variant="ghost" size="icon" onClick={load} aria-label="Actualizar" title="Actualizar">
+                <RefreshCcw className="h-4 w-4" />
+              </Button>
             </div>
             <Table>
               <TableHeader>

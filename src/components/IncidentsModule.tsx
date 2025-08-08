@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, MoreVertical } from 'lucide-react';
+import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, MoreVertical, RefreshCcw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/hooks/useAuth';
 import type { Database } from '@/integrations/supabase/types';
@@ -455,6 +455,9 @@ setDevSelected(parseMulti(incident.device || '', DEVICE_OPTIONS));
             <div className="flex flex-wrap items-center gap-2">
               <Button onClick={() => { resetForm(); setCreateOpen(true); }}>
                 <Plus className="h-4 w-4 mr-2" /> Crear tarea
+              </Button>
+              <Button variant="ghost" size="icon" onClick={fetchIncidents} aria-label="Actualizar" title="Actualizar">
+                <RefreshCcw className="h-4 w-4" />
               </Button>
               {/* Hidden file input for Importar */}
               <input

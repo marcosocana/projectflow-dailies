@@ -13,7 +13,7 @@ import { useProjectAccess } from '@/hooks/useProjectAccess';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { es } from 'date-fns/locale';
 import type { TablesInsert } from '@/integrations/supabase/types';
-import { Trash2, Eye, Pencil } from 'lucide-react';
+import { Trash2, Eye, Pencil, RefreshCcw } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 type TaskStatus = 'pending' | 'in_progress' | 'resolved';
 interface DailiesModuleProps {
@@ -367,6 +367,9 @@ useEffect(() => {
               
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button variant="ghost" size="icon" onClick={() => { loadBaseData(); loadTasks(date); }} aria-label="Actualizar" title="Actualizar">
+                <RefreshCcw className="h-4 w-4" />
+              </Button>
               <Button onClick={() => setCreateTaskOpen(true)} aria-label="Crear tarea" title="Crear tarea">+</Button>
               <Button variant="outline" onClick={cloneYesterdayTasks}>Persistir tareas</Button>
               <Button variant="outline" onClick={() => setTeamOpen(true)}>Equipo</Button>
