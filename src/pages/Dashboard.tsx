@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useProjectAccess } from '@/hooks/useProjectAccess';
+import CreateProjectForm from '@/components/CreateProjectForm';
 import { LogOut, Plus } from 'lucide-react';
 
 const Dashboard = () => {
@@ -13,6 +15,7 @@ const Dashboard = () => {
   const [showCreateProject, setShowCreateProject] = useState(false);
   const { user, signOut } = useAuth();
   const { toast } = useToast();
+  const { accessProject, currentProject, isAccessing } = useProjectAccess();
 
   const handleSignOut = async () => {
     await signOut();
@@ -24,10 +27,21 @@ const Dashboard = () => {
 
   const handleProjectAccess = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement project access logic
+    try {
+      await accessProject(projectNumber, projectPassword);
+      // Reset form on success
+      setProjectNumber('');
+      setProjectPassword('');
+    } catch (error) {
+      // Error is handled in the hook
+    }
+  };
+
+  const handleProjectCreated = (projectId: string, projectNumber: number) => {
+    setShowCreateProject(false);
     toast({
-      title: "Acceso a proyecto",
-      description: `Accediendo al proyecto ${projectNumber}...`,
+      title: "Proyecto creado exitosamente",
+      description: `Proyecto número ${projectNumber} creado. Puedes acceder a él ahora.`,
     });
   };
 
@@ -36,7 +50,18 @@ const Dashboard = () => {
       {/* Header */}
       <header className="border-b border-border">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold">ProjectFlow Dailies</h1>
+          <div className="flex items-center gap-4">
+            {currentProject?.logo_url && (
+              <img 
+                src={currentProject.logo_url} 
+                alt={`${currentProject.name} logo`}
+                className="h-8 w-8 object-contain"
+              />
+            )}
+            <h1 className="text-2xl font-bold">
+              {currentProject ? currentProject.name : 'ProjectFlow Dailies'}
+            </h1>
+          </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">
               {user?.email}
@@ -83,8 +108,8 @@ const Dashboard = () => {
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full">
-                  Acceder al Proyecto
+                <Button type="submit" disabled={isAccessing} className="w-full">
+                  {isAccessing ? 'Accediendo...' : 'Acceder al Proyecto'}
                 </Button>
               </form>
             </CardContent>
@@ -111,10 +136,11 @@ const Dashboard = () => {
               </Button>
               
               {showCreateProject && (
-                <div className="mt-4 p-4 border border-border rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    Funcionalidad de creación de proyectos próximamente...
-                  </p>
+                <div className="mt-4">
+                  <CreateProjectForm 
+                    onProjectCreated={handleProjectCreated}
+                    onClose={() => setShowCreateProject(false)}
+                  />
                 </div>
               )}
             </CardContent>
