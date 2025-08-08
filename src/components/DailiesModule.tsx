@@ -14,13 +14,19 @@ import { useProjectAccess } from '@/hooks/useProjectAccess';
 
 interface DailiesModuleProps {
   projectId: string;
+  initiallyUnlocked?: boolean;
 }
 
-export default function DailiesModule({ projectId }: DailiesModuleProps) {
+export default function DailiesModule({ projectId, initiallyUnlocked = false }: DailiesModuleProps) {
   const { toast } = useToast();
   const { accessDailies } = useProjectAccess();
-  const [unlocked, setUnlocked] = useState(false);
+  const [unlocked, setUnlocked] = useState<boolean>(initiallyUnlocked);
   const [pass, setPass] = useState('');
+
+  // Sync when parent unlocks via modal
+  useEffect(() => {
+    if (initiallyUnlocked) setUnlocked(true);
+  }, [initiallyUnlocked]);
 
   const [date, setDate] = useState<Date>(new Date());
   const [dailyId, setDailyId] = useState<string | null>(null);

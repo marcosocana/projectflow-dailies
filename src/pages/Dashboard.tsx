@@ -3,20 +3,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
 import CreateProjectForm from '@/components/CreateProjectForm';
 import IncidentsModule from '@/components/IncidentsModule';
 import DailiesModule from '@/components/DailiesModule';
-import { LogOut, Plus } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 
 const Dashboard = () => {
   const [projectPassword, setProjectPassword] = useState('');
-  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [tab, setTab] = useState<'tareas' | 'dailies'>('tareas');
+  const [dailiesOpen, setDailiesOpen] = useState(false);
+  const [dailiesPass, setDailiesPass] = useState('');
+  const [dailiesUnlocked, setDailiesUnlocked] = useState(false);
   const { user, signOut } = useAuth();
   const { toast } = useToast();
-  const { accessProject, currentProject, isAccessing } = useProjectAccess();
+  const { accessProject, accessDailies, currentProject, isAccessing } = useProjectAccess();
 
   const handleSignOut = async () => {
     await signOut();
@@ -37,13 +43,13 @@ const Dashboard = () => {
     }
   };
 
-  const handleProjectCreated = (projectId: string, projectNumber: number) => {
-    setShowCreateProject(false);
-    toast({
-      title: "Proyecto creado exitosamente",
-      description: `Proyecto número ${projectNumber} creado. Puedes acceder a él ahora.`,
-    });
-  };
+const handleProjectCreated = (projectId: string, projectNumber: number) => {
+  setCreateProjectOpen(false);
+  toast({
+    title: "Proyecto creado exitosamente",
+    description: `Proyecto número ${projectNumber} creado. Puedes acceder a él ahora.`,
+  });
+};
 
   return (
     <div className="min-h-screen bg-background">
@@ -74,7 +80,7 @@ const Dashboard = () => {
         </div>
       </header>
 
-      {/* Main Content */}
+{/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         {!currentProject ? (
           <div className="max-w-2xl mx-auto space-y-6">
@@ -103,59 +109,80 @@ const Dashboard = () => {
                     {isAccessing ? 'Accediendo...' : 'Acceder al Proyecto'}
                   </Button>
                 </form>
+                <div className="mt-4 text-center">
+                  <Button variant="outline" onClick={() => setCreateProjectOpen(true)}>
+                    Crear nuevo proyecto
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
-            {/* Create New Project */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Plus className="h-5 w-5" />
-                  Crear Nuevo Proyecto
-                </CardTitle>
-                <CardDescription>
-                  Crea un nuevo proyecto para compartir con tu equipo
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button 
-                  onClick={() => setShowCreateProject(!showCreateProject)}
-                  variant="outline"
-                  className="w-full"
-                >
-                  {showCreateProject ? 'Ocultar' : 'Crear Proyecto'}
-                </Button>
-                {showCreateProject && (
-                  <div className="mt-4">
-                    <CreateProjectForm 
-                      onProjectCreated={handleProjectCreated}
-                      onClose={() => setShowCreateProject(false)}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {/* Create Project Modal */}
+            <Dialog open={createProjectOpen} onOpenChange={setCreateProjectOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Crear nuevo proyecto</DialogTitle>
+                  <DialogDescription>Completa la información del proyecto</DialogDescription>
+                </DialogHeader>
+                <CreateProjectForm
+                  onProjectCreated={handleProjectCreated}
+                  onClose={() => setCreateProjectOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
           </div>
         ) : (
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Módulos del proyecto</CardTitle>
-                <CardDescription>Gestiona incidencias y dailies</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <section className="space-y-6">
-                  <div>
-                    <h2 className="text-xl font-semibold mb-4">Incidencias</h2>
-                    <IncidentsModule projectId={currentProject.id} />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold mb-4">Dailies</h2>
-                    <DailiesModule projectId={currentProject.id} />
-                  </div>
-                </section>
-              </CardContent>
-            </Card>
+            <Tabs value={tab} onValueChange={(v) => { setTab(v as any); if (v === 'dailies' && !dailiesUnlocked) setDailiesOpen(true); }}>
+              <TabsList>
+                <TabsTrigger value="tareas">Tareas</TabsTrigger>
+                <TabsTrigger value="dailies">Dailies</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="tareas">
+                <IncidentsModule projectId={currentProject.id} />
+              </TabsContent>
+
+              <TabsContent value="dailies">
+                {dailiesUnlocked ? (
+                  <DailiesModule projectId={currentProject.id} initiallyUnlocked />
+                ) : (
+                  <div className="p-6 text-center text-muted-foreground">Introduce la contraseña para acceder a Dailies.</div>
+                )}
+              </TabsContent>
+            </Tabs>
+
+            {/* Dailies Password Modal */}
+            <Dialog open={dailiesOpen} onOpenChange={setDailiesOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Acceder a Dailies</DialogTitle>
+                  <DialogDescription>Introduce la contraseña de dailies</DialogDescription>
+                </DialogHeader>
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!currentProject) return;
+                    try {
+                      await accessDailies(currentProject.id, dailiesPass);
+                      setDailiesUnlocked(true);
+                      setDailiesOpen(false);
+                      setDailiesPass('');
+                    } catch {}
+                  }}
+                  className="space-y-4"
+                >
+                  <Input
+                    type="password"
+                    placeholder="Contraseña de dailies"
+                    value={dailiesPass}
+                    onChange={(e) => setDailiesPass(e.target.value)}
+                    required
+                  />
+                  <Button type="submit">Acceder</Button>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         )}
       </main>

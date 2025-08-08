@@ -14,6 +14,7 @@ import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown } from 'lucide
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/hooks/useAuth';
 import type { Database } from '@/integrations/supabase/types';
+import React from 'react';
 
 interface IncidentsModuleProps {
   projectId: string;
@@ -35,6 +36,52 @@ const CATEGORY_OPTIONS = [
   { value: 'improvement', label: 'Mejora' },
 ];
 
+/* UI helpers */
+function StatusBadge({ status }: { status: IncidentStatus }) {
+  const label = STATUS_OPTIONS.find((s) => s.value === status)?.label ?? status;
+  // Use semantic tokens via className when variant colors are not enough
+  const map: Record<IncidentStatus, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string }> = {
+    pending: { variant: 'secondary' },
+    in_progress: { variant: 'default' },
+    in_qa: { variant: 'outline', className: 'bg-accent text-accent-foreground border-transparent' },
+    resolved: { variant: 'outline', className: 'bg-primary text-primary-foreground border-transparent' },
+    closed: { variant: 'destructive' },
+  } as const;
+  const cfg = map[status];
+  return <Badge variant={cfg.variant} className={cfg.className}>{label}</Badge>;
+}
+
+function CategoryIcon({ category }: { category: IncidentCategory }) {
+  if (category === 'incident') {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="inline-grid place-items-center h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">i</span>
+        <span className="text-sm text-muted-foreground">Incidencia</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <span className="inline-grid place-items-center h-5 w-5 rounded-sm bg-primary text-primary-foreground text-[10px] font-bold">M</span>
+      <span className="text-sm text-muted-foreground">Mejora</span>
+    </div>
+  );
+}
+
+type ImportButtonProps = { onFile: (file: File) => void };
+const ImportButton = ({ onFile }: ImportButtonProps) => (
+  <label className="inline-flex items-center gap-2 cursor-pointer border border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-md h-10 px-4 py-2 text-sm font-medium">
+    <FileUp className="h-4 w-4" />
+    <span>Importar</span>
+    <input
+      type="file"
+      accept=".xlsx,.xls"
+      className="hidden"
+      onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
+    />
+  </label>
+);
+
 function useSignedUrl(bucket: string) {
   const cache = useRef(new Map<string, string>());
   const getUrl = async (path: string | null | undefined) => {
@@ -53,47 +100,82 @@ export default function IncidentsModule({ projectId }: IncidentsModuleProps) {
   const { user } = useAuth();
   const { getUrl } = useSignedUrl('project-files');
 
-  const [incidents, setIncidents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<IncidentStatus | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState<IncidentCategory | null>(null);
+const [incidents, setIncidents] = useState<any[]>([]);
+const [loading, setLoading] = useState(false);
+const [statusFilter, setStatusFilter] = useState<IncidentStatus | null>(null);
+const [categoryFilter, setCategoryFilter] = useState<IncidentCategory | null>(null);
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    name: '',
-    description: '',
-    evidenceLink: '',
-    environment: '',
-    device: '',
-    occurredAt: new Date().toISOString(),
-    status: 'pending',
-    category: 'incident',
-    additionalComments: '',
-  });
-  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+const [search, setSearch] = useState('');
+const [sortKey, setSortKey] = useState<'name' | 'status' | 'category' | 'occurred_at'>('occurred_at');
+const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-  const filtered = useMemo(() => {
-    return incidents.filter((i) =>
-      (statusFilter ? i.status === statusFilter : true) &&
-      (categoryFilter ? i.category === categoryFilter : true)
-    );
-  }, [incidents, statusFilter, categoryFilter]);
+const [editingId, setEditingId] = useState<string | null>(null);
+const [form, setForm] = useState({
+  name: '',
+  description: '',
+  evidenceLink: '',
+  environment: '',
+  device: '',
+  occurredAt: new Date().toISOString(),
+  status: 'pending',
+  category: 'incident',
+  additionalComments: '',
+});
+const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
 
-  const fetchIncidents = async () => {
-    setLoading(true);
-    try {
-      let query = supabase.from('incidents').select('*').eq('project_id', projectId).order('created_at', { ascending: false });
-      if (statusFilter) query = query.eq('status', statusFilter);
-      if (categoryFilter) query = query.eq('category', categoryFilter);
-      const { data, error } = await query;
-      if (error) throw error;
-      setIncidents(data || []);
-    } catch (e: any) {
-      toast({ title: 'Error', description: 'No se pudieron cargar las incidencias', variant: 'destructive' });
-    } finally {
-      setLoading(false);
+const [createOpen, setCreateOpen] = useState(false);
+const [detailsOpen, setDetailsOpen] = useState(false);
+const [selected, setSelected] = useState<any | null>(null);
+
+const filtered = useMemo(() => {
+  const term = search.trim().toLowerCase();
+  return incidents.filter((i) =>
+    (statusFilter ? i.status === statusFilter : true) &&
+    (categoryFilter ? i.category === categoryFilter : true) &&
+    (term
+      ? [i.name, i.description, i.environment, i.device, i.status, i.category, i.additional_comments]
+          .filter(Boolean)
+          .some((v: any) => String(v).toLowerCase().includes(term))
+      : true)
+  );
+}, [incidents, statusFilter, categoryFilter, search]);
+
+const sorted = useMemo(() => {
+  const arr = [...filtered];
+  arr.sort((a, b) => {
+    const key = sortKey;
+    let av = a[key];
+    let bv = b[key];
+    if (key === 'occurred_at') {
+      av = new Date(a.occurred_at).getTime();
+      bv = new Date(b.occurred_at).getTime();
     }
-  };
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  return arr;
+}, [filtered, sortKey, sortDir]);
+
+const fetchIncidents = async () => {
+  setLoading(true);
+  try {
+    let query = supabase
+      .from('incidents')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('occurred_at', { ascending: true });
+    if (statusFilter) query = query.eq('status', statusFilter);
+    if (categoryFilter) query = query.eq('category', categoryFilter);
+    const { data, error } = await query;
+    if (error) throw error;
+    setIncidents(data || []);
+  } catch (e: any) {
+    toast({ title: 'Error', description: 'No se pudieron cargar las incidencias', variant: 'destructive' });
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => { fetchIncidents(); }, [projectId, statusFilter, categoryFilter]);
 
@@ -167,11 +249,14 @@ export default function IncidentsModule({ projectId }: IncidentsModuleProps) {
 
       resetForm();
       fetchIncidents();
-    } catch (err: any) {
-      console.error(err);
-      toast({ title: 'Error', description: 'No se pudo guardar la incidencia', variant: 'destructive' });
-    }
-  };
+} catch (err: any) {
+  console.error(err);
+  toast({ title: 'Error', description: 'No se pudo guardar la incidencia', variant: 'destructive' });
+} finally {
+  // Close modal after create/update
+  setCreateOpen(false);
+}
+};
 
   const onEdit = (incident: any) => {
     setEditingId(incident.id);
@@ -259,155 +344,255 @@ export default function IncidentsModule({ projectId }: IncidentsModuleProps) {
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Gestión de Incidencias</CardTitle>
-          <CardDescription>Listado y creación de incidencias del proyecto</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Nombre</Label>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
-            </div>
-            <div className="space-y-2">
-              <Label>Entorno</Label>
-              <Input value={form.environment} onChange={(e) => setForm((f) => ({ ...f, environment: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Dispositivo</Label>
-              <Input value={form.device} onChange={(e) => setForm((f) => ({ ...f, device: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Fecha (ISO)</Label>
-              <Input type="datetime-local" value={new Date(form.occurredAt).toISOString().slice(0,16)} onChange={(e) => setForm((f) => ({ ...f, occurredAt: new Date(e.target.value).toISOString() }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Estado</Label>
-              <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-                <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Categoría</Label>
-              <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
-                <SelectTrigger><SelectValue placeholder="Categoría" /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORY_OPTIONS.map((c) => (<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>Descripción</Label>
-              <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Evidencia (archivo)</Label>
-              <Input type="file" accept="image/*,application/pdf" onChange={(e) => setEvidenceFile(e.target.files?.[0] ?? null)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Evidencia (link)</Label>
-              <Input placeholder="https://..." value={form.evidenceLink} onChange={(e) => setForm((f) => ({ ...f, evidenceLink: e.target.value }))} />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>Comentarios adicionales</Label>
-              <Textarea value={form.additionalComments} onChange={(e) => setForm((f) => ({ ...f, additionalComments: e.target.value }))} />
-            </div>
-            <div className="md:col-span-2 flex gap-2">
-              <Button type="submit" className="flex items-center gap-2"><Plus className="h-4 w-4" /> {editingId ? 'Guardar cambios' : 'Crear incidencia'}</Button>
-              {editingId && <Button type="button" variant="outline" onClick={resetForm}>Cancelar edición</Button>}
-              <Button type="button" variant="outline" className="ml-auto flex items-center gap-2" onClick={downloadTemplate}><Download className="h-4 w-4" /> Plantilla</Button>
-              <Button type="button" variant="outline" className="flex items-center gap-2" onClick={exportCurrent}><Download className="h-4 w-4" /> Exportar</Button>
-              <label className="inline-flex items-center gap-2 cursor-pointer">
-                <FileUp className="h-4 w-4" />
-                <Input type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importFromExcel(f); }} />
-                <span>Importar</span>
-              </label>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+return (
+  <div className="space-y-6">
+    <Card>
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle>Gestión de Incidencias</CardTitle>
+            <CardDescription>Listado de incidencias del proyecto</CardDescription>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => { resetForm(); setCreateOpen(true); }}>
+              <Plus className="h-4 w-4 mr-2" /> Crear tarea
+            </Button>
+            <Button type="button" variant="outline" className="flex items-center gap-2" onClick={downloadTemplate}>
+              <Download className="h-4 w-4" /> Plantilla
+            </Button>
+            <Button type="button" variant="outline" className="flex items-center gap-2" onClick={exportCurrent}>
+              <Download className="h-4 w-4" /> Exportar
+            </Button>
+            <ImportButton onFile={(f) => importFromExcel(f)} />
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          <div>
+            <Label>Buscar</Label>
+            <Input placeholder="Buscar en todos los campos" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <div>
+            <Label>Estado</Label>
+            <Select value={statusFilter ?? 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? null : (v as IncidentStatus))}>
+              <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {STATUS_OPTIONS.map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Categoría</Label>
+            <Select value={categoryFilter ?? 'all'} onValueChange={(v) => setCategoryFilter(v === 'all' ? null : (v as IncidentCategory))}>
+              <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {CATEGORY_OPTIONS.map((c) => (<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Listado</CardTitle>
-          <CardDescription>Incidencias del proyecto</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row gap-3 mb-4">
-            <div className="flex-1">
-              <Label>Estado</Label>
-              <Select value={statusFilter ?? 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? null : (v as IncidentStatus))}>
-                <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {STATUS_OPTIONS.map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
-                </SelectContent>
-              </Select>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('name')}>
+                Nombre <ArrowUpDown className="inline h-4 w-4 ml-1" />
+              </TableHead>
+              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('status')}>
+                Estado <ArrowUpDown className="inline h-4 w-4 ml-1" />
+              </TableHead>
+              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('category')}>
+                Categoría <ArrowUpDown className="inline h-4 w-4 ml-1" />
+              </TableHead>
+              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('occurred_at')}>
+                Fecha <ArrowUpDown className="inline h-4 w-4 ml-1" />
+              </TableHead>
+              <TableHead>Evidencia</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sorted.map((i) => (
+              <TableRow key={i.id}>
+                <TableCell className="font-medium">{i.name}</TableCell>
+                <TableCell>
+                  <StatusBadge status={i.status} />
+                </TableCell>
+                <TableCell>
+                  <CategoryIcon category={i.category} />
+                </TableCell>
+                <TableCell>{new Date(i.occurred_at).toLocaleString()}</TableCell>
+                <TableCell>
+                  {i.evidence ? (
+                    i.evidence.startsWith('incidents/') ? (
+                      <a className="text-primary underline" target="_blank" rel="noreferrer" href="#" onClick={async (e) => { e.preventDefault(); const url = await getUrl(i.evidence); if (url) window.open(url, '_blank'); }}>
+                        Ver archivo
+                      </a>
+                    ) : (
+                      <a className="text-primary underline" target="_blank" rel="noreferrer" href={i.evidence}>Ver enlace</a>
+                    )
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell className="flex justify-end gap-2">
+                  <Button variant="ghost" size="icon" onClick={() => { setSelected(i); setDetailsOpen(true); }} aria-label="Ver más">
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={() => onEdit(i)} aria-label="Editar">
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={() => onDelete(i.id)} aria-label="Borrar" className="text-destructive">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {sorted.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-muted-foreground">No hay incidencias</TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+
+    {/* Crear/Editar incidencia */}
+    <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>{editingId ? 'Editar incidencia' : 'Crear incidencia'}</DialogTitle>
+          <DialogDescription>Completa la información de la incidencia o mejora</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Nombre</Label>
+            <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
+          </div>
+          <div className="space-y-2">
+            <Label>Entorno</Label>
+            <Input value={form.environment} onChange={(e) => setForm((f) => ({ ...f, environment: e.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label>Dispositivo</Label>
+            <Input value={form.device} onChange={(e) => setForm((f) => ({ ...f, device: e.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label>Fecha (ISO)</Label>
+            <Input type="datetime-local" value={new Date(form.occurredAt).toISOString().slice(0,16)} onChange={(e) => setForm((f) => ({ ...f, occurredAt: new Date(e.target.value).toISOString() }))} />
+          </div>
+          <div className="space-y-2">
+            <Label>Estado</Label>
+            <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
+              <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTIONS.map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Categoría</Label>
+            <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
+              <SelectTrigger><SelectValue placeholder="Categoría" /></SelectTrigger>
+              <SelectContent>
+                {CATEGORY_OPTIONS.map((c) => (<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Descripción</Label>
+            <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label>Evidencia (archivo)</Label>
+            <Input type="file" accept="image/*,application/pdf" onChange={(e) => setEvidenceFile(e.target.files?.[0] ?? null)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Evidencia (link)</Label>
+            <Input placeholder="https://..." value={form.evidenceLink} onChange={(e) => setForm((f) => ({ ...f, evidenceLink: e.target.value }))} />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Comentarios adicionales</Label>
+            <Textarea value={form.additionalComments} onChange={(e) => setForm((f) => ({ ...f, additionalComments: e.target.value }))} />
+          </div>
+          <div className="md:col-span-2 flex gap-2 justify-end">
+            {editingId && <Button type="button" variant="outline" onClick={() => { resetForm(); setCreateOpen(false); }}>Cancelar</Button>}
+            <Button type="submit" className="flex items-center gap-2">
+              <Plus className="h-4 w-4" /> {editingId ? 'Guardar cambios' : 'Crear incidencia'}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+
+    {/* Ver más */}
+    <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Detalle de incidencia</DialogTitle>
+        </DialogHeader>
+        {selected && (
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs text-muted-foreground">Nombre</Label>
+              <div className="font-medium">{selected.name}</div>
             </div>
-            <div className="flex-1">
-              <Label>Categoría</Label>
-              <Select value={categoryFilter ?? 'all'} onValueChange={(v) => setCategoryFilter(v === 'all' ? null : (v as IncidentCategory))}>
-                <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {CATEGORY_OPTIONS.map((c) => (<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
-                </SelectContent>
-              </Select>
+            <div>
+              <Label className="text-xs text-muted-foreground">Estado</Label>
+              <StatusBadge status={selected.status} />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Categoría</Label>
+              <CategoryIcon category={selected.category} />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Fecha</Label>
+              <div>{new Date(selected.occurred_at).toLocaleString()}</div>
+            </div>
+            {selected.environment && (
+              <div>
+                <Label className="text-xs text-muted-foreground">Entorno</Label>
+                <div>{selected.environment}</div>
+              </div>
+            )}
+            {selected.device && (
+              <div>
+                <Label className="text-xs text-muted-foreground">Dispositivo</Label>
+                <div>{selected.device}</div>
+              </div>
+            )}
+            {selected.description && (
+              <div>
+                <Label className="text-xs text-muted-foreground">Descripción</Label>
+                <div className="whitespace-pre-wrap">{selected.description}</div>
+              </div>
+            )}
+            {selected.additional_comments && (
+              <div>
+                <Label className="text-xs text-muted-foreground">Comentarios adicionales</Label>
+                <div className="whitespace-pre-wrap">{selected.additional_comments}</div>
+              </div>
+            )}
+            <div>
+              <Label className="text-xs text-muted-foreground">Evidencia</Label>
+              {selected.evidence ? (
+                selected.evidence.startsWith('incidents/') ? (
+                  <a className="text-primary underline" href="#" onClick={async (e) => { e.preventDefault(); const url = await getUrl(selected.evidence); if (url) window.open(url, '_blank'); }}>Ver archivo</a>
+                ) : (
+                  <a className="text-primary underline" href={selected.evidence} target="_blank" rel="noreferrer">Ver enlace</a>
+                )
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )}
             </div>
           </div>
-
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Categoría</TableHead>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Evidencia</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((i) => (
-                <TableRow key={i.id}>
-                  <TableCell className="font-medium">{i.name}</TableCell>
-                  <TableCell><Badge>{STATUS_OPTIONS.find((s) => s.value === i.status)?.label ?? i.status}</Badge></TableCell>
-                  <TableCell>{CATEGORY_OPTIONS.find((c) => c.value === i.category)?.label ?? i.category}</TableCell>
-                  <TableCell>{new Date(i.occurred_at).toLocaleString()}</TableCell>
-                  <TableCell>
-                    {i.evidence ? (
-                      i.evidence.startsWith('incidents/') ? (
-                        <a className="text-primary underline" target="_blank" rel="noreferrer" href="#" onClick={async (e) => { e.preventDefault(); const url = await getUrl(i.evidence); if (url) window.open(url, '_blank'); }}>
-                          Ver archivo
-                        </a>
-                      ) : (
-                        <a className="text-primary underline" target="_blank" rel="noreferrer" href={i.evidence}>Ver enlace</a>
-                      )
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => onEdit(i)} className="flex items-center gap-1"><Pencil className="h-4 w-4" /> Editar</Button>
-                    <Button variant="outline" size="sm" onClick={() => onDelete(i.id)} className="flex items-center gap-1 text-destructive"><Trash2 className="h-4 w-4" /> Borrar</Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">No hay incidencias</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
-  );
+        )}
+      </DialogContent>
+    </Dialog>
+  </div>
+);
 }
