@@ -61,7 +61,7 @@ const handleProjectCreated = (projectId: string, projectNumber: number) => {
               <img 
                 src={currentProject.logo_url} 
                 alt={`${currentProject.name} logo`}
-                className="h-8 w-8 object-contain"
+                className="h-10 max-w-[160px] w-auto object-contain"
               />
             )}
             <h1 className="text-2xl font-bold">

@@ -39,16 +39,14 @@ const CATEGORY_OPTIONS = [
 /* UI helpers */
 function StatusBadge({ status }: { status: IncidentStatus }) {
   const label = STATUS_OPTIONS.find((s) => s.value === status)?.label ?? status;
-  // Use semantic tokens via className when variant colors are not enough
-  const map: Record<IncidentStatus, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string }> = {
-    pending: { variant: 'secondary' },
-    in_progress: { variant: 'default' },
-    in_qa: { variant: 'outline', className: 'bg-accent text-accent-foreground border-transparent' },
-    resolved: { variant: 'outline', className: 'bg-primary text-primary-foreground border-transparent' },
-    closed: { variant: 'destructive' },
+  const classMap: Record<IncidentStatus, string> = {
+    pending: 'bg-muted text-muted-foreground', // Gris
+    in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]', // Naranja
+    in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]', // Azul
+    resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]', // Verde
+    closed: 'bg-destructive text-destructive-foreground', // Rojo
   } as const;
-  const cfg = map[status];
-  return <Badge variant={cfg.variant} className={cfg.className}>{label}</Badge>;
+  return <Badge variant="outline" className={`${classMap[status]} border-transparent`}>{label}</Badge>;
 }
 
 function CategoryIcon({ category }: { category: IncidentCategory }) {
@@ -131,6 +129,8 @@ const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
 const [createOpen, setCreateOpen] = useState(false);
 const [detailsOpen, setDetailsOpen] = useState(false);
 const [selected, setSelected] = useState<any | null>(null);
+const [comments, setComments] = useState<any[]>([]);
+const [commentText, setCommentText] = useState('');
 
 const filtered = useMemo(() => {
   const term = search.trim().toLowerCase();
@@ -349,6 +349,30 @@ const fetchIncidents = async () => {
     }
   };
 
+  // Comments
+  const loadComments = async (incidentId: string) => {
+    const { data } = await supabase
+      .from('incident_comments')
+      .select('*')
+      .eq('incident_id', incidentId)
+      .order('created_at', { ascending: true });
+    setComments(data || []);
+  };
+
+  const addComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selected || !user || !commentText.trim()) return;
+    const { error } = await supabase
+      .from('incident_comments')
+      .insert({ incident_id: selected.id, user_id: user.id, content: commentText.trim() });
+    if (!error) {
+      setCommentText('');
+      loadComments(selected.id);
+    } else {
+      toast({ title: 'Error', description: 'No se pudo añadir el comentario', variant: 'destructive' });
+    }
+  };
+
 return (
   <div className="space-y-6">
     <Card>
@@ -403,6 +427,7 @@ return (
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>ID</TableHead>
               <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('name')}>
                 Nombre <ArrowUpDown className="inline h-4 w-4 ml-1" />
               </TableHead>
@@ -422,6 +447,7 @@ return (
           <TableBody>
             {sorted.map((i) => (
               <TableRow key={i.id}>
+                <TableCell className="font-mono text-xs">{`T${String(i.incident_number ?? 0).padStart(5, '0')}`}</TableCell>
                 <TableCell className="font-medium">{i.name}</TableCell>
                 <TableCell>
                   <StatusBadge status={i.status} />
@@ -444,11 +470,8 @@ return (
                   )}
                 </TableCell>
                 <TableCell className="flex justify-end gap-2">
-                  <Button variant="ghost" size="icon" onClick={() => { setSelected(i); setDetailsOpen(true); }} aria-label="Ver más">
+                  <Button variant="ghost" size="icon" onClick={async () => { setSelected(i); setDetailsOpen(true); await loadComments(i.id); }} aria-label="Ver más">
                     <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" onClick={() => onEdit(i)} aria-label="Editar">
-                    <Pencil className="h-4 w-4" />
                   </Button>
                   <Button variant="outline" size="icon" onClick={() => onDelete(i.id)} aria-label="Borrar" className="text-destructive">
                     <Trash2 className="h-4 w-4" />
@@ -458,7 +481,7 @@ return (
             ))}
             {sorted.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground">No hay incidencias</TableCell>
+                <TableCell colSpan={7} className="text-center text-muted-foreground">No hay incidencias</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -538,7 +561,19 @@ return (
     <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Detalle de incidencia</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle>Detalle de incidencia</DialogTitle>
+            {selected && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Editar"
+                onClick={() => { onEdit(selected); setCreateOpen(true); setDetailsOpen(false); }}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </DialogHeader>
         {selected && (
           <div className="space-y-3">
@@ -594,10 +629,28 @@ return (
                 <span className="text-muted-foreground">—</span>
               )}
             </div>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+            <div className="pt-4 border-t">
+              <Label className="text-xs text-muted-foreground">Comentarios</Label>
+              <div className="space-y-3 max-h-48 overflow-auto mt-2 pr-1">
+                {comments.map((c) => (
+                  <div key={c.id} className="rounded-md border p-2">
+                    <div className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleString()}</div>
+                    <div className="text-sm whitespace-pre-wrap">{c.content}</div>
+                  </div>
+                ))}
+                {comments.length === 0 && (
+                  <div className="text-sm text-muted-foreground">Sin comentarios aún</div>
+                )}
+              </div>
+              <form onSubmit={addComment} className="mt-3 flex gap-2">
+                <Input
+                  placeholder="Escribe un comentario..."
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                />
+                <Button type="submit">Enviar</Button>
+              </form>
+            </div>
   </div>
 );
 }

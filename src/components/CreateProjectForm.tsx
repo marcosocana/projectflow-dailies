@@ -46,33 +46,56 @@ const CreateProjectForm = ({ onProjectCreated, onClose }: CreateProjectFormProps
     setLogoPreview(null);
   };
 
+  // Resize image to fit within 160x40 while preserving aspect ratio
+  const resizeImage = async (file: File, maxW = 160, maxH = 40): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('No 2D context'));
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('No se pudo procesar la imagen'));
+        }, 'image/png', 0.92);
+      };
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
     setIsCreating(true);
     try {
-      let logoUrl = null;
+      let logoUrl: string | null = null;
 
       // Upload logo if provided
       if (logoFile) {
-        const fileExt = logoFile.name.split('.').pop();
-        const fileName = `${crypto.randomUUID()}.${fileExt}`;
-        const filePath = `logos/${fileName}`;
+        const resized = await resizeImage(logoFile, 160, 40);
+        const fileName = `${crypto.randomUUID()}.png`;
+        const filePath = `${user.id}/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
-          .from('project-files')
-          .upload(filePath, logoFile);
+          .from('project-logos')
+          .upload(filePath, resized, { contentType: 'image/png' });
 
         if (uploadError) {
           throw uploadError;
         }
 
-        // Get public URL
+        // Get public URL from public bucket
         const { data: { publicUrl } } = supabase.storage
-          .from('project-files')
+          .from('project-logos')
           .getPublicUrl(filePath);
-        
         logoUrl = publicUrl;
       }
 

@@ -11,6 +11,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { es } from 'date-fns/locale';
+import { Trash2 } from 'lucide-react';
 
 interface DailiesModuleProps {
   projectId: string;
@@ -22,6 +25,7 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
   const { accessDailies } = useProjectAccess();
   const [unlocked, setUnlocked] = useState<boolean>(initiallyUnlocked);
   const [pass, setPass] = useState('');
+  const [teamOpen, setTeamOpen] = useState(false);
 
   // Sync when parent unlocks via modal
   useEffect(() => {
@@ -139,51 +143,13 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
           <CardDescription>Selecciona un día para gestionar</CardDescription>
         </CardHeader>
         <CardContent>
-          <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} className="rounded-md border" />
+          <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} className="rounded-md border p-3 pointer-events-auto" locale={es} />
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle>Equipo</CardTitle>
-            <CardDescription>Personas del proyecto</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={addPerson} className="space-y-3">
-              <div>
-                <Label>Nombre</Label>
-                <Input value={personForm.name} onChange={(e) => setPersonForm((f) => ({ ...f, name: e.target.value }))} required />
-              </div>
-              <div>
-                <Label>Rol</Label>
-                <Input value={personForm.role} onChange={(e) => setPersonForm((f) => ({ ...f, role: e.target.value }))} />
-              </div>
-              <div>
-                <Label>Color</Label>
-                <Input type="color" value={personForm.color} onChange={(e) => setPersonForm((f) => ({ ...f, color: e.target.value }))} />
-              </div>
-              <Button type="submit">Añadir persona</Button>
-            </form>
-
-            <div className="mt-6 space-y-2">
-              {people.map((p) => (
-                <div key={p.id} className="flex items-center justify-between rounded border p-2">
-                  <div className="flex items-center gap-2">
-                    <span className="h-4 w-4 rounded" style={{ backgroundColor: p.color }} />
-                    <div>
-                      <div className="font-medium">{p.name}</div>
-                      <div className="text-xs text-muted-foreground">{p.role}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {people.length === 0 && <div className="text-sm text-muted-foreground">Sin personas aún</div>}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
+      <div className="flex items-center justify-end">
+        <Button variant="outline" onClick={() => setTeamOpen(true)}>Gestionar equipo</Button>
+      </div>
           <CardHeader>
             <CardTitle>Tareas del día</CardTitle>
             <CardDescription>Crear y gestionar tareas</CardDescription>
@@ -255,7 +221,7 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
                         {inc ? inc.name : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell>
-                        <Button variant="outline" size="sm" onClick={() => deleteTask(t.id)}>Eliminar</Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteTask(t.id)} aria-label="Eliminar"><Trash2 className="h-4 w-4" /></Button>
                       </TableCell>
                     </TableRow>
                   );
@@ -270,6 +236,45 @@ export default function DailiesModule({ projectId, initiallyUnlocked = false }: 
           </CardContent>
         </Card>
       </div>
+      </div>
+
+      <Dialog open={teamOpen} onOpenChange={setTeamOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Gestionar equipo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <form onSubmit={addPerson} className="space-y-3">
+              <div>
+                <Label>Nombre</Label>
+                <Input value={personForm.name} onChange={(e) => setPersonForm((f) => ({ ...f, name: e.target.value }))} required />
+              </div>
+              <div>
+                <Label>Rol</Label>
+                <Input value={personForm.role} onChange={(e) => setPersonForm((f) => ({ ...f, role: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Color</Label>
+                <Input type="color" value={personForm.color} onChange={(e) => setPersonForm((f) => ({ ...f, color: e.target.value }))} />
+              </div>
+              <Button type="submit">Añadir persona</Button>
+            </form>
+
+            <div className="mt-2 space-y-2">
+              {people.map((p) => (
+                <div key={p.id} className="flex items-center justify-between rounded border p-2">
+                  <div className="flex items-center gap-2">
+                    <span className="h-4 w-4 rounded" style={{ backgroundColor: p.color }} />
+                    <div>
+                      <div className="font-medium">{p.name}</div>
+                      <div className="text-xs text-muted-foreground">{p.role}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {people.length === 0 && <div className="text-sm text-muted-foreground">Sin personas aún</div>}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
-  );
-}

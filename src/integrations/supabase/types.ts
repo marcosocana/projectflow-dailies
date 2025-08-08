@@ -49,6 +49,38 @@ export type Database = {
           },
         ]
       }
+      incident_comments: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          incident_id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          incident_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          incident_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "incident_comments_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "incidents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       incidents: {
         Row: {
           additional_comments: string | null
