@@ -16,18 +16,21 @@ export function useProjectAccess() {
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const { toast } = useToast();
 
-  const accessProject = async (projectNumber: string, password: string) => {
+  const accessProject = async (password: string) => {
     setIsAccessing(true);
     try {
       const { data: project, error } = await supabase
         .from('projects')
         .select('*')
-        .eq('project_number', parseInt(projectNumber))
         .eq('project_password', password)
-        .single();
+        .maybeSingle();
 
-      if (error || !project) {
-        throw new Error('Número de proyecto o contraseña incorrectos');
+      if (error) {
+        throw new Error('Error al buscar el proyecto');
+      }
+
+      if (!project) {
+        throw new Error('Contraseña incorrecta');
       }
 
       setCurrentProject(project);

@@ -10,7 +10,6 @@ import CreateProjectForm from '@/components/CreateProjectForm';
 import { LogOut, Plus } from 'lucide-react';
 
 const Dashboard = () => {
-  const [projectNumber, setProjectNumber] = useState('');
   const [projectPassword, setProjectPassword] = useState('');
   const [showCreateProject, setShowCreateProject] = useState(false);
   const { user, signOut } = useAuth();
@@ -28,9 +27,8 @@ const Dashboard = () => {
   const handleProjectAccess = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await accessProject(projectNumber, projectPassword);
+      await accessProject(projectPassword);
       // Reset form on success
-      setProjectNumber('');
       setProjectPassword('');
     } catch (error) {
       // Error is handled in the hook
@@ -82,22 +80,11 @@ const Dashboard = () => {
             <CardHeader>
               <CardTitle>Acceder a Proyecto</CardTitle>
               <CardDescription>
-                Introduce el número de proyecto y contraseña para acceder
+                Introduce la contraseña del proyecto para acceder
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleProjectAccess} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="project-number">Número de Proyecto</Label>
-                  <Input
-                    id="project-number"
-                    type="number"
-                    value={projectNumber}
-                    onChange={(e) => setProjectNumber(e.target.value)}
-                    placeholder="Ej: 1001"
-                    required
-                  />
-                </div>
                 <div className="space-y-2">
                   <Label htmlFor="project-password">Contraseña del Proyecto</Label>
                   <Input
@@ -105,6 +92,7 @@ const Dashboard = () => {
                     type="password"
                     value={projectPassword}
                     onChange={(e) => setProjectPassword(e.target.value)}
+                    placeholder="Introduce la contraseña del proyecto"
                     required
                   />
                 </div>
