@@ -5,14 +5,16 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
 import CreateProjectForm from '@/components/CreateProjectForm';
 import IncidentsModule from '@/components/IncidentsModule';
 import DailiesModule from '@/components/DailiesModule';
-import { LogOut } from 'lucide-react';
+import { LogOut, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import vecturaLogo from '@/assets/vectura-logo.png';
 const Dashboard = () => {
   const [projectPassword, setProjectPassword] = useState('');
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
@@ -59,26 +61,79 @@ const handleProjectCreated = (projectId: string, projectNumber: number) => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            {currentProject?.logo_url && (
-              <img 
-                src={currentProject.logo_url} 
-                alt={`${currentProject.name} logo`}
-                className="h-10 max-w-[160px] w-auto object-contain"
-              />
-            )}
-            <h1 className="text-2xl font-bold">
-              {currentProject ? currentProject.name : 'ProjectFlow Dailies'}
-            </h1>
+        <div className="container mx-auto px-4 py-4">
+          {/* Desktop Header */}
+          <div className="hidden md:flex justify-between items-center">
+            <div className="flex items-center gap-4">
+              {currentProject?.logo_url ? (
+                <img 
+                  src={currentProject.logo_url} 
+                  alt={`${currentProject.name} logo`}
+                  className="h-10 max-w-[160px] w-auto object-contain"
+                />
+              ) : (
+                <img 
+                  src={vecturaLogo} 
+                  alt="Vectura" 
+                  className="h-10 w-auto object-contain"
+                />
+              )}
+              <h1 className="text-2xl font-bold">
+                {currentProject ? currentProject.name : 'Vectura'}
+              </h1>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground">
+                {user?.email}
+              </span>
+              <Button variant="outline" size="sm" onClick={handleSignOut} aria-label="Cerrar sesión">
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              {user?.email}
-            </span>
-            <Button variant="outline" size="sm" onClick={handleSignOut} aria-label="Cerrar sesión">
-              <LogOut className="h-4 w-4" />
-            </Button>
+
+          {/* Mobile Header */}
+          <div className="flex md:hidden justify-between items-center">
+            <div className="flex items-center gap-3">
+              {currentProject?.logo_url ? (
+                <img 
+                  src={currentProject.logo_url} 
+                  alt={`${currentProject.name} logo`}
+                  className="h-8 max-w-[120px] w-auto object-contain"
+                />
+              ) : (
+                <img 
+                  src={vecturaLogo} 
+                  alt="Vectura" 
+                  className="h-8 w-auto object-contain"
+                />
+              )}
+              <h1 className="text-lg font-bold truncate">
+                {currentProject ? currentProject.name : 'Vectura'}
+              </h1>
+            </div>
+            
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" aria-label="Abrir menú">
+                  <Menu className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right">
+                <SheetHeader>
+                  <SheetTitle>Menú</SheetTitle>
+                </SheetHeader>
+                <div className="flex flex-col gap-4 mt-6">
+                  <div className="text-sm text-muted-foreground">
+                    Usuario: {user?.email}
+                  </div>
+                  <Button variant="outline" onClick={handleSignOut} className="w-full justify-start">
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Cerrar sesión
+                  </Button>
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </header>
@@ -89,11 +144,20 @@ const handleProjectCreated = (projectId: string, projectNumber: number) => {
           <div className="max-w-2xl mx-auto space-y-6">
             {/* Project Access */}
             <Card>
-              <CardHeader>
-                <CardTitle>Acceder a Proyecto</CardTitle>
-                <CardDescription>
-                  Introduce la contraseña del proyecto para acceder
-                </CardDescription>
+              <CardHeader className="text-center space-y-4">
+                <div className="flex justify-center">
+                  <img 
+                    src={vecturaLogo} 
+                    alt="Vectura" 
+                    className="h-16 w-auto object-contain"
+                  />
+                </div>
+                <div>
+                  <CardTitle>Acceder a Proyecto</CardTitle>
+                  <CardDescription>
+                    Introduce la contraseña del proyecto para acceder
+                  </CardDescription>
+                </div>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleProjectAccess} className="space-y-4">
@@ -137,7 +201,7 @@ const handleProjectCreated = (projectId: string, projectNumber: number) => {
         ) : (
           <div className="space-y-6">
             <Tabs value={tab} onValueChange={(v) => { setTab(v as any); if (v === 'dailies' && !dailiesUnlocked) setDailiesOpen(true); }}>
-              <TabsList>
+              <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto md:max-w-none md:w-auto">
                 <TabsTrigger value="tareas">Tareas</TabsTrigger>
                 <TabsTrigger value="dailies">Dailies</TabsTrigger>
               </TabsList>

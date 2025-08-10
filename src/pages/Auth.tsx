@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import vecturaLogo from '@/assets/vectura-logo.png';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
@@ -67,11 +68,20 @@ const Auth = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">ProjectFlow Dailies</CardTitle>
-          <CardDescription>
-            Gestión de proyectos e incidencias colaborativa
-          </CardDescription>
+        <CardHeader className="text-center space-y-6">
+          <div className="flex justify-center">
+            <img 
+              src={vecturaLogo} 
+              alt="Vectura" 
+              className="h-16 w-auto object-contain"
+            />
+          </div>
+          <div>
+            <CardTitle className="text-2xl">Vectura</CardTitle>
+            <CardDescription>
+              Gestión de proyectos e incidencias colaborativa
+            </CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
