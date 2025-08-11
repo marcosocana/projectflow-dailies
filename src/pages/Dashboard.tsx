@@ -148,7 +148,7 @@ const Dashboard = () => {
           </div>
         ) : (
           <SidebarProvider>
-            <div className="min-h-screen flex w-full pt-16">
+            <div className="min-h-screen flex w-full pt-[76px]">
               <AppSidebar currentProject={currentProject} />
               <SidebarInset className="flex-1">
                 <main className="flex-1 p-6 pt-2">
