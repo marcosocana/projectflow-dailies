@@ -75,10 +75,11 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-   <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-white border-gray-200 h-[64px] flex items-center">
-  <div className="w-full">
-    {/* Logo + título fijo a la izquierda */}
-    <div className="flex items-center fixed left-[10px]">
+  <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-white border-gray-200 h-[64px] flex items-center">
+  <div className="relative w-full h-full flex items-center justify-center">
+    
+    {/* Bloque izquierdo: logo + título */}
+    <div className="absolute left-[10px] flex items-center">
       {currentProject?.logo_url ? (
         <img
           src={currentProject.logo_url}
@@ -97,8 +98,8 @@ const Dashboard = () => {
       </h1>
     </div>
 
-    {/* Email + botón fijo a la derecha */}
-    <div className="flex items-center gap-4 fixed right-[15px]">
+    {/* Bloque derecho: email + cerrar sesión */}
+    <div className="absolute right-[15px] flex items-center gap-4">
       <span className="text-sm text-muted-foreground">
         {user?.email}
       </span>
@@ -111,8 +112,10 @@ const Dashboard = () => {
         <LogOut className="h-4 w-4" />
       </Button>
     </div>
+
   </div>
 </header>
+
 
       {/* Main Content */}
       <main className="container mx-auto pt-0 py-[30px] px-0">
