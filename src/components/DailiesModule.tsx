@@ -476,7 +476,7 @@ export default function DailiesModule({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="space-y-6">
             <div>
               <Calendar
                 mode="single"
