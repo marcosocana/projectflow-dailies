@@ -217,6 +217,36 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          color: string
+          created_at: string
+          full_name: string
+          id: string
+          is_active: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          full_name: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       projects: {
         Row: {
           created_at: string
@@ -252,6 +282,73 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      shared_notes: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          last_edited_by: string | null
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          last_edited_by?: string | null
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          last_edited_by?: string | null
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_notes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shared_notes_history: {
+        Row: {
+          content: string
+          created_at: string
+          edited_by: string | null
+          id: string
+          note_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          edited_by?: string | null
+          id?: string
+          note_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          edited_by?: string | null
+          id?: string
+          note_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_notes_history_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "shared_notes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       task_comments: {
         Row: {
@@ -376,6 +473,47 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      vacations: {
+        Row: {
+          created_at: string
+          description: string | null
+          end_date: string
+          id: string
+          project_id: string
+          start_date: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          end_date: string
+          id?: string
+          project_id: string
+          start_date: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          end_date?: string
+          id?: string
+          project_id?: string
+          start_date?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vacations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
