@@ -474,9 +474,7 @@ export default function DailiesModule({
               </Button>
               <Button onClick={() => setCreateTaskOpen(true)} aria-label="Crear tarea" title="Crear tarea">+</Button>
               <Button variant="outline" onClick={openPersistModal}>Persistir</Button>
-              <Button variant="outline" onClick={() => {
-              loadAllTasks();
-              setViewAllTasksOpen(true);
+              <Button variant="outline" onClick={() => { loadAllTasks(); setViewAllTasksOpen(true); }}>Ver todas</Button>
             </div>
           </div>
         </CardHeader>
