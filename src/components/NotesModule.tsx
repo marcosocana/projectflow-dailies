@@ -10,6 +10,17 @@ import { useAuth } from '@/hooks/useAuth';
 import { ArrowLeft, FileText, Edit2, Trash2, Check } from 'lucide-react';
 import NotesIndex from '@/components/NotesIndex';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface NotesModuleProps {
   projectId: string;
@@ -24,6 +35,7 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
   const [noteTitle, setNoteTitle] = useState('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // Auto-save functionality
   const autoSave = useCallback(async (noteId: string, newContent: string, newTitle: string) => {
@@ -90,21 +102,22 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
   const handleDeleteNote = async () => {
     if (!selectedNote) return;
     
-    if (confirm('¿Estás seguro de que quieres eliminar esta nota?')) {
-      try {
-        await deleteNote(selectedNote.id);
-        toast({
-          title: "Nota eliminada",
-          description: "La nota ha sido eliminada correctamente",
-        });
-        handleBackToIndex();
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "No se pudo eliminar la nota",
-          variant: "destructive",
-        });
-      }
+    try {
+      await deleteNote(selectedNote.id);
+      toast({
+        title: "Nota eliminada",
+        description: "La nota ha sido eliminada correctamente",
+      });
+      setShowDeleteDialog(false);
+      handleBackToIndex();
+    } catch (error) {
+      console.error('Error deleting note:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la nota",
+        variant: "destructive",
+      });
+      setShowDeleteDialog(false);
     }
   };
 
@@ -176,15 +189,32 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
               Guardando...
             </div>
           )}
-          <Button 
-            variant="destructive"
-            size="sm"
-            onClick={handleDeleteNote}
-            className="flex items-center gap-2"
-          >
-            <Trash2 className="h-4 w-4" />
-            Eliminar
-          </Button>
+          <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <AlertDialogTrigger asChild>
+              <Button 
+                variant="destructive"
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Eliminar
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirmar eliminación</AlertDialogTitle>
+                <AlertDialogDescription>
+                  ¿Estás seguro de que quieres eliminar la nota "{noteTitle}"? Esta acción no se puede deshacer.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteNote} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Eliminar
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
 
