@@ -85,18 +85,21 @@ export function AppSidebar({ currentProject }: AppSidebarProps) {
                       to={item.url} 
                       end 
                       className={({ isActive }) => 
-                        `flex items-center justify-center w-12 h-12 rounded-lg transition-colors ${
+                        `group flex items-center justify-center w-12 h-12 rounded-xl transition-all duration-200 ${
                           isActive 
-                            ? 'bg-primary text-primary-foreground' 
-                            : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                            ? 'bg-primary text-primary-foreground shadow-md ring-2 ring-primary' 
+                            : 'hover:bg-muted text-muted-foreground hover:text-foreground hover:shadow-sm'
                         }`
                       }
                     >
-                      <item.icon className="h-6 w-6" />
+                      <item.icon className="h-6 w-6 transition-transform duration-200 group-hover:scale-110" />
                     </NavLink>
                   </TooltipTrigger>
                   <TooltipContent side="right" className="ml-2">
-                    <p>{item.title}</p>
+                    <div className="flex flex-col">
+                      <p className="font-medium">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">{item.description}</p>
+                    </div>
                   </TooltipContent>
                 </Tooltip>
               </div>

@@ -220,7 +220,7 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-3">
             {/* Calendar */}
             <div>
               <h3 className="text-lg font-semibold mb-4">Calendario</h3>
@@ -229,7 +229,7 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
                 locale={es}
-                className="rounded-md border p-3 pointer-events-auto w-full max-w-sm mx-auto"
+                className="rounded-md border p-3 pointer-events-auto w-full mx-auto px-[50px]"
                 components={{ DayContent: DayContent as any }}
               />
             </div>
