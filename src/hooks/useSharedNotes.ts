@@ -39,20 +39,7 @@ export function useSharedNotes(projectId?: string) {
 
       if (error) throw error;
       
-      // Procesar notas para extraer títulos del contenido
-      const notesWithTitles = (data || []).map(note => {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = note.content;
-        const textContent = tempDiv.textContent || tempDiv.innerText || '';
-        const title = textContent.trim().split('\n')[0].substring(0, 50) || 'Sin título';
-        
-        return {
-          ...note,
-          title,
-        };
-      });
-
-      setNotes(notesWithTitles);
+      setNotes((data || []) as any);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -89,6 +76,7 @@ export function useSharedNotes(projectId?: string) {
         .from('shared_notes')
         .insert([{ 
           project_id: projectId, 
+          title: finalTitle,
           content: initialContent, 
           last_edited_by: user.id 
         }])
@@ -98,7 +86,7 @@ export function useSharedNotes(projectId?: string) {
       if (error) throw error;
       
       await fetchNotes();
-      return { ...data, title: finalTitle };
+      return { ...data };
     } catch (error: any) {
       toast({
         title: "Error",
@@ -116,6 +104,7 @@ export function useSharedNotes(projectId?: string) {
       const { error } = await supabase
         .from('shared_notes')
         .update({ 
+          title,
           content, 
           last_edited_by: user.id,
           updated_at: new Date().toISOString()

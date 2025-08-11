@@ -123,9 +123,6 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Gestión del Equipo</CardTitle>
-              <CardDescription>
-                Administra los miembros del equipo del proyecto
-              </CardDescription>
             </div>
             <Button onClick={() => setCreatePersonOpen(true)}>
               <UserPlus className="h-4 w-4 mr-2" />

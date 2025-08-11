@@ -71,7 +71,7 @@ const menuItems = [
 export function AppSidebar({ currentProject }: AppSidebarProps) {
   return (
     <aside 
-      className="fixed left-0 top-[75px] w-16 h-[calc(100vh-75px)] bg-white border-r border-gray-200 overflow-y-auto z-40"
+      className="fixed left-0 top-[75px] w-16 h-[calc(100vh-75px)] bg-background border-r border-border shadow-sm overflow-y-auto z-40"
       data-sidebar="content"
     >
       <div className="p-2">

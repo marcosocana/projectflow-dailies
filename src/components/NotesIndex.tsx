@@ -41,21 +41,8 @@ export default function NotesIndex({ projectId, onSelectNote, onCreateNote }: No
 
       if (error) throw error;
 
-      // Extraer título del contenido HTML
-      const notesWithTitles = (data || []).map(note => {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = note.content;
-        const textContent = tempDiv.textContent || tempDiv.innerText || '';
-        const title = textContent.trim().split('\n')[0].substring(0, 50) || 'Sin título';
-        
-        return {
-          ...note,
-          title,
-        };
-      });
-
-      setNotes(notesWithTitles);
-      setFilteredNotes(notesWithTitles);
+      setNotes(data || []);
+      setFilteredNotes(data || []);
     } catch (error: any) {
       console.error('Error fetching notes:', error);
       toast({
@@ -169,7 +156,7 @@ export default function NotesIndex({ projectId, onSelectNote, onCreateNote }: No
             >
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg line-clamp-2">
-                  {note.title}
+                  {note.title || 'Sin título'}
                 </CardTitle>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Calendar className="h-3 w-3" />

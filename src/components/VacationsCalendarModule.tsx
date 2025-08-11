@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useVacations } from '@/hooks/useVacations';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, User, CalendarIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -183,6 +183,22 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
     }
   };
 
+  const handleDeleteAllVacations = async () => {
+    const confirmed = confirm('¿Eliminar todas las vacaciones de este proyecto? Esta acción no se puede deshacer.');
+    if (!confirmed) return;
+    try {
+      const { error } = await supabase
+        .from('vacations')
+        .delete()
+        .eq('project_id', projectId);
+      if (error) throw error;
+      await refetch();
+      toast({ title: 'Éxito', description: 'Todas las vacaciones han sido eliminadas.' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'No se pudieron eliminar las vacaciones', variant: 'destructive' });
+    }
+  };
+
   const dayVacations = getVacationsForDate(selectedDate);
 
   return (
@@ -191,10 +207,16 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Gestión de Vacaciones</CardTitle>
-            <Button onClick={() => setCreateOpen(true)} className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Nueva Vacación
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={handleDeleteAllVacations} className="text-destructive border-destructive/50">
+                <Trash2 className="h-4 w-4 mr-2" />
+                Eliminar todas
+              </Button>
+              <Button onClick={() => setCreateOpen(true)} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Añadir vacaciones
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -207,7 +229,7 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
                 locale={es}
-                className="rounded-md border p-3 pointer-events-auto w-full mx-auto"
+                className="rounded-md border p-3 pointer-events-auto w-full max-w-sm mx-auto"
                 components={{ DayContent: DayContent as any }}
               />
             </div>
