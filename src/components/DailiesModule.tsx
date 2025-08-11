@@ -904,5 +904,5 @@ export default function DailiesModule({
           </div>
         </DialogContent>
       </Dialog>
-    </div>;
+    </div>);
 }
