@@ -80,7 +80,11 @@ const Dashboard = () => {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-4">
               {currentProject?.logo_url ? (
-                <img src={currentProject.logo_url} alt={`${currentProject.name} logo`} className="h-10 max-w-[160px] w-auto object-contain" />
+               <img 
+  src={currentProject.logo_url} 
+  alt={`${currentProject.name} logo`} 
+  className="h-10 max-w-[160px] w-auto object-contain ml-[10px]" 
+/> 
               ) : (
                 <img src={vecturaLogo} alt="Vectura" className="h-10 w-auto object-contain" />
               )}
