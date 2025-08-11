@@ -207,7 +207,8 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
                 locale={es}
-                className={cn("rounded-md border p-3 pointer-events-auto scale-110 md:scale-125 origin-top")}
+                initialFocus
+                className={cn("w-full rounded-md border p-3 pointer-events-auto md:scale-110 lg:scale-125 origin-top")}
                 components={{ DayContent: DayContent as any }}
               />
             </div>
@@ -230,7 +231,7 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
                           <div className="flex items-center gap-3">
                             <div 
                               className="w-4 h-4 rounded-full" 
-                              style={{ backgroundColor: person?.color || '#3B82F6' }}
+                              style={{ backgroundColor: person?.color || 'hsl(var(--primary))' }}
                             />
                             <div>
                               <p className="font-medium">{person?.name || 'Usuario en vacaciones'}</p>
