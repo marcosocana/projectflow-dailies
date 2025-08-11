@@ -64,11 +64,11 @@ const menuItems = [
 export function AppSidebar({ currentProject }: AppSidebarProps) {
   return (
     <aside 
-      className="fixed left-0 top-[76px] w-64 h-[calc(100vh-76px)] bg-white border-r border-gray-200 overflow-y-auto z-40"
+      className="fixed left-0 top-[75px] w-16 h-[calc(100vh-75px)] bg-white border-r border-gray-200 overflow-y-auto z-40"
       data-sidebar="content"
     >
-      <div className="p-4">
-        <nav className="space-y-2">
+      <div className="p-2">
+        <nav className="space-y-1">
           <TooltipProvider>
             {menuItems.map((item) => (
               <div key={item.title}>

@@ -150,7 +150,7 @@ const Dashboard = () => {
         ) : (
           <div className="min-h-screen">
             <AppSidebar currentProject={currentProject} />
-            <main className="ml-64 p-6 pt-[88px]">
+            <main className="ml-16 p-6 pt-[88px]">
               <Routes>
                 <Route path="/" element={<Navigate to="tasks" replace />} />
                 <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
