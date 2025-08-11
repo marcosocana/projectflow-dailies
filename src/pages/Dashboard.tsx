@@ -93,11 +93,10 @@ const Dashboard = () => {
             className="h-10 w-auto object-contain fixed left-[10px]"
           />
         )}
-        <h1 className="text-2xl font-bold ml-[10px]">
+        <h1 className="text-2xl font-bold">
           {currentProject ? currentProject.name : 'Vectura'}
         </h1>
-  </div>
-
+    </div>
       <div className="flex items-center gap-4">
         <span className="text-sm text-muted-foreground">{user?.email}</span>
         <Button
