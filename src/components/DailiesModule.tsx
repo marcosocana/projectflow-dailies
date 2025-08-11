@@ -13,8 +13,10 @@ import { useProjectAccess } from '@/hooks/useProjectAccess';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { es } from 'date-fns/locale';
 import type { TablesInsert } from '@/integrations/supabase/types';
-import { Trash2, Eye, Pencil, RefreshCcw } from 'lucide-react';
+import { Trash2, Eye, Pencil, RefreshCcw, List } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 type TaskStatus = 'pending' | 'in_progress' | 'resolved';
 interface DailiesModuleProps {
   projectId: string;
@@ -55,6 +57,16 @@ export default function DailiesModule({
     incidentId: '',
     status: 'pending'
   });
+  
+  // New states for persist modal and view all tasks
+  const [persistModalOpen, setPersistModalOpen] = useState(false);
+  const [lastDayTasks, setLastDayTasks] = useState<any[]>([]);
+  const [selectedTasksForPersist, setSelectedTasksForPersist] = useState<string[]>([]);
+  const [viewAllTasksOpen, setViewAllTasksOpen] = useState(false);
+  const [allTasks, setAllTasks] = useState<any[]>([]);
+  const [filteredTasks, setFilteredTasks] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   // Sync when parent unlocks via modal
   useEffect(() => {
     if (initiallyUnlocked) setUnlocked(true);
@@ -227,29 +239,33 @@ export default function DailiesModule({
     } = await supabase.from('tasks').delete().eq('id', id);
     if (!error) setTasks(t => t.filter(x => x.id !== id));
   };
-  const cloneYesterdayTasks = async () => {
+  const openPersistModal = async () => {
     try {
       if (!date) return;
-      const todayId = await ensureDaily(date);
       const todayStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      
       // Find the most recent previous day with tasks
-      const {
-        data: prevDays
-      } = await supabase.from('dailies').select('id, date').eq('project_id', projectId).lt('date', todayStr).order('date', {
-        ascending: false
-      });
+      const { data: prevDays } = await supabase
+        .from('dailies')
+        .select('id, date')
+        .eq('project_id', projectId)
+        .lt('date', todayStr)
+        .order('date', { ascending: false });
+      
       let sourceDailyId: string | null = null;
       if (prevDays && prevDays.length) {
         for (const d of prevDays) {
-          const {
-            data: links
-          } = await supabase.from('daily_tasks').select('task_id').eq('daily_id', d.id);
+          const { data: links } = await supabase
+            .from('daily_tasks')
+            .select('task_id')
+            .eq('daily_id', d.id);
           if (links && links.length) {
             sourceDailyId = d.id as string;
             break;
           }
         }
       }
+      
       if (!sourceDailyId) {
         toast({
           title: 'Sin tareas previas',
@@ -258,24 +274,16 @@ export default function DailiesModule({
         return;
       }
 
-      // Get task ids from source and map them to today
-      const {
-        data: toLink
-      } = await supabase.from('daily_tasks').select('task_id').eq('daily_id', sourceDailyId);
-      const rows = (toLink || []).map((r: any) => ({
-        daily_id: todayId,
-        task_id: r.task_id
-      }));
-      if (rows.length) {
-        await supabase.from('daily_tasks').upsert(rows as any, {
-          onConflict: 'daily_id,task_id'
-        } as any);
-      }
-      await loadTasks(date);
-      toast({
-        title: 'Tareas persistidas',
-        description: 'Se cargaron las tareas del último día con tareas.'
-      });
+      // Get tasks from the last day with tasks
+      const { data: taskData } = await supabase
+        .from('daily_tasks')
+        .select('tasks(*)')
+        .eq('daily_id', sourceDailyId);
+      
+      const tasks = (taskData || []).map((r: any) => r.tasks).filter(Boolean);
+      setLastDayTasks(tasks);
+      setSelectedTasksForPersist(tasks.map((t: any) => t.id)); // All selected by default
+      setPersistModalOpen(true);
     } catch (e) {
       toast({
         title: 'Error',
@@ -284,6 +292,92 @@ export default function DailiesModule({
       });
     }
   };
+
+  const persistSelectedTasks = async () => {
+    try {
+      if (!date) return;
+      const todayId = await ensureDaily(date);
+      
+      const rows = selectedTasksForPersist.map(taskId => ({
+        daily_id: todayId,
+        task_id: taskId
+      }));
+      
+      if (rows.length) {
+        await supabase.from('daily_tasks').upsert(rows as any, {
+          onConflict: 'daily_id,task_id'
+        } as any);
+      }
+      
+      await loadTasks(date);
+      setPersistModalOpen(false);
+      toast({
+        title: 'Tareas persistidas',
+        description: `Se persistieron ${selectedTasksForPersist.length} tareas.`
+      });
+    } catch (e) {
+      toast({
+        title: 'Error',
+        description: 'No se pudieron persistir las tareas',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const loadAllTasks = async () => {
+    try {
+      const { data: tasksData } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false });
+      
+      if (tasksData) {
+        // Remove duplicates based on task ID
+        const uniqueTasks = tasksData.filter((task, index, self) => 
+          index === self.findIndex(t => t.id === task.id)
+        );
+        
+        // Sort by status: in_progress, pending, resolved
+        const statusOrder = { 'in_progress': 0, 'pending': 1, 'resolved': 2 };
+        uniqueTasks.sort((a, b) => {
+          const aOrder = statusOrder[a.status as keyof typeof statusOrder] ?? 3;
+          const bOrder = statusOrder[b.status as keyof typeof statusOrder] ?? 3;
+          return aOrder - bOrder;
+        });
+        
+        setAllTasks(uniqueTasks);
+        setFilteredTasks(uniqueTasks);
+      }
+    } catch (e) {
+      toast({
+        title: 'Error',
+        description: 'No se pudieron cargar todas las tareas',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Filter and search logic for all tasks view
+  useEffect(() => {
+    let filtered = [...allTasks];
+    
+    // Filter by status
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(task => task.status === statusFilter);
+    }
+    
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(task => 
+        task.title?.toLowerCase().includes(query) ||
+        task.description?.toLowerCase().includes(query)
+      );
+    }
+    
+    setFilteredTasks(filtered);
+  }, [allTasks, statusFilter, searchQuery]);
   const loadTaskComments = async (taskId: string) => {
     const {
       data
@@ -394,7 +488,11 @@ export default function DailiesModule({
                 <RefreshCcw className="h-4 w-4" />
               </Button>
               <Button onClick={() => setCreateTaskOpen(true)} aria-label="Crear tarea" title="Crear tarea">+</Button>
-              <Button variant="outline" onClick={cloneYesterdayTasks}>Persistir tareas</Button>
+              <Button variant="outline" onClick={openPersistModal}>Persistir</Button>
+              <Button variant="outline" onClick={() => {
+                loadAllTasks();
+                setViewAllTasksOpen(true);
+              }}>Ver todas</Button>
               <Button variant="outline" onClick={() => setTeamOpen(true)}>Equipo</Button>
             </div>
           </div>
@@ -603,6 +701,183 @@ export default function DailiesModule({
                 </form>
               </div>
             </div>}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de persistir tareas */}
+      <Dialog open={persistModalOpen} onOpenChange={setPersistModalOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Persistir tareas</DialogTitle>
+            <DialogDescription>Selecciona las tareas del último día que quieres persistir</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <ScrollArea className="h-[400px] pr-4">
+              <div className="space-y-3">
+                {lastDayTasks.map(task => {
+                  const person = people.find(p => p.id === task.person_id);
+                  const isSelected = selectedTasksForPersist.includes(task.id);
+                  
+                  return (
+                    <div key={task.id} className="flex items-start gap-3 p-3 border rounded">
+                      <Checkbox 
+                        checked={isSelected}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedTasksForPersist(prev => [...prev, task.id]);
+                          } else {
+                            setSelectedTasksForPersist(prev => prev.filter(id => id !== task.id));
+                          }
+                        }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium">{task.title}</div>
+                        {task.description && (
+                          <div className="text-sm text-muted-foreground mt-1">{task.description}</div>
+                        )}
+                        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                          <span>
+                            {task.status === 'in_progress' ? 'En curso' : 
+                             task.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
+                          </span>
+                          {person && (
+                            <div className="flex items-center gap-1">
+                              <span className="h-2 w-2 rounded" style={{ backgroundColor: person.color }} />
+                              {person.name}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {lastDayTasks.length === 0 && (
+                  <div className="text-center text-muted-foreground py-8">
+                    No hay tareas en el último día con tareas
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+            
+            <div className="flex gap-2 pt-4 border-t">
+              <Button 
+                variant="outline" 
+                onClick={() => setSelectedTasksForPersist(lastDayTasks.map(t => t.id))}
+                disabled={lastDayTasks.length === 0}
+              >
+                Seleccionar todas
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setSelectedTasksForPersist([])}
+              >
+                Deseleccionar todas
+              </Button>
+              <Button 
+                onClick={persistSelectedTasks}
+                disabled={selectedTasksForPersist.length === 0}
+                className="ml-auto"
+              >
+                Persistir {selectedTasksForPersist.length} tareas
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal ver todas las tareas */}
+      <Dialog open={viewAllTasksOpen} onOpenChange={setViewAllTasksOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Todas las tareas</DialogTitle>
+            <DialogDescription>Vista completa de todas las tareas del proyecto</DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <Input
+                  placeholder="Buscar tareas..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los estados</SelectItem>
+                  <SelectItem value="in_progress">En curso</SelectItem>
+                  <SelectItem value="pending">Pendiente</SelectItem>
+                  <SelectItem value="resolved">Resuelta</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <ScrollArea className="h-[400px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Tarea</TableHead>
+                    <TableHead>Persona</TableHead>
+                    <TableHead>Creada</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTasks.map(task => {
+                    const person = people.find(p => p.id === task.person_id);
+                    return (
+                      <TableRow key={task.id}>
+                        <TableCell>
+                          {task.status === 'in_progress' ? 'En curso' : 
+                           task.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium">{task.title}</div>
+                          {task.description && (
+                            <div className="text-xs text-muted-foreground">{task.description}</div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {person ? (
+                            <div className="flex items-center gap-2">
+                              <span className="h-3 w-3 rounded" style={{ backgroundColor: person.color }} />
+                              {person.name}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {new Date(task.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => openDetails(task)}
+                            aria-label="Ver detalles"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {filteredTasks.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        No se encontraron tareas
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
 
