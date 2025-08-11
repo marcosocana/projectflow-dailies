@@ -118,7 +118,7 @@ const Dashboard = () => {
 
 
       {/* Main Content */}
-      <main className="container mx-auto pt-0 py-[30px] px-0">
+      <main className="container mx-auto pt-0 py-[94px] px-0">
         {!currentProject ? (
           <div className="max-w-4xl mx-auto space-y-6">
             {/* Acceso con contraseña */}
