@@ -95,7 +95,7 @@ const Dashboard = () => {
       </header>
 
     {/* Main Content */}
-      <main className="container mx-auto pt-20 py-[63px] px-0">
+      <main className="container mx-auto pt-20 px-0 py-0">
         {!currentProject ? <div className="max-w-4xl mx-auto space-y-6">
             {!showProjectsList ? <>
                 {/* Mis Proyectos */}
@@ -207,7 +207,7 @@ const Dashboard = () => {
             <div className="min-h-screen flex w-full pt-16 py-0">
               <AppSidebar currentProject={currentProject} />
               <SidebarInset className="flex-1">
-                <main className="flex-1 p-6">
+                <main className="flex-1 p-6 py-[10px] px-0">
                   <Routes>
                     <Route path="/" element={<Navigate to="tasks" replace />} />
                     <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
