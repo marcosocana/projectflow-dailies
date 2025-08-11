@@ -88,9 +88,9 @@ const Dashboard = () => {
               ) : (
                 <img src={vecturaLogo} alt="Vectura" className="h-10 w-auto object-contain" />
               )}
-              <h1 className="text-2xl font-bold">
-                {currentProject ? currentProject.name : 'Vectura'}
-              </h1>
+             <h1 className="text-2xl font-bold ml-[10px]">
+  {currentProject ? currentProject.name : 'Vectura'}
+</h1>
             </div>
             <div className="flex items-center gap-4">
               <span className="text-sm text-muted-foreground">
