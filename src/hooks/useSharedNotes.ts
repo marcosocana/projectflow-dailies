@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 export interface SharedNote {
   id: string;
   project_id: string;
   content: string;
+  title: string;
   last_edited_by?: string;
   created_at: string;
   updated_at: string;
@@ -20,12 +22,12 @@ export interface SharedNoteHistory {
 }
 
 export function useSharedNotes(projectId?: string) {
-  const [note, setNote] = useState<SharedNote | null>(null);
-  const [history, setHistory] = useState<SharedNoteHistory[]>([]);
+  const [notes, setNotes] = useState<SharedNote[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { user } = useAuth();
 
-  const fetchNote = async () => {
+  const fetchNotes = async () => {
     if (!projectId) return;
     
     try {
@@ -33,10 +35,24 @@ export function useSharedNotes(projectId?: string) {
         .from('shared_notes')
         .select('*')
         .eq('project_id', projectId)
-        .maybeSingle();
+        .order('updated_at', { ascending: false });
 
       if (error) throw error;
-      setNote(data);
+      
+      // Procesar notas para extraer títulos del contenido
+      const notesWithTitles = (data || []).map(note => {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = note.content;
+        const textContent = tempDiv.textContent || tempDiv.innerText || '';
+        const title = textContent.trim().split('\n')[0].substring(0, 50) || 'Sin título';
+        
+        return {
+          ...note,
+          title,
+        };
+      });
+
+      setNotes(notesWithTitles);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -48,51 +64,90 @@ export function useSharedNotes(projectId?: string) {
     }
   };
 
-  const fetchHistory = async () => {
-    if (!note?.id) return;
+  const createNote = async (title: string = 'Nueva nota') => {
+    if (!projectId || !user) return null;
     
     try {
+      // Verificar si ya existe una nota con el mismo título
+      let finalTitle = title;
+      let counter = 1;
+      let titleExists = true;
+      
+      while (titleExists) {
+        const existingNote = notes.find(note => note.title === finalTitle);
+        if (!existingNote) {
+          titleExists = false;
+        } else {
+          finalTitle = `${title} (${counter})`;
+          counter++;
+        }
+      }
+      
+      const initialContent = `<h1>${finalTitle}</h1><p>Contenido de la nota...</p>`;
+      
       const { data, error } = await supabase
-        .from('shared_notes_history')
-        .select('*')
-        .eq('note_id', note.id)
-        .order('created_at', { ascending: false });
+        .from('shared_notes')
+        .insert([{ 
+          project_id: projectId, 
+          content: initialContent, 
+          last_edited_by: user.id 
+        }])
+        .select()
+        .single();
 
       if (error) throw error;
-      setHistory(data || []);
+      
+      await fetchNotes();
+      return { ...data, title: finalTitle };
     } catch (error: any) {
-      console.error('Error fetching history:', error);
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+      return null;
     }
   };
 
-  const createOrUpdateNote = async (content: string, userId?: string) => {
-    if (!projectId) return;
+  const updateNote = async (noteId: string, content: string, title: string) => {
+    if (!user) return;
     
     try {
-      if (note) {
-        const { error } = await supabase
-          .from('shared_notes')
-          .update({ 
-            content, 
-            last_edited_by: userId,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', note.id);
+      const { error } = await supabase
+        .from('shared_notes')
+        .update({ 
+          content, 
+          last_edited_by: user.id,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', noteId);
 
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('shared_notes')
-          .insert([{ 
-            project_id: projectId, 
-            content, 
-            last_edited_by: userId 
-          }]);
-
-        if (error) throw error;
-      }
+      if (error) throw error;
       
-      await fetchNote();
+      await fetchNotes();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteNote = async (noteId: string) => {
+    try {
+      const { error } = await supabase
+        .from('shared_notes')
+        .delete()
+        .eq('id', noteId);
+
+      if (error) throw error;
+      
+      await fetchNotes();
+      toast({
+        title: "Nota eliminada",
+        description: "La nota ha sido eliminada correctamente",
+      });
     } catch (error: any) {
       toast({
         title: "Error",
@@ -103,20 +158,15 @@ export function useSharedNotes(projectId?: string) {
   };
 
   useEffect(() => {
-    fetchNote();
+    fetchNotes();
   }, [projectId]);
 
-  useEffect(() => {
-    if (note) {
-      fetchHistory();
-    }
-  }, [note]);
-
   return {
-    note,
-    history,
+    notes,
     loading,
-    createOrUpdateNote,
-    refetch: fetchNote,
+    createNote,
+    updateNote,
+    deleteNote,
+    refetch: fetchNotes,
   };
 }

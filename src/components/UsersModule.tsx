@@ -64,7 +64,8 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
       setGeneratedPassword(password);
       
       try {
-        const { error: signUpError } = await supabase.auth.admin.createUser({
+        // Crear usuario en Supabase Auth
+        const { data: authData, error: signUpError } = await supabase.auth.admin.createUser({
           email: formData.email,
           password: password,
           email_confirm: true,
@@ -75,6 +76,38 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
 
         if (signUpError) throw signUpError;
 
+        // El perfil se crea automáticamente por el trigger, pero vamos a actualizarlo
+        if (authData.user) {
+          // Esperar un poco para que el trigger se ejecute
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Actualizar el perfil con los datos adicionales
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({
+              full_name: formData.full_name,
+              color: formData.color,
+            })
+            .eq('user_id', authData.user.id);
+
+          if (updateError) {
+            console.error('Error updating profile:', updateError);
+          }
+
+          // Crear acceso al proyecto
+          const { error: accessError } = await supabase
+            .from('project_access')
+            .insert({
+              user_id: authData.user.id,
+              project_id: projectId,
+              granted_by: currentUser?.id,
+            });
+
+          if (accessError) {
+            console.error('Error creating project access:', accessError);
+          }
+        }
+
         toast({
           title: "Usuario creado",
           description: `Usuario creado exitosamente. Contraseña generada.`,
@@ -82,6 +115,7 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
         
         setShowPassword(true);
       } catch (error: any) {
+        console.error('Error creating user:', error);
         toast({
           title: "Error",
           description: error.message,

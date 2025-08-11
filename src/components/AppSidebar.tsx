@@ -71,7 +71,7 @@ export function AppSidebar({ currentProject }: AppSidebarProps) {
 
   return (
     <Sidebar
-      className="w-14"
+      className="w-14 bg-white border-r border-gray-200"
       collapsible="none"
     >
       <SidebarContent>

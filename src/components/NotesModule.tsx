@@ -1,147 +1,91 @@
-import { useState, useEffect, useRef } from 'react';
-import { Save, History, User, ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
-import { useSharedNotes } from '@/hooks/useSharedNotes';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useSharedNotes, SharedNote } from '@/hooks/useSharedNotes';
 import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
-import ReactQuill from 'react-quill';
-import NotesIndex from './NotesIndex';
-import 'react-quill/dist/quill.snow.css';
+import { ArrowLeft, Save, FileText, Edit2, Trash2 } from 'lucide-react';
+import NotesIndex from '@/components/NotesIndex';
 
 interface NotesModuleProps {
   projectId: string;
 }
 
-interface Note {
-  id: string;
-  project_id: string;
-  content: string;
-  title?: string;
-  created_at: string;
-  updated_at: string;
-  last_edited_by?: string;
-}
-
 export default function NotesModule({ projectId }: NotesModuleProps) {
+  const { notes, loading, createNote, updateNote, deleteNote } = useSharedNotes(projectId);
   const { user } = useAuth();
-  const { toast } = useToast();
-  
-  const [currentView, setCurrentView] = useState<'index' | 'editor'>('index');
-  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+  const [selectedNote, setSelectedNote] = useState<SharedNote | null>(null);
   const [content, setContent] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+  const [noteTitle, setNoteTitle] = useState('');
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const autoSaveTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Configuración del editor
-  const modules = {
-    toolbar: [
-      [{ 'header': [1, 2, 3, false] }],
-      ['bold', 'italic', 'underline', 'strike'],
-      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-      [{ 'indent': '-1'}, { 'indent': '+1' }],
-      ['link', 'blockquote', 'code-block'],
-      [{ 'color': [] }, { 'background': [] }],
-      ['clean']
-    ],
-  };
-
-  const formats = [
-    'header', 'bold', 'italic', 'underline', 'strike',
-    'list', 'bullet', 'indent', 'link', 'blockquote', 
-    'code-block', 'color', 'background'
-  ];
-
-  // Cargar contenido inicial
+  // Sync content when note is selected
   useEffect(() => {
     if (selectedNote) {
       setContent(selectedNote.content);
+      setNoteTitle(selectedNote.title);
       setHasChanges(false);
     }
   }, [selectedNote]);
-
-  // Auto-guardado
-  useEffect(() => {
-    if (hasChanges && content !== (selectedNote?.content || '')) {
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current);
-      }
-      
-      autoSaveTimeoutRef.current = setTimeout(() => {
-        handleSave();
-      }, 2000); // Auto-guardar después de 2 segundos de inactividad
-    }
-
-    return () => {
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current);
-      }
-    };
-  }, [content, hasChanges, selectedNote]);
 
   const handleContentChange = (value: string) => {
     setContent(value);
     setHasChanges(true);
   };
 
+  const handleTitleChange = (newTitle: string) => {
+    setNoteTitle(newTitle);
+    setHasChanges(true);
+  };
+
   const handleSave = async () => {
-    if (!hasChanges || isSaving || !selectedNote) return;
+    if (!selectedNote) return;
     
-    setIsSaving(true);
-    try {
-      // Simular guardado - en una app real esto iría a Supabase
-      setHasChanges(false);
-      toast({
-        title: "Guardado",
-        description: "Las notas se han guardado correctamente",
-      });
-    } catch (error) {
-      console.error('Error saving notes:', error);
-    } finally {
-      setIsSaving(false);
+    // Actualizar el contenido con el título
+    const updatedContent = content.replace(/<h1>.*?<\/h1>/, `<h1>${noteTitle}</h1>`);
+    await updateNote(selectedNote.id, updatedContent, noteTitle);
+    setHasChanges(false);
+    setIsEditingTitle(false);
+  };
+
+  const handleCreateNote = async () => {
+    const newNote = await createNote('Nueva nota');
+    if (newNote) {
+      setSelectedNote(newNote);
     }
   };
 
-  const handleSelectNote = (note: Note) => {
+  const handleSelectNote = (note: any) => {
     setSelectedNote(note);
-    setCurrentView('editor');
-  };
-
-  const handleCreateNote = () => {
-    const newNote: Note = {
-      id: crypto.randomUUID(),
-      project_id: projectId,
-      content: '',
-      title: 'Nueva nota',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    setSelectedNote(newNote);
-    setCurrentView('editor');
   };
 
   const handleBackToIndex = () => {
-    setCurrentView('index');
     setSelectedNote(null);
     setContent('');
+    setNoteTitle('');
     setHasChanges(false);
+    setIsEditingTitle(false);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  const handleDeleteNote = async () => {
+    if (!selectedNote) return;
+    
+    if (confirm('¿Estás seguro de que quieres eliminar esta nota?')) {
+      await deleteNote(selectedNote.id);
+      handleBackToIndex();
+    }
   };
 
-  if (currentView === 'index') {
+  if (loading) {
+    return <div className="p-6 text-center">Cargando notas...</div>;
+  }
+
+  // Mostrar índice si no hay nota seleccionada
+  if (!selectedNote) {
     return (
       <NotesIndex 
         projectId={projectId}
@@ -157,80 +101,90 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
         <div className="flex items-center gap-4">
           <Button 
             variant="ghost" 
-            size="sm"
+            size="sm" 
             onClick={handleBackToIndex}
+            className="flex items-center gap-2"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Volver a notas
+            <ArrowLeft className="h-4 w-4" />
+            Volver al índice
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold">{selectedNote?.title || 'Nota'}</h1>
-            <p className="text-muted-foreground">
-              Editor colaborativo para la nota seleccionada
-            </p>
+          
+          <div className="flex items-center gap-2">
+            {isEditingTitle ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={noteTitle}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  className="text-2xl font-bold border-0 px-0 focus-visible:ring-0"
+                  onBlur={() => setIsEditingTitle(false)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setIsEditingTitle(false);
+                    }
+                  }}
+                  autoFocus
+                />
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h1 className="text-3xl font-bold">{noteTitle}</h1>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsEditingTitle(true)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
         </div>
         
         <div className="flex items-center gap-2">
-          {hasChanges && (
-            <Badge variant="secondary">
-              Cambios sin guardar
-            </Badge>
-          )}
-          
+          <Button 
+            variant="destructive"
+            size="sm"
+            onClick={handleDeleteNote}
+            className="flex items-center gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Eliminar
+          </Button>
           <Button 
             onClick={handleSave} 
-            disabled={!hasChanges || isSaving}
-            variant={hasChanges ? "default" : "outline"}
+            disabled={!hasChanges}
+            className="flex items-center gap-2"
           >
-            <Save className="h-4 w-4 mr-2" />
-            {isSaving ? 'Guardando...' : 'Guardar'}
+            <Save className="h-4 w-4" />
+            Guardar cambios
           </Button>
         </div>
       </div>
 
-      <Card className="min-h-[600px]">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <div className="flex items-center gap-2">
-              {selectedNote?.title || 'Documento'}
-              {selectedNote?.last_edited_by && (
-                <Badge variant="outline" className="text-xs">
-                  Última edición: {formatDate(selectedNote.updated_at)}
-                </Badge>
-              )}
-            </div>
-          </CardTitle>
-          <CardDescription>
-            Editor colaborativo con guardado automático cada 2 segundos
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Card>
+        <CardContent className="p-0">
           <div className="min-h-[500px]">
             <ReactQuill
               theme="snow"
               value={content}
               onChange={handleContentChange}
-              modules={modules}
-              formats={formats}
-              placeholder="Escribe aquí el contenido de la nota..."
-              style={{ height: '450px' }}
+              modules={{
+                toolbar: [
+                  [{ 'header': [1, 2, 3, false] }],
+                  ['bold', 'italic', 'underline', 'strike'],
+                  [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                  ['blockquote', 'code-block'],
+                  ['link'],
+                  ['clean']
+                ],
+              }}
+              placeholder="Escribe el contenido de la nota..."
+              style={{ border: 'none' }}
             />
           </div>
         </CardContent>
       </Card>
-
-      <div className="text-sm text-muted-foreground">
-        <p>
-          <strong>Consejos:</strong>
-        </p>
-        <ul className="list-disc list-inside space-y-1 mt-2">
-          <li>Los cambios se guardan automáticamente cada 2 segundos</li>
-          <li>Usa el botón "Volver a notas" para navegar entre diferentes notas</li>
-          <li>Todos los usuarios con acceso al proyecto pueden editar estas notas</li>
-          <li>Usa el botón "Guardar" para forzar el guardado inmediato</li>
-        </ul>
-      </div>
     </div>
   );
 }

@@ -62,8 +62,8 @@ const handleProjectCreated = (projectId: string, projectNumber: number) => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background">
-        <div className="container mx-auto px-4 py-4">
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-white border-gray-200">
+        <div className="container mx-auto px-4 py-3">
           {/* Desktop Header */}
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-4">
@@ -97,7 +97,7 @@ const handleProjectCreated = (projectId: string, projectNumber: number) => {
       </header>
 
 {/* Main Content */}
-      <main className="container mx-auto px-4 py-8 pt-24">
+      <main className="container mx-auto px-4 py-6 pt-20">
         {!currentProject ? (
           <div className="max-w-4xl mx-auto space-y-6">
             {!showProjectsList ? (
@@ -249,7 +249,7 @@ const handleProjectCreated = (projectId: string, projectNumber: number) => {
           </div>
         ) : (
           <SidebarProvider>
-            <div className="min-h-screen flex w-full pt-20">
+            <div className="min-h-screen flex w-full pt-16">
               <AppSidebar currentProject={currentProject} />
               <SidebarInset className="flex-1">
                 <main className="flex-1 p-6">
