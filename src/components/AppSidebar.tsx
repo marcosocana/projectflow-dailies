@@ -29,37 +29,37 @@ interface AppSidebarProps {
 const menuItems = [
   { 
     title: "Tareas", 
-    url: "/tasks", 
+    url: "tasks", 
     icon: ClipboardList,
     description: "Gestión de incidencias y tareas" 
   },
   { 
     title: "Dailies", 
-    url: "/dailies", 
+    url: "dailies", 
     icon: BookOpen,
     description: "Seguimiento diario del proyecto" 
   },
   { 
     title: "Vacaciones", 
-    url: "/vacations", 
+    url: "vacations", 
     icon: Calendar,
     description: "Gestión de vacaciones del equipo" 
   },
   { 
     title: "Usuarios", 
-    url: "/users", 
+    url: "users", 
     icon: Users,
     description: "Gestión de miembros del equipo" 
   },
   { 
     title: "Notas", 
-    url: "/notes", 
+    url: "notes", 
     icon: FileText,
     description: "Notas compartidas del proyecto" 
   },
   { 
     title: "Configuración", 
-    url: "/settings", 
+    url: "settings", 
     icon: Settings,
     description: "Configuración del proyecto" 
   },

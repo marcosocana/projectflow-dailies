@@ -174,13 +174,13 @@ const handleProjectCreated = (projectId: string, projectNumber: number) => {
                 </header>
                 <main className="flex-1 p-6">
                   <Routes>
-                    <Route path="/" element={<Navigate to="/tasks" replace />} />
-                    <Route path="/tasks" element={<IncidentsModule projectId={currentProject.id} />} />
-                    <Route path="/dailies" element={<DailiesModule projectId={currentProject.id} initiallyUnlocked />} />
-                    <Route path="/vacations" element={<VacationsModule projectId={currentProject.id} />} />
-                    <Route path="/users" element={<UsersModule projectId={currentProject.id} />} />
-                    <Route path="/notes" element={<NotesModule projectId={currentProject.id} />} />
-                    <Route path="/settings" element={<ProjectSettingsModule projectId={currentProject.id} />} />
+                    <Route path="/" element={<Navigate to="tasks" replace />} />
+                    <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
+                    <Route path="dailies" element={<DailiesModule projectId={currentProject.id} initiallyUnlocked />} />
+                    <Route path="vacations" element={<VacationsModule projectId={currentProject.id} />} />
+                    <Route path="users" element={<UsersModule projectId={currentProject.id} />} />
+                    <Route path="notes" element={<NotesModule projectId={currentProject.id} />} />
+                    <Route path="settings" element={<ProjectSettingsModule projectId={currentProject.id} />} />
                   </Routes>
                 </main>
               </SidebarInset>
