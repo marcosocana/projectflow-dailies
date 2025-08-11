@@ -79,18 +79,18 @@ const Dashboard = () => {
   <div className="container mx-auto px-4 py-3">
     <div className="relative flex justify-between items-center">
       {/* Contenedor logo + título con flexbox */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2.5 relative">
         {currentProject?.logo_url ? (
           <img
             src={currentProject.logo_url}
             alt={`${currentProject.name} logo`}
-            className="h-10 max-w-[160px] w-auto object-contain"
+            className="h-10 max-w-[160px] w-auto object-contain absolute left-[10px]"
           />
         ) : (
           <img
             src={vecturaLogo}
             alt="Vectura"
-            className="h-10 w-auto object-contain"
+            className="h-10 w-auto object-contain absolute left-[10px]"
           />
         )}
         <h1 className="text-2xl font-bold">
