@@ -150,7 +150,7 @@ const Dashboard = () => {
           </div>
         ) : (
           <SidebarProvider>
-            <div className="min-h-screen">
+            <div className="min-h-screen flex w-full">
               <AppSidebar currentProject={currentProject} />
               <main className="ml-16 p-6 pt-[88px]">
                 <Routes>
