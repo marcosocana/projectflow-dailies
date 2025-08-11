@@ -57,7 +57,7 @@ export default function DailiesModule({
     incidentId: '',
     status: 'pending'
   });
-  
+
   // New states for persist modal and view all tasks
   const [persistModalOpen, setPersistModalOpen] = useState(false);
   const [lastDayTasks, setLastDayTasks] = useState<any[]>([]);
@@ -243,29 +243,25 @@ export default function DailiesModule({
     try {
       if (!date) return;
       const todayStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-      
+
       // Find the most recent previous day with tasks
-      const { data: prevDays } = await supabase
-        .from('dailies')
-        .select('id, date')
-        .eq('project_id', projectId)
-        .lt('date', todayStr)
-        .order('date', { ascending: false });
-      
+      const {
+        data: prevDays
+      } = await supabase.from('dailies').select('id, date').eq('project_id', projectId).lt('date', todayStr).order('date', {
+        ascending: false
+      });
       let sourceDailyId: string | null = null;
       if (prevDays && prevDays.length) {
         for (const d of prevDays) {
-          const { data: links } = await supabase
-            .from('daily_tasks')
-            .select('task_id')
-            .eq('daily_id', d.id);
+          const {
+            data: links
+          } = await supabase.from('daily_tasks').select('task_id').eq('daily_id', d.id);
           if (links && links.length) {
             sourceDailyId = d.id as string;
             break;
           }
         }
       }
-      
       if (!sourceDailyId) {
         toast({
           title: 'Sin tareas previas',
@@ -275,11 +271,9 @@ export default function DailiesModule({
       }
 
       // Get tasks from the last day with tasks
-      const { data: taskData } = await supabase
-        .from('daily_tasks')
-        .select('tasks(*)')
-        .eq('daily_id', sourceDailyId);
-      
+      const {
+        data: taskData
+      } = await supabase.from('daily_tasks').select('tasks(*)').eq('daily_id', sourceDailyId);
       const tasks = (taskData || []).map((r: any) => r.tasks).filter(Boolean);
       setLastDayTasks(tasks);
       setSelectedTasksForPersist(tasks.map((t: any) => t.id)); // All selected by default
@@ -292,23 +286,19 @@ export default function DailiesModule({
       });
     }
   };
-
   const persistSelectedTasks = async () => {
     try {
       if (!date) return;
       const todayId = await ensureDaily(date);
-      
       const rows = selectedTasksForPersist.map(taskId => ({
         daily_id: todayId,
         task_id: taskId
       }));
-      
       if (rows.length) {
         await supabase.from('daily_tasks').upsert(rows as any, {
           onConflict: 'daily_id,task_id'
         } as any);
       }
-      
       await loadTasks(date);
       setPersistModalOpen(false);
       toast({
@@ -323,29 +313,28 @@ export default function DailiesModule({
       });
     }
   };
-
   const loadAllTasks = async () => {
     try {
-      const { data: tasksData } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('created_at', { ascending: false });
-      
+      const {
+        data: tasksData
+      } = await supabase.from('tasks').select('*').eq('project_id', projectId).order('created_at', {
+        ascending: false
+      });
       if (tasksData) {
         // Remove duplicates based on task ID
-        const uniqueTasks = tasksData.filter((task, index, self) => 
-          index === self.findIndex(t => t.id === task.id)
-        );
-        
+        const uniqueTasks = tasksData.filter((task, index, self) => index === self.findIndex(t => t.id === task.id));
+
         // Sort by status: in_progress, pending, resolved
-        const statusOrder = { 'in_progress': 0, 'pending': 1, 'resolved': 2 };
+        const statusOrder = {
+          'in_progress': 0,
+          'pending': 1,
+          'resolved': 2
+        };
         uniqueTasks.sort((a, b) => {
           const aOrder = statusOrder[a.status as keyof typeof statusOrder] ?? 3;
           const bOrder = statusOrder[b.status as keyof typeof statusOrder] ?? 3;
           return aOrder - bOrder;
         });
-        
         setAllTasks(uniqueTasks);
         setFilteredTasks(uniqueTasks);
       }
@@ -361,21 +350,17 @@ export default function DailiesModule({
   // Filter and search logic for all tasks view
   useEffect(() => {
     let filtered = [...allTasks];
-    
+
     // Filter by status
     if (statusFilter !== 'all') {
       filtered = filtered.filter(task => task.status === statusFilter);
     }
-    
+
     // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(task => 
-        task.title?.toLowerCase().includes(query) ||
-        task.description?.toLowerCase().includes(query)
-      );
+      filtered = filtered.filter(task => task.title?.toLowerCase().includes(query) || task.description?.toLowerCase().includes(query));
     }
-    
     setFilteredTasks(filtered);
   }, [allTasks, statusFilter, searchQuery]);
   const loadTaskComments = async (taskId: string) => {
@@ -469,7 +454,7 @@ export default function DailiesModule({
           
         </CardHeader>
         <CardContent>
-          <Calendar mode="single" selected={date} onSelect={d => d && setDate(d)} locale={es} className="rounded-md border p-3 pointer-events-auto w-full mx-auto" />
+          <Calendar mode="single" selected={date} onSelect={d => d && setDate(d)} locale={es} className="rounded-md border p-3 pointer-events-auto w-full mx-auto px-[50px]" />
         </CardContent>
       </Card>
 
@@ -477,10 +462,8 @@ export default function DailiesModule({
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <CardTitle>Gestión de Dailies</CardTitle>
-              <CardDescription>
-                Organiza las tareas diarias del equipo
-              </CardDescription>
+              <CardTitle>Tareas del día</CardTitle>
+              
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="ghost" size="icon" onClick={() => {
@@ -492,9 +475,9 @@ export default function DailiesModule({
               <Button onClick={() => setCreateTaskOpen(true)} aria-label="Crear tarea" title="Crear tarea">+</Button>
               <Button variant="outline" onClick={openPersistModal}>Persistir</Button>
               <Button variant="outline" onClick={() => {
-                loadAllTasks();
-                setViewAllTasksOpen(true);
-              }}>Ver todas</Button>
+              loadAllTasks();
+              setViewAllTasksOpen(true);
+            }}>Ver todas</Button>
               <Button variant="outline" onClick={() => setTeamOpen(true)}>Equipo</Button>
             </div>
           </div>
@@ -717,69 +700,47 @@ export default function DailiesModule({
             <ScrollArea className="h-[400px] pr-4">
               <div className="space-y-3">
                 {lastDayTasks.map(task => {
-                  const person = people.find(p => p.id === task.person_id);
-                  const isSelected = selectedTasksForPersist.includes(task.id);
-                  
-                  return (
-                    <div key={task.id} className="flex items-start gap-3 p-3 border rounded">
-                      <Checkbox 
-                        checked={isSelected}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedTasksForPersist(prev => [...prev, task.id]);
-                          } else {
-                            setSelectedTasksForPersist(prev => prev.filter(id => id !== task.id));
-                          }
-                        }}
-                      />
+                const person = people.find(p => p.id === task.person_id);
+                const isSelected = selectedTasksForPersist.includes(task.id);
+                return <div key={task.id} className="flex items-start gap-3 p-3 border rounded">
+                      <Checkbox checked={isSelected} onCheckedChange={checked => {
+                    if (checked) {
+                      setSelectedTasksForPersist(prev => [...prev, task.id]);
+                    } else {
+                      setSelectedTasksForPersist(prev => prev.filter(id => id !== task.id));
+                    }
+                  }} />
                       <div className="flex-1 min-w-0">
                         <div className="font-medium">{task.title}</div>
-                        {task.description && (
-                          <div className="text-sm text-muted-foreground mt-1">{task.description}</div>
-                        )}
+                        {task.description && <div className="text-sm text-muted-foreground mt-1">{task.description}</div>}
                         <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                           <span>
-                            {task.status === 'in_progress' ? 'En curso' : 
-                             task.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
+                            {task.status === 'in_progress' ? 'En curso' : task.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
                           </span>
-                          {person && (
-                            <div className="flex items-center gap-1">
-                              <span className="h-2 w-2 rounded" style={{ backgroundColor: person.color }} />
+                          {person && <div className="flex items-center gap-1">
+                              <span className="h-2 w-2 rounded" style={{
+                          backgroundColor: person.color
+                        }} />
                               {person.name}
-                            </div>
-                          )}
+                            </div>}
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-                {lastDayTasks.length === 0 && (
-                  <div className="text-center text-muted-foreground py-8">
+                    </div>;
+              })}
+                {lastDayTasks.length === 0 && <div className="text-center text-muted-foreground py-8">
                     No hay tareas en el último día con tareas
-                  </div>
-                )}
+                  </div>}
               </div>
             </ScrollArea>
             
             <div className="flex gap-2 pt-4 border-t">
-              <Button 
-                variant="outline" 
-                onClick={() => setSelectedTasksForPersist(lastDayTasks.map(t => t.id))}
-                disabled={lastDayTasks.length === 0}
-              >
+              <Button variant="outline" onClick={() => setSelectedTasksForPersist(lastDayTasks.map(t => t.id))} disabled={lastDayTasks.length === 0}>
                 Seleccionar todas
               </Button>
-              <Button 
-                variant="outline" 
-                onClick={() => setSelectedTasksForPersist([])}
-              >
+              <Button variant="outline" onClick={() => setSelectedTasksForPersist([])}>
                 Deseleccionar todas
               </Button>
-              <Button 
-                onClick={persistSelectedTasks}
-                disabled={selectedTasksForPersist.length === 0}
-                className="ml-auto"
-              >
+              <Button onClick={persistSelectedTasks} disabled={selectedTasksForPersist.length === 0} className="ml-auto">
                 Persistir {selectedTasksForPersist.length} tareas
               </Button>
             </div>
@@ -798,11 +759,7 @@ export default function DailiesModule({
           <div className="space-y-4">
             <div className="flex gap-4">
               <div className="flex-1">
-                <Input
-                  placeholder="Buscar tareas..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+                <Input placeholder="Buscar tareas..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
               </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[180px]">
@@ -830,52 +787,38 @@ export default function DailiesModule({
                 </TableHeader>
                 <TableBody>
                   {filteredTasks.map(task => {
-                    const person = people.find(p => p.id === task.person_id);
-                    return (
-                      <TableRow key={task.id}>
+                  const person = people.find(p => p.id === task.person_id);
+                  return <TableRow key={task.id}>
                         <TableCell>
-                          {task.status === 'in_progress' ? 'En curso' : 
-                           task.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
+                          {task.status === 'in_progress' ? 'En curso' : task.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
                         </TableCell>
                         <TableCell>
                           <div className="font-medium">{task.title}</div>
-                          {task.description && (
-                            <div className="text-xs text-muted-foreground">{task.description}</div>
-                          )}
+                          {task.description && <div className="text-xs text-muted-foreground">{task.description}</div>}
                         </TableCell>
                         <TableCell>
-                          {person ? (
-                            <div className="flex items-center gap-2">
-                              <span className="h-3 w-3 rounded" style={{ backgroundColor: person.color }} />
+                          {person ? <div className="flex items-center gap-2">
+                              <span className="h-3 w-3 rounded" style={{
+                          backgroundColor: person.color
+                        }} />
                               {person.name}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
+                            </div> : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell>
                           {new Date(task.created_at).toLocaleDateString()}
                         </TableCell>
                         <TableCell>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => openDetails(task)}
-                            aria-label="Ver detalles"
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => openDetails(task)} aria-label="Ver detalles">
                             <Eye className="h-4 w-4" />
                           </Button>
                         </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {filteredTasks.length === 0 && (
-                    <TableRow>
+                      </TableRow>;
+                })}
+                  {filteredTasks.length === 0 && <TableRow>
                       <TableCell colSpan={5} className="text-center text-muted-foreground">
                         No se encontraron tareas
                       </TableCell>
-                    </TableRow>
-                  )}
+                    </TableRow>}
                 </TableBody>
               </Table>
             </ScrollArea>
