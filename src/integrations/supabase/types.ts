@@ -537,6 +537,7 @@ export type Database = {
           description: string | null
           end_date: string
           id: string
+          person_id: string | null
           project_id: string
           start_date: string
           updated_at: string
@@ -547,6 +548,7 @@ export type Database = {
           description?: string | null
           end_date: string
           id?: string
+          person_id?: string | null
           project_id: string
           start_date: string
           updated_at?: string
@@ -557,12 +559,20 @@ export type Database = {
           description?: string | null
           end_date?: string
           id?: string
+          person_id?: string | null
           project_id?: string
           start_date?: string
           updated_at?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "vacations_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "vacations_project_id_fkey"
             columns: ["project_id"]

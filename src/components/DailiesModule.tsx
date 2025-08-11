@@ -477,8 +477,10 @@ export default function DailiesModule({
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <CardTitle>Tareas del día</CardTitle>
-              
+              <CardTitle>Gestión de Dailies</CardTitle>
+              <CardDescription>
+                Organiza las tareas diarias del equipo
+              </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="ghost" size="icon" onClick={() => {

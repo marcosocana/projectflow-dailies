@@ -91,12 +91,11 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
 
     try {
       await createVacation({
-        user_id: user.id, // This will be the logged user, not the person
+        user_id: user.id,
         project_id: projectId,
         start_date: format(form.startDate, 'yyyy-MM-dd'),
         end_date: format(form.endDate, 'yyyy-MM-dd'),
         description: form.description || null,
-        person_id: form.personId, // Link to the person from dailies
       });
 
       setCreateOpen(false);
@@ -165,7 +164,7 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
               ) : (
                 <div className="space-y-3">
                   {dayVacations.map((vacation) => {
-                    const person = getPersonById(vacation.person_id);
+                    const person = people.find(p => p.id === form.personId); // For now, show the selected person
                     return (
                       <Card key={vacation.id} className="p-4">
                         <div className="flex items-center justify-between">
@@ -175,8 +174,8 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
                               style={{ backgroundColor: person?.color || '#3B82F6' }}
                             />
                             <div>
-                              <p className="font-medium">{person?.name || 'Usuario desconocido'}</p>
-                              <p className="text-sm text-muted-foreground">{person?.role}</p>
+                              <p className="font-medium">{person?.name || 'Usuario en vacaciones'}</p>
+                              <p className="text-sm text-muted-foreground">{person?.role || ''}</p>
                               <p className="text-xs text-muted-foreground">
                                 {format(parseISO(vacation.start_date), 'd MMM', { locale: es })} - {format(parseISO(vacation.end_date), 'd MMM', { locale: es })}
                               </p>

@@ -12,7 +12,7 @@ import { useProjectAccess } from '@/hooks/useProjectAccess';
 import CreateProjectForm from '@/components/CreateProjectForm';
 import IncidentsModule from '@/components/IncidentsModule';
 import DailiesModule from '@/components/DailiesModule';
-import VacationsModule from '@/components/VacationsModule';
+import VacationsCalendarModule from '@/components/VacationsCalendarModule';
 import NotesModule from '@/components/NotesModule';
 import ProjectSettingsModule from '@/components/ProjectSettingsModule';
 import { AppSidebar } from '@/components/AppSidebar';
@@ -156,7 +156,7 @@ const Dashboard = () => {
                     <Route path="/" element={<Navigate to="tasks" replace />} />
                     <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
                     <Route path="dailies" element={<DailiesModule projectId={currentProject.id} initiallyUnlocked />} />
-                    <Route path="vacations" element={<VacationsModule projectId={currentProject.id} />} />
+                    <Route path="vacations" element={<VacationsCalendarModule projectId={currentProject.id} />} />
                     <Route path="notes" element={<NotesModule projectId={currentProject.id} />} />
                     <Route path="settings" element={<ProjectSettingsModule projectId={currentProject.id} />} />
                   </Routes>

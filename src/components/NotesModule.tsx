@@ -163,6 +163,12 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
       </div>
 
       <Card>
+        <CardHeader>
+          <CardTitle>Gestión de Notas</CardTitle>
+          <CardDescription>
+            Editor de notas compartidas del proyecto
+          </CardDescription>
+        </CardHeader>
         <CardContent className="p-0">
           <div className="min-h-[500px]">
             <ReactQuill

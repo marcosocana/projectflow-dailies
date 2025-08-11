@@ -1,10 +1,9 @@
-import { useState, useRef } from 'react';
-import { Save, Upload, Trash2, Eye, EyeOff } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Save, Upload, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,16 +18,19 @@ export default function ProjectSettingsModule({ projectId }: ProjectSettingsModu
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState({
-    name: currentProject?.name || '',
-    project_password: '',
-    dailies_password: '',
-  });
-  const [showPasswords, setShowPasswords] = useState({
-    project: false,
-    dailies: false,
+    name: '',
   });
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Load current project data
+  useEffect(() => {
+    if (currentProject) {
+      setFormData({
+        name: currentProject.name || '',
+      });
+    }
+  }, [currentProject]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -139,14 +141,6 @@ export default function ProjectSettingsModule({ projectId }: ProjectSettingsModu
       if (formData.name.trim() && formData.name !== currentProject?.name) {
         updates.name = formData.name.trim();
       }
-      
-      if (formData.project_password.trim()) {
-        updates.project_password = formData.project_password.trim();
-      }
-      
-      if (formData.dailies_password.trim()) {
-        updates.dailies_password = formData.dailies_password.trim();
-      }
 
       if (Object.keys(updates).length === 0) {
         toast({
@@ -168,13 +162,6 @@ export default function ProjectSettingsModule({ projectId }: ProjectSettingsModu
         description: "Configuración del proyecto actualizada",
       });
 
-      // Limpiar campos de contraseña
-      setFormData(prev => ({
-        ...prev,
-        project_password: '',
-        dailies_password: '',
-      }));
-
     } catch (error: any) {
       toast({
         title: "Error",
@@ -188,23 +175,18 @@ export default function ProjectSettingsModule({ projectId }: ProjectSettingsModu
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Configuración del Proyecto</h1>
-        <p className="text-muted-foreground">
-          Gestiona la información y configuración del proyecto
-        </p>
-      </div>
-
-      <div className="grid gap-6">
-        {/* Información básica */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Información básica</CardTitle>
-            <CardDescription>
-              Datos generales del proyecto
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Configuración del Proyecto</CardTitle>
+          <CardDescription>
+            Gestiona la información básica del proyecto
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Información básica */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Información básica</h3>
+            
             <div className="space-y-2">
               <Label htmlFor="project-name">Nombre del proyecto</Label>
               <Input
@@ -226,18 +208,12 @@ export default function ProjectSettingsModule({ projectId }: ProjectSettingsModu
                 El número del proyecto se asigna automáticamente y no puede modificarse
               </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Logo del proyecto */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Logo del proyecto</CardTitle>
-            <CardDescription>
-              Imagen que se mostrará en el encabezado del proyecto
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          {/* Logo del proyecto */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Logo del proyecto</h3>
+            
             {currentProject?.logo_url && (
               <div className="flex items-center gap-4">
                 <img 
@@ -276,81 +252,17 @@ export default function ProjectSettingsModule({ projectId }: ProjectSettingsModu
                 Formatos: JPG, PNG, GIF. Tamaño máximo: 5MB
               </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Contraseñas */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Contraseñas de acceso</CardTitle>
-            <CardDescription>
-              Actualiza las contraseñas para acceder al proyecto y las dailies
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="project-password">Contraseña del proyecto</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="project-password"
-                  type={showPasswords.project ? "text" : "password"}
-                  value={formData.project_password}
-                  onChange={(e) => handleInputChange('project_password', e.target.value)}
-                  placeholder="Nueva contraseña del proyecto (dejar vacío para no cambiar)"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setShowPasswords(prev => ({ ...prev, project: !prev.project }))}
-                >
-                  {showPasswords.project ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="dailies-password">Contraseña de dailies</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="dailies-password"
-                  type={showPasswords.dailies ? "text" : "password"}
-                  value={formData.dailies_password}
-                  onChange={(e) => handleInputChange('dailies_password', e.target.value)}
-                  placeholder="Nueva contraseña de dailies (dejar vacío para no cambiar)"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setShowPasswords(prev => ({ ...prev, dailies: !prev.dailies }))}
-                >
-                  {showPasswords.dailies ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-
-            <p className="text-sm text-muted-foreground">
-              Las contraseñas solo se actualizarán si introduces una nueva. 
-              Deja los campos vacíos para mantener las contraseñas actuales.
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Información del proyecto */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Información adicional</CardTitle>
-            <CardDescription>
-              Fechas y estadísticas del proyecto
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          {/* Información adicional */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Información adicional</h3>
+            
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Fecha de creación</Label>
+                <Label>Número de versión</Label>
                 <Input
-                  value={currentProject?.created_at ? new Date(currentProject.created_at).toLocaleDateString() : ''}
+                  value="V.1.0.0"
                   disabled
                   className="bg-muted"
                 />
@@ -365,21 +277,21 @@ export default function ProjectSettingsModule({ projectId }: ProjectSettingsModu
                 />
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Botón de guardar */}
-        <div className="flex justify-end">
-          <Button 
-            onClick={handleSave}
-            disabled={isSaving}
-            size="lg"
-          >
-            <Save className="h-4 w-4 mr-2" />
-            {isSaving ? 'Guardando...' : 'Guardar cambios'}
-          </Button>
-        </div>
-      </div>
+          {/* Botón de guardar */}
+          <div className="flex justify-end pt-4">
+            <Button 
+              onClick={handleSave}
+              disabled={isSaving}
+              size="lg"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {isSaving ? 'Guardando...' : 'Guardar cambios'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
