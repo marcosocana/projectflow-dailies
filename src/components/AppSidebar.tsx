@@ -71,7 +71,7 @@ const menuItems = [
 export function AppSidebar({ currentProject }: AppSidebarProps) {
   return (
     <aside 
-      className="fixed left-0 top-[75px] w-16 h-[calc(100vh-75px)] bg-background border-r border-border shadow-sm overflow-y-auto z-40"
+      className="fixed left-0 top-[75px] w-16 h-[calc(100vh-75px)] bg-white border-r border-border shadow-sm overflow-y-auto z-40"
       data-sidebar="content"
     >
       <div className="p-2">
@@ -85,10 +85,10 @@ export function AppSidebar({ currentProject }: AppSidebarProps) {
                       to={item.url} 
                       end 
                       className={({ isActive }) => 
-                        `group flex items-center justify-center w-12 h-12 rounded-xl border transition-colors duration-200 ${
+                        `group flex items-center justify-center w-12 h-12 rounded-xl transition-colors duration-200 ${
                           isActive 
-                            ? 'bg-background text-foreground border-border shadow-sm' 
-                            : 'bg-background text-muted-foreground hover:text-foreground hover:border-muted-foreground/40'
+                            ? 'bg-white text-foreground shadow-sm' 
+                            : 'bg-white text-muted-foreground hover:text-foreground'
                         }`
                       }
                     >

@@ -476,7 +476,7 @@ export default function DailiesModule({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
             <div>
               <Calendar
                 mode="single"
@@ -509,8 +509,10 @@ export default function DailiesModule({
                         </TableCell>
                         <TableCell>
                           <div className="font-medium">{t.title}</div>
-                          {t.description && (
-                            <div className="text-xs text-muted-foreground">{t.description}</div>
+                          {typeof t.description === 'string' && (
+                            <div className="text-xs text-muted-foreground">
+                              {t.description.length > 150 ? `${t.description.slice(0, 150)}...` : t.description}
+                            </div>
                           )}
                         </TableCell>
                         <TableCell>
@@ -819,7 +821,7 @@ export default function DailiesModule({
                         </TableCell>
                         <TableCell>
                           <div className="font-medium">{task.title}</div>
-                          {task.description && <div className="text-xs text-muted-foreground">{task.description}</div>}
+                          {typeof task.description === 'string' && <div className="text-xs text-muted-foreground">{task.description.length > 150 ? `${task.description.slice(0, 150)}...` : task.description}</div>}
                         </TableCell>
                         <TableCell>
                           {person ? <div className="flex items-center gap-2">

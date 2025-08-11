@@ -122,7 +122,7 @@ export default function ProjectInformationModule({ projectId }: ProjectInformati
           <form onSubmit={handleReset} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="reset-pass">Contraseña</Label>
-              <Input id="reset-pass" type="password" value={resetPass} onChange={(e) => setResetPass(e.target.value)} placeholder="Resete0" />
+              <Input id="reset-pass" type="password" value={resetPass} onChange={(e) => setResetPass(e.target.value)} placeholder="Introduce la contraseña" />
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setResetOpen(false)}>
