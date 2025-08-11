@@ -100,7 +100,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
   }, [projectId]);
 
   const statusOrder = useMemo(() => ['in_progress', 'pending', 'resolved'], []);
-  const STATUS_LABELS: Record<string, string> = { in_progress: 'En curso', pending: 'Pendiente', resolved: 'Resuelto' };
+  const STATUS_LABELS: Record<string, string> = { in_progress: 'En curso', pending: 'Pendiente', resolved: 'Resuelto', closed: 'Cerrado' };
   const STATUS_BADGE_CLS: Record<string, string> = {
     in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
     pending: 'bg-muted text-muted-foreground',
