@@ -14,7 +14,8 @@ import IncidentsModule from '@/components/IncidentsModule';
 import DailiesModule from '@/components/DailiesModule';
 import VacationsCalendarModule from '@/components/VacationsCalendarModule';
 import NotesModule from '@/components/NotesModule';
-import ProjectSettingsModule from '@/components/ProjectSettingsModule';
+import ProjectInformationModule from '@/components/ProjectInformationModule';
+import TeamModule from '@/components/TeamModule';
 import { AppSidebar } from '@/components/AppSidebar';
 import { LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -150,7 +151,7 @@ const Dashboard = () => {
           <SidebarProvider>
             <div className="min-h-screen flex w-full pt-[76px]">
               <AppSidebar currentProject={currentProject} />
-              <SidebarInset className="flex-1">
+              <SidebarInset className="flex-1" style={{ marginLeft: '60px' }}>
                 <div className="flex h-14 items-center gap-2 px-4 border-b lg:hidden">
                   <SidebarTrigger />
                   <h2 className="text-lg font-semibold">
@@ -161,10 +162,11 @@ const Dashboard = () => {
                   <Routes>
                     <Route path="/" element={<Navigate to="tasks" replace />} />
                     <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
-                    <Route path="dailies" element={<DailiesModule projectId={currentProject.id} initiallyUnlocked />} />
+                    <Route path="dailies" element={<DailiesModule projectId={currentProject.id} />} />
+                    <Route path="team" element={<TeamModule projectId={currentProject.id} />} />
                     <Route path="vacations" element={<VacationsCalendarModule projectId={currentProject.id} />} />
                     <Route path="notes" element={<NotesModule projectId={currentProject.id} />} />
-                    <Route path="settings" element={<ProjectSettingsModule projectId={currentProject.id} />} />
+                    <Route path="info" element={<ProjectInformationModule projectId={currentProject.id} />} />
                   </Routes>
                 </main>
               </SidebarInset>
