@@ -75,10 +75,10 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-white border-gray-200">
+   <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-white border-gray-200">
   <div className="container mx-auto px-4 py-3">
     <div className="flex justify-between items-center">
-      
+
       {/* Logo + título fijo a la izquierda */}
       <div className="flex items-center fixed left-[10px]">
         {currentProject?.logo_url ? (
@@ -99,8 +99,8 @@ const Dashboard = () => {
         </h1>
       </div>
 
-      {/* Email + botón a la derecha */}
-      <div className="flex items-center gap-4 ml-auto">
+      {/* Email + botón fijo a la derecha */}
+      <div className="flex items-center gap-4 fixed right-[15px]">
         <span className="text-sm text-muted-foreground">
           {user?.email}
         </span>
