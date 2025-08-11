@@ -63,9 +63,41 @@ export function useProjectAccess() {
   const fetchUserProjects = async () => {
     setLoadingProjects(true);
     try {
-      // Por ahora retornamos array vacío, se implementará cuando se configure la relación
-      setUserProjects([]);
-      return [];
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) {
+        setUserProjects([]);
+        return [];
+      }
+
+      // Primero obtenemos los IDs de proyectos del usuario
+      const { data: projectAccess, error: accessError } = await supabase
+        .from('project_access')
+        .select('project_id')
+        .eq('user_id', user.data.user.id);
+
+      if (accessError) throw accessError;
+
+      if (!projectAccess || projectAccess.length === 0) {
+        setUserProjects([]);
+        return [];
+      }
+
+      // Luego obtenemos los datos completos de los proyectos
+      const projectIds = projectAccess.map(access => access.project_id);
+      const { data: projects, error: projectsError } = await supabase
+        .from('projects')
+        .select('id, name, project_number, logo_url, created_at, updated_at')
+        .in('id', projectIds);
+
+      if (projectsError) throw projectsError;
+
+      const userProjects: ProjectWithAccess[] = projects?.map(project => ({
+        ...project,
+        hasAccess: true
+      })) || [];
+
+      setUserProjects(userProjects);
+      return userProjects;
     } catch (error: any) {
       console.error('Error fetching user projects:', error);
       toast({
