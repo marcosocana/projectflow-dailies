@@ -85,10 +85,10 @@ export function AppSidebar({ currentProject }: AppSidebarProps) {
                       to={item.url} 
                       end 
                       className={({ isActive }) => 
-                        `group flex items-center justify-center w-12 h-12 rounded-xl transition-all duration-200 ${
+                        `group flex items-center justify-center w-12 h-12 rounded-xl border transition-colors duration-200 ${
                           isActive 
-                            ? 'bg-primary text-primary-foreground shadow-md ring-2 ring-primary' 
-                            : 'hover:bg-muted text-muted-foreground hover:text-foreground hover:shadow-sm'
+                            ? 'bg-background text-foreground border-border shadow-sm' 
+                            : 'bg-background text-muted-foreground hover:text-foreground hover:border-muted-foreground/40'
                         }`
                       }
                     >

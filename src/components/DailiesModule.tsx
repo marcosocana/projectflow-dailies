@@ -447,29 +447,26 @@ export default function DailiesModule({
         </CardContent>
       </Card>;
   }
-  return <div className="grid gap-6 md:grid-cols-3">
-      <Card className="md:col-span-1">
-        <CardHeader>
-          <CardTitle>Calendario</CardTitle>
-          
-        </CardHeader>
-        <CardContent>
-          <Calendar mode="single" selected={date} onSelect={d => d && setDate(d)} locale={es} className="rounded-md border p-3 pointer-events-auto w-full mx-auto px-[50px]" />
-        </CardContent>
-      </Card>
-
-      <Card className="md:col-span-2">
+  return (
+    <div className="grid gap-6 md:grid-cols-1">
+      <Card>
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <CardTitle>Tareas del día</CardTitle>
-              
+              <CardTitle>Dailies</CardTitle>
+              <CardDescription>Calendario y tareas del día</CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="ghost" size="icon" onClick={() => {
-              loadBaseData();
-              loadTasks(date);
-            }} aria-label="Actualizar" title="Actualizar">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  loadBaseData();
+                  loadTasks(date);
+                }}
+                aria-label="Actualizar"
+                title="Actualizar"
+              >
                 <RefreshCcw className="h-4 w-4" />
               </Button>
               <Button onClick={() => setCreateTaskOpen(true)} aria-label="Crear tarea" title="Crear tarea">+</Button>
@@ -479,51 +476,83 @@ export default function DailiesModule({
           </div>
         </CardHeader>
         <CardContent>
-          <Table className="mt-0">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Estado</TableHead>
-                <TableHead>Tarea</TableHead>
-                <TableHead>Persona</TableHead>
-                <TableHead>Incidencia</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tasks.map(t => {
-              const person = people.find(p => p.id === t.person_id);
-              const inc = incidents.find(i => i.id === t.incident_id);
-              return <TableRow key={t.id}>
-                    <TableCell>
-                      {t.status === 'in_progress' ? 'En curso' : t.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{t.title}</div>
-                      {t.description && <div className="text-xs text-muted-foreground">{t.description}</div>}
-                    </TableCell>
-                    <TableCell>
-                      {person ? <div className="flex items-center gap-2"><span className="h-3 w-3 rounded" style={{
-                      backgroundColor: person.color
-                    }} />{person.name}</div> : <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell>
-                      {inc ? inc.name : <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell className="flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openDetails(t)} aria-label="Ver"><Eye className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteTask(t.id)} aria-label="Eliminar"><Trash2 className="h-4 w-4" /></Button>
-                    </TableCell>
-                  </TableRow>;
-            })}
-              {tasks.length === 0 && <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">Sin tareas para este día</TableCell>
-                </TableRow>}
-            </TableBody>
-          </Table>
+          <div className="space-y-6">
+            <div>
+              <Calendar
+                mode="single"
+                selected={date}
+                onSelect={(d) => d && setDate(d)}
+                locale={es}
+                className="rounded-md border p-3 pointer-events-auto w-full mx-auto px-[50px]"
+              />
+            </div>
+
+            <div>
+              <Table className="mt-0">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Tarea</TableHead>
+                    <TableHead>Persona</TableHead>
+                    <TableHead>Incidencia</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tasks.map((t) => {
+                    const person = people.find((p) => p.id === t.person_id);
+                    const inc = incidents.find((i) => i.id === t.incident_id);
+                    return (
+                      <TableRow key={t.id}>
+                        <TableCell>
+                          {t.status === 'in_progress' ? 'En curso' : t.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium">{t.title}</div>
+                          {t.description && (
+                            <div className="text-xs text-muted-foreground">{t.description}</div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {person ? (
+                            <div className="flex items-center gap-2">
+                              <span className="h-3 w-3 rounded" style={{ backgroundColor: person.color }} />
+                              {person.name}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {inc ? inc.name : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => openDetails(t)} aria-label="Ver">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => deleteTask(t.id)} aria-label="Eliminar">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {tasks.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        Sin tareas para este día
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
       {/* Modal Crear Tarea */}
+
       <Dialog open={createTaskOpen} onOpenChange={setCreateTaskOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
