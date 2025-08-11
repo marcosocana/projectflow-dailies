@@ -75,30 +75,35 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-white border-gray-200">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-white border-gray-200">
   <div className="container mx-auto px-4 py-3">
-    <div className="relative flex justify-between items-center">
-      {/* Contenedor logo + título con flexbox */}
- <div className="flex items-center fixed left-[10px]">
-  {currentProject?.logo_url ? (
-    <img
-      src={currentProject.logo_url}
-      alt={`${currentProject.name} logo`}
-      className="h-10 w-auto object-contain"
-    />
-  ) : (
-    <img
-      src={vecturaLogo}
-      alt="Vectura"
-      className="h-10 w-auto object-contain"
-    />
-  )}
-  <h1 className="text-2xl font-bold ml-[10px]">
-    {currentProject ? currentProject.name : 'Vectura'}
-  </h1>
-</div>
-      <div className="flex items-center gap-4">
-        <span className="text-sm text-muted-foreground">{user?.email}</span>
+    <div className="flex justify-between items-center">
+      
+      {/* Logo + título fijo a la izquierda */}
+      <div className="flex items-center fixed left-[10px]">
+        {currentProject?.logo_url ? (
+          <img
+            src={currentProject.logo_url}
+            alt={`${currentProject.name} logo`}
+            className="h-10 w-auto object-contain"
+          />
+        ) : (
+          <img
+            src={vecturaLogo}
+            alt="Vectura"
+            className="h-10 w-auto object-contain"
+          />
+        )}
+        <h1 className="text-2xl font-bold ml-[10px]">
+          {currentProject ? currentProject.name : 'Vectura'}
+        </h1>
+      </div>
+
+      {/* Email + botón a la derecha */}
+      <div className="flex items-center gap-4 ml-auto">
+        <span className="text-sm text-muted-foreground">
+          {user?.email}
+        </span>
         <Button
           variant="outline"
           size="sm"
@@ -108,9 +113,11 @@ const Dashboard = () => {
           <LogOut className="h-4 w-4" />
         </Button>
       </div>
+
     </div>
   </div>
 </header>
+
 
       {/* Main Content */}
       <main className="container mx-auto pt-0 py-[30px] px-0">
