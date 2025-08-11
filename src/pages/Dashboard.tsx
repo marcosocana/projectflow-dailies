@@ -16,6 +16,7 @@ import VacationsCalendarModule from '@/components/VacationsCalendarModule';
 import NotesModule from '@/components/NotesModule';
 import ProjectInformationModule from '@/components/ProjectInformationModule';
 import TeamModule from '@/components/TeamModule';
+import HomeModule from '@/components/HomeModule';
 import { AppSidebar } from '@/components/AppSidebar';
 import { LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -152,7 +153,8 @@ const Dashboard = () => {
             <AppSidebar currentProject={currentProject} />
             <main className="ml-16 p-6 pt-[88px]">
               <Routes>
-                <Route path="/" element={<Navigate to="tasks" replace />} />
+                <Route path="/" element={<Navigate to="home" replace />} />
+                <Route path="home" element={<HomeModule projectId={currentProject.id} />} />
                 <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
                 <Route path="dailies" element={<DailiesModule projectId={currentProject.id} />} />
                 <Route path="team" element={<TeamModule projectId={currentProject.id} />} />

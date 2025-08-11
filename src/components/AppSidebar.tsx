@@ -15,7 +15,8 @@ import {
   Info,
   ClipboardList,
   Users,
-  AlertTriangle
+  AlertTriangle,
+  Home
 } from 'lucide-react';
 
 interface AppSidebarProps {
@@ -23,6 +24,12 @@ interface AppSidebarProps {
 }
 
 const menuItems = [
+  { 
+    title: "Home", 
+    url: "home", 
+    icon: Home,
+    description: "Resumen del proyecto" 
+  },
   { 
     title: "Incidencias", 
     url: "tasks", 

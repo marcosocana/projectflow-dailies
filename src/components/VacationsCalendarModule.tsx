@@ -207,8 +207,7 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
                 locale={es}
-                initialFocus
-                className={cn("w-full rounded-md border p-3 pointer-events-auto md:scale-110 lg:scale-125 origin-top")}
+                className="rounded-md border p-3 pointer-events-auto w-full mx-auto"
                 components={{ DayContent: DayContent as any }}
               />
             </div>
