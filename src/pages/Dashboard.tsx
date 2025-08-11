@@ -84,7 +84,7 @@ const Dashboard = () => {
           <img
             src={currentProject.logo_url}
             alt={`${currentProject.name} logo`}
-            className="h-10 max-w-[160px] w-auto object-contain absolute left-[10px]"
+            className="h-10 w-auto object-contain absolute left-[10px]"
           />
         ) : (
           <img
