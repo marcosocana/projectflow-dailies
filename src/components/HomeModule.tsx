@@ -100,6 +100,12 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
   }, [projectId]);
 
   const statusOrder = useMemo(() => ['in_progress', 'pending', 'resolved'], []);
+  const STATUS_LABELS: Record<string, string> = { in_progress: 'En curso', pending: 'Pendiente', resolved: 'Resuelto' };
+  const STATUS_BADGE_CLS: Record<string, string> = {
+    in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
+    pending: 'bg-muted text-muted-foreground',
+    resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
+  };
 
   return (
     <main className="space-y-6">
@@ -122,22 +128,26 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
             <CardTitle className="flex items-center gap-2 text-base">
               <ListChecks className="h-4 w-4" /> Incidencias por estado
             </CardTitle>
-            <CardDescription>Distribución actual</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-4">
+              {Object.keys(statusCounts).length === 0 && (
+                <span className="text-muted-foreground text-sm">Sin datos</span>
+              )}
               {statusOrder.map(key => (
-                <div key={key} className="flex items-center gap-2">
-                  <Badge variant="secondary">{key}</Badge>
-                  <span className="text-2xl font-semibold">{statusCounts[key] || 0}</span>
+                <div key={key} className="w-24 text-center">
+                  <div className="text-3xl font-bold">{statusCounts[key] || 0}</div>
+                  <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1`}>
+                    {STATUS_LABELS[key] || key}
+                  </Badge>
                 </div>
               ))}
               {Object.keys(statusCounts)
                 .filter(k => !statusOrder.includes(k))
                 .map(k => (
-                  <div key={k} className="flex items-center gap-2">
-                    <Badge variant="secondary">{k}</Badge>
-                    <span className="text-2xl font-semibold">{statusCounts[k] || 0}</span>
+                  <div key={k} className="w-24 text-center">
+                    <div className="text-3xl font-bold">{statusCounts[k] || 0}</div>
+                    <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1">{k}</Badge>
                   </div>
                 ))}
             </div>
@@ -149,7 +159,6 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
             <CardTitle className="flex items-center gap-2 text-base">
               <CheckCircle2 className="h-4 w-4" /> Total mejoras
             </CardTitle>
-            <CardDescription>Marcadas como improvement</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{totalImprovements}</div>

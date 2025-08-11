@@ -477,8 +477,6 @@ export default function DailiesModule({
               <Button variant="outline" onClick={() => {
               loadAllTasks();
               setViewAllTasksOpen(true);
-            }}>Ver todas</Button>
-              <Button variant="outline" onClick={() => setTeamOpen(true)}>Equipo</Button>
             </div>
           </div>
         </CardHeader>

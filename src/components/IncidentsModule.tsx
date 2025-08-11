@@ -245,7 +245,6 @@ const deviceValue = form.device || '';
           additional_comments: form.additionalComments,
           project_id: projectId,
           created_by: user?.id ?? null,
-          evidence: form.evidenceLink || null,
         };
         if (evidenceFile) {
           const path = await handleUploadEvidence(id);
@@ -264,8 +263,6 @@ const deviceValue = form.device || '';
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
           category: form.category,
-          additional_comments: form.additionalComments,
-          evidence: form.evidenceLink || undefined,
         };
         if (evidenceFile) {
           const path = await handleUploadEvidence(id);
@@ -430,7 +427,7 @@ setDetailForm({
         occurred_at: new Date(detailForm.occurredAt).toISOString(),
         status: detailForm.status,
         category: detailForm.category,
-        evidence: detailForm.evidenceLink || selected.evidence,
+        evidence: selected.evidence,
       };
       
       // Handle file upload if there's a new file
@@ -572,14 +569,10 @@ setDetailForm({
                 </TableCell>
                 <TableCell>{new Date(i.occurred_at).toLocaleString()}</TableCell>
                 <TableCell>
-                  {i.evidence ? (
-                    i.evidence.startsWith('incidents/') ? (
-                      <a className="text-primary underline" target="_blank" rel="noreferrer" href="#" onClick={async (e) => { e.preventDefault(); const url = await getUrl(i.evidence); if (url) window.open(url, '_blank'); }}>
-                        Ver archivo
-                      </a>
-                    ) : (
-                      <a className="text-primary underline" target="_blank" rel="noreferrer" href={i.evidence}>Ver enlace</a>
-                    )
+                  {i.evidence && i.evidence.startsWith('incidents/') ? (
+                    <a className="text-primary underline" target="_blank" rel="noreferrer" href="#" onClick={async (e) => { e.preventDefault(); const url = await getUrl(i.evidence); if (url) window.open(url, '_blank'); }}>
+                      Ver archivo
+                    </a>
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}
@@ -667,10 +660,6 @@ setDetailForm({
           <div className="space-y-2">
             <Label>Evidencia (archivo)</Label>
             <Input type="file" accept="image/*,application/pdf" onChange={(e) => setEvidenceFile(e.target.files?.[0] ?? null)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Evidencia (link)</Label>
-            <Input placeholder="https://..." value={form.evidenceLink} onChange={(e) => setForm((f) => ({ ...f, evidenceLink: e.target.value }))} />
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label>Comentarios adicionales</Label>
@@ -760,22 +749,10 @@ setDetailForm({
                 />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Evidencia (link)</Label>
-                <Input 
-                  placeholder="https://..." 
-                  value={detailForm.evidenceLink} 
-                  onChange={(e) => setDetailForm((f) => ({ ...f, evidenceLink: e.target.value }))} 
-                />
-              </div>
-              <div>
                 <Label className="text-xs text-muted-foreground">Evidencia actual</Label>
                 <div>
-                  {selected.evidence ? (
-                    selected.evidence.startsWith('incidents/') ? (
-                      <a className="text-primary underline" href="#" onClick={async (e) => { e.preventDefault(); const url = await getUrl(selected.evidence); if (url) window.open(url, '_blank'); }}>Ver archivo</a>
-                    ) : (
-                      <a className="text-primary underline" href={selected.evidence} target="_blank" rel="noreferrer">Ver enlace</a>
-                    )
+                  {selected.evidence && selected.evidence.startsWith('incidents/') ? (
+                    <a className="text-primary underline" href="#" onClick={async (e) => { e.preventDefault(); const url = await getUrl(selected.evidence); if (url) window.open(url, '_blank'); }}>Ver archivo</a>
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}

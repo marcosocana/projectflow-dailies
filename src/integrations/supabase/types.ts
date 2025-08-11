@@ -276,6 +276,9 @@ export type Database = {
       }
       projects: {
         Row: {
+          client_email: string | null
+          client_name: string | null
+          client_phone: string | null
           created_at: string
           created_by: string | null
           dailies_password: string
@@ -287,6 +290,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          client_email?: string | null
+          client_name?: string | null
+          client_phone?: string | null
           created_at?: string
           created_by?: string | null
           dailies_password: string
@@ -298,6 +304,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          client_email?: string | null
+          client_name?: string | null
+          client_phone?: string | null
           created_at?: string
           created_by?: string | null
           dailies_password?: string
@@ -317,6 +326,7 @@ export type Database = {
           id: string
           last_edited_by: string | null
           project_id: string
+          title: string
           updated_at: string
         }
         Insert: {
@@ -325,6 +335,7 @@ export type Database = {
           id?: string
           last_edited_by?: string | null
           project_id: string
+          title?: string
           updated_at?: string
         }
         Update: {
@@ -333,6 +344,7 @@ export type Database = {
           id?: string
           last_edited_by?: string | null
           project_id?: string
+          title?: string
           updated_at?: string
         }
         Relationships: [
