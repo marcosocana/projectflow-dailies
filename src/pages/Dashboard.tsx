@@ -1,27 +1,28 @@
 import { useState } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
 import CreateProjectForm from '@/components/CreateProjectForm';
 import IncidentsModule from '@/components/IncidentsModule';
 import DailiesModule from '@/components/DailiesModule';
-import { LogOut, Menu } from 'lucide-react';
+import VacationsModule from '@/components/VacationsModule';
+import UsersModule from '@/components/UsersModule';
+import NotesModule from '@/components/NotesModule';
+import ProjectSettingsModule from '@/components/ProjectSettingsModule';
+import { AppSidebar } from '@/components/AppSidebar';
+import { LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import vecturaLogo from '@/assets/vectura-logo.png';
 const Dashboard = () => {
   const [projectPassword, setProjectPassword] = useState('');
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
-  const [tab, setTab] = useState<'tareas' | 'dailies'>('tareas');
-  const [dailiesOpen, setDailiesOpen] = useState(false);
-  const [dailiesPass, setDailiesPass] = useState('');
-  const [dailiesUnlocked, setDailiesUnlocked] = useState(false);
   const { user, signOut } = useAuth();
   const { toast } = useToast();
   const { accessProject, accessDailies, currentProject, isAccessing } = useProjectAccess();
@@ -92,49 +93,6 @@ const handleProjectCreated = (projectId: string, projectNumber: number) => {
             </div>
           </div>
 
-          {/* Mobile Header */}
-          <div className="flex md:hidden justify-between items-center">
-            <div className="flex items-center gap-3">
-              {currentProject?.logo_url ? (
-                <img 
-                  src={currentProject.logo_url} 
-                  alt={`${currentProject.name} logo`}
-                  className="h-8 max-w-[120px] w-auto object-contain"
-                />
-              ) : (
-                <img 
-                  src={vecturaLogo} 
-                  alt="Vectura" 
-                  className="h-8 w-auto object-contain"
-                />
-              )}
-              <h1 className="text-lg font-bold truncate">
-                {currentProject ? currentProject.name : 'Vectura'}
-              </h1>
-            </div>
-            
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="outline" size="sm" aria-label="Abrir menú">
-                  <Menu className="h-4 w-4" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right">
-                <SheetHeader>
-                  <SheetTitle>Menú</SheetTitle>
-                </SheetHeader>
-                <div className="flex flex-col gap-4 mt-6">
-                  <div className="text-sm text-muted-foreground">
-                    Usuario: {user?.email}
-                  </div>
-                  <Button variant="outline" onClick={handleSignOut} className="w-full justify-start">
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Cerrar sesión
-                  </Button>
-                </div>
-              </SheetContent>
-            </Sheet>
-          </div>
         </div>
       </header>
 
@@ -199,58 +157,35 @@ const handleProjectCreated = (projectId: string, projectNumber: number) => {
             </Dialog>
           </div>
         ) : (
-          <div className="space-y-6">
-            <Tabs value={tab} onValueChange={(v) => { setTab(v as any); if (v === 'dailies' && !dailiesUnlocked) setDailiesOpen(true); }}>
-              <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto md:max-w-none md:w-auto">
-                <TabsTrigger value="tareas">Tareas</TabsTrigger>
-                <TabsTrigger value="dailies">Dailies</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="tareas">
-                <IncidentsModule projectId={currentProject.id} />
-              </TabsContent>
-
-              <TabsContent value="dailies">
-                {dailiesUnlocked ? (
-                  <DailiesModule projectId={currentProject.id} initiallyUnlocked />
-                ) : (
-                  <div className="p-6 text-center text-muted-foreground">Introduce la contraseña para acceder a Dailies.</div>
-                )}
-              </TabsContent>
-            </Tabs>
-
-            {/* Dailies Password Modal */}
-            <Dialog open={dailiesOpen} onOpenChange={setDailiesOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Acceder a Dailies</DialogTitle>
-                  <DialogDescription>Introduce la contraseña de dailies</DialogDescription>
-                </DialogHeader>
-                <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (!currentProject) return;
-                    try {
-                      await accessDailies(currentProject.id, dailiesPass);
-                      setDailiesUnlocked(true);
-                      setDailiesOpen(false);
-                      setDailiesPass('');
-                    } catch {}
-                  }}
-                  className="space-y-4"
-                >
-                  <Input
-                    type="password"
-                    placeholder="Contraseña de dailies"
-                    value={dailiesPass}
-                    onChange={(e) => setDailiesPass(e.target.value)}
-                    required
-                  />
-                  <Button type="submit">Acceder</Button>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
+          <SidebarProvider>
+            <div className="min-h-screen flex w-full">
+              <AppSidebar currentProject={currentProject} />
+              <SidebarInset className="flex-1">
+                <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b">
+                  <SidebarTrigger className="-ml-1" />
+                  <div className="flex items-center gap-2 ml-auto">
+                    <span className="text-sm text-muted-foreground">
+                      {user?.email}
+                    </span>
+                    <Button variant="outline" size="sm" onClick={handleSignOut}>
+                      <LogOut className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </header>
+                <main className="flex-1 p-6">
+                  <Routes>
+                    <Route path="/" element={<Navigate to="/tasks" replace />} />
+                    <Route path="/tasks" element={<IncidentsModule projectId={currentProject.id} />} />
+                    <Route path="/dailies" element={<DailiesModule projectId={currentProject.id} initiallyUnlocked />} />
+                    <Route path="/vacations" element={<VacationsModule projectId={currentProject.id} />} />
+                    <Route path="/users" element={<UsersModule projectId={currentProject.id} />} />
+                    <Route path="/notes" element={<NotesModule projectId={currentProject.id} />} />
+                    <Route path="/settings" element={<ProjectSettingsModule projectId={currentProject.id} />} />
+                  </Routes>
+                </main>
+              </SidebarInset>
+            </div>
+          </SidebarProvider>
         )}
       </main>
     </div>
