@@ -168,7 +168,7 @@ const Dashboard = () => {
         ) : (
           <div className="min-h-screen">
             <AppSidebar currentProject={currentProject} />
-            <main className="ml-16 p-6 pt-[70px]">
+            <main className="ml-16 p-6 pt-[20px]">
               <Routes>
                 <Route path="/" element={<Navigate to="home" replace />} />
                 <Route path="home" element={<HomeModule projectId={currentProject.id} />} />
