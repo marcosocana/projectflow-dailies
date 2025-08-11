@@ -111,7 +111,6 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
             <CardTitle className="flex items-center gap-2 text-base">
               <AlertTriangle className="h-4 w-4" /> Total incidencias
             </CardTitle>
-            <CardDescription>Acumulado del proyecto</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{totalIncidents}</div>
