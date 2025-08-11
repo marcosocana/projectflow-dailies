@@ -30,8 +30,8 @@ const sections = [
 ];
 
 export default function UsersModule({ projectId }: UsersModuleProps) {
-  const { profiles, loading, updateProfile, deleteProfile } = useProfiles();
-  const { permissions, updatePermission, hasPermission } = useUserPermissions(projectId);
+  const { profiles, loading, updateProfile, deleteProfile, refetch: refetchProfiles } = useProfiles();
+  const { permissions, updatePermission, hasPermission, refetch: refetchPermissions } = useUserPermissions(projectId);
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
   
@@ -122,6 +122,10 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
             );
 
           await Promise.all(permissionPromises);
+
+          // Refrescar los datos para mostrar el nuevo usuario en la tabla
+          await refetchProfiles();
+          await refetchPermissions();
         }
 
         toast({
