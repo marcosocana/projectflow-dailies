@@ -46,12 +46,6 @@ const menuItems = [
     description: "Gestión de vacaciones del equipo" 
   },
   { 
-    title: "Usuarios", 
-    url: "users", 
-    icon: Users,
-    description: "Gestión de miembros del equipo" 
-  },
-  { 
     title: "Notas", 
     url: "notes", 
     icon: FileText,
