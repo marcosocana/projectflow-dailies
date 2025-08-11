@@ -78,25 +78,22 @@ const Dashboard = () => {
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-white border-gray-200">
   <div className="container mx-auto px-4 py-3">
     <div className="relative flex justify-between items-center">
-      {/* Contenedor logo + título con posición relativa para hijos absolute */}
-      <div className="relative flex items-center" style={{ minWidth: '200px' }}>
+      {/* Contenedor logo + título con flexbox */}
+      <div className="flex items-center gap-2.5">
         {currentProject?.logo_url ? (
           <img
             src={currentProject.logo_url}
             alt={`${currentProject.name} logo`}
-            className="h-10 max-w-[160px] w-auto object-contain absolute left-[10px]"
+            className="h-10 max-w-[160px] w-auto object-contain"
           />
         ) : (
           <img
             src={vecturaLogo}
             alt="Vectura"
-            className="h-10 w-auto object-contain absolute left-[10px]"
+            className="h-10 w-auto object-contain"
           />
         )}
-        <h1
-          className="text-2xl font-bold absolute"
-          style={{ left: '180px', top: '50%', transform: 'translateY(-50%)' }}
-        >
+        <h1 className="text-2xl font-bold">
           {currentProject ? currentProject.name : 'Vectura'}
         </h1>
       </div>
