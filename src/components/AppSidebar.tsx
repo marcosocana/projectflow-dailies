@@ -63,48 +63,40 @@ const menuItems = [
 
 export function AppSidebar({ currentProject }: AppSidebarProps) {
   return (
-    <Sidebar 
-      variant="sidebar" 
-      collapsible="none" 
-      className="border-r border-gray-200 bg-white"
-      style={{ width: '60px' }}
+    <aside 
+      className="fixed left-0 top-[76px] w-64 h-[calc(100vh-76px)] bg-white border-r border-gray-200 overflow-y-auto z-40"
+      data-sidebar="content"
     >
-      <SidebarContent className="pt-4">
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <TooltipProvider>
-                {menuItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <SidebarMenuButton asChild>
-                          <NavLink 
-                            to={item.url} 
-                            end 
-                            className={({ isActive }) => 
-                              `flex items-center justify-center w-12 h-12 rounded-lg transition-colors ${
-                                isActive 
-                                  ? 'bg-primary text-primary-foreground' 
-                                  : 'hover:bg-muted text-muted-foreground hover:text-foreground'
-                              }`
-                            }
-                          >
-                            <item.icon className="h-5 w-5" />
-                          </NavLink>
-                        </SidebarMenuButton>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="ml-2">
-                        <p>{item.title}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </SidebarMenuItem>
-                ))}
-              </TooltipProvider>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-    </Sidebar>
+      <div className="p-4">
+        <nav className="space-y-2">
+          <TooltipProvider>
+            {menuItems.map((item) => (
+              <div key={item.title}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <NavLink 
+                      to={item.url} 
+                      end 
+                      className={({ isActive }) => 
+                        `flex items-center justify-center w-12 h-12 rounded-lg transition-colors ${
+                          isActive 
+                            ? 'bg-primary text-primary-foreground' 
+                            : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                        }`
+                      }
+                    >
+                      <item.icon className="h-5 w-5" />
+                    </NavLink>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="ml-2">
+                    <p>{item.title}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            ))}
+          </TooltipProvider>
+        </nav>
+      </div>
+    </aside>
   );
 }

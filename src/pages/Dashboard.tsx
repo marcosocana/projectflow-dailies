@@ -148,30 +148,20 @@ const Dashboard = () => {
             </Dialog>
           </div>
         ) : (
-          <SidebarProvider>
-            <div className="min-h-screen flex w-full pt-[76px]">
-              <AppSidebar currentProject={currentProject} />
-              <SidebarInset className="flex-1" style={{ marginLeft: '60px' }}>
-                <div className="flex h-14 items-center gap-2 px-4 border-b lg:hidden">
-                  <SidebarTrigger />
-                  <h2 className="text-lg font-semibold">
-                    {currentProject.name}
-                  </h2>
-                </div>
-                <main className="flex-1 p-6 pt-2 lg:pt-6">
-                  <Routes>
-                    <Route path="/" element={<Navigate to="tasks" replace />} />
-                    <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
-                    <Route path="dailies" element={<DailiesModule projectId={currentProject.id} />} />
-                    <Route path="team" element={<TeamModule projectId={currentProject.id} />} />
-                    <Route path="vacations" element={<VacationsCalendarModule projectId={currentProject.id} />} />
-                    <Route path="notes" element={<NotesModule projectId={currentProject.id} />} />
-                    <Route path="info" element={<ProjectInformationModule projectId={currentProject.id} />} />
-                  </Routes>
-                </main>
-              </SidebarInset>
-            </div>
-          </SidebarProvider>
+          <div className="min-h-screen">
+            <AppSidebar currentProject={currentProject} />
+            <main className="ml-64 p-6 pt-[88px]">
+              <Routes>
+                <Route path="/" element={<Navigate to="tasks" replace />} />
+                <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
+                <Route path="dailies" element={<DailiesModule projectId={currentProject.id} />} />
+                <Route path="team" element={<TeamModule projectId={currentProject.id} />} />
+                <Route path="vacations" element={<VacationsCalendarModule projectId={currentProject.id} />} />
+                <Route path="notes" element={<NotesModule projectId={currentProject.id} />} />
+                <Route path="info" element={<ProjectInformationModule projectId={currentProject.id} />} />
+              </Routes>
+            </main>
+          </div>
         )}
       </main>
     </div>
