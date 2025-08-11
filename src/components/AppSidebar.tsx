@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useLocation, NavLink } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import {
   Sidebar,
   SidebarContent,
@@ -9,12 +8,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
-  useSidebar,
 } from '@/components/ui/sidebar';
 import { 
   Calendar,
-  Users,
   FileText,
   Settings,
   ClipboardList,
@@ -28,16 +24,16 @@ interface AppSidebarProps {
 
 const menuItems = [
   { 
-    title: "Tareas", 
+    title: "Incidencias", 
     url: "tasks", 
-    icon: ClipboardList,
-    description: "Gestión de incidencias y tareas" 
+    icon: AlertTriangle,
+    description: "Gestión de incidencias y mejoras" 
   },
   { 
     title: "Dailies", 
     url: "dailies", 
-    icon: BookOpen,
-    description: "Seguimiento diario del proyecto" 
+    icon: ClipboardList,
+    description: "Gestión diaria de tareas y equipo" 
   },
   { 
     title: "Vacaciones", 
@@ -60,16 +56,11 @@ const menuItems = [
 ];
 
 export function AppSidebar({ currentProject }: AppSidebarProps) {
-  const location = useLocation();
-  const currentPath = location.pathname;
-
   return (
-    <Sidebar
-      className="w-14 bg-white border-r border-gray-200"
-      collapsible="none"
-    >
+    <Sidebar variant="inset" collapsible="icon" className="border-r">
       <SidebarContent>
         <SidebarGroup>
+          <SidebarGroupLabel>Navegación</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => (
@@ -78,14 +69,17 @@ export function AppSidebar({ currentProject }: AppSidebarProps) {
                     <NavLink 
                       to={item.url} 
                       end 
-                      className={({ isActive }) =>
-                        isActive 
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium flex items-center justify-center" 
-                          : "hover:bg-sidebar-accent/50 flex items-center justify-center"
+                      className={({ isActive }) => 
+                        `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                          isActive 
+                            ? 'bg-primary text-primary-foreground' 
+                            : 'hover:bg-muted'
+                        }`
                       }
                       title={item.description}
                     >
-                      <item.icon className="h-4 w-4" />
+                      <item.icon className="h-5 w-5" />
+                      <span>{item.title}</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
