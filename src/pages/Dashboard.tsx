@@ -84,13 +84,13 @@ const Dashboard = () => {
           <img
             src={currentProject.logo_url}
             alt={`${currentProject.name} logo`}
-            className="h-10 w-auto object-contain absolute left-[10px]"
+            className="h-10 w-auto object-contain fixed left-[10px]"
           />
         ) : (
           <img
             src={vecturaLogo}
             alt="Vectura"
-            className="h-10 w-auto object-contain absolute left-[10px]"
+            className="h-10 w-auto object-contain fixed left-[10px]"
           />
         )}
         <h1 className="text-2xl font-bold">
