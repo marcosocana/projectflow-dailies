@@ -151,7 +151,13 @@ const Dashboard = () => {
             <div className="min-h-screen flex w-full pt-[76px]">
               <AppSidebar currentProject={currentProject} />
               <SidebarInset className="flex-1">
-                <main className="flex-1 p-6 pt-2">
+                <div className="flex h-14 items-center gap-2 px-4 border-b lg:hidden">
+                  <SidebarTrigger />
+                  <h2 className="text-lg font-semibold">
+                    {currentProject.name}
+                  </h2>
+                </div>
+                <main className="flex-1 p-6 pt-2 lg:pt-6">
                   <Routes>
                     <Route path="/" element={<Navigate to="tasks" replace />} />
                     <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
