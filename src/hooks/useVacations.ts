@@ -6,9 +6,10 @@ export interface Vacation {
   id: string;
   user_id: string;
   project_id: string;
+  person_id?: string;
   start_date: string;
   end_date: string;
-  description?: string;
+  description?: string | null;
   created_at: string;
   updated_at: string;
 }

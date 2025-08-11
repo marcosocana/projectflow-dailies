@@ -31,12 +31,19 @@ interface Person {
 export default function VacationsCalendarModule({ projectId }: VacationsCalendarModuleProps) {
   const { toast } = useToast();
   const { user } = useAuth();
-  const { vacations, loading, createVacation, deleteVacation, refetch } = useVacations(projectId);
+  const { vacations, loading, createVacation, updateVacation, deleteVacation, refetch } = useVacations(projectId);
   
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [people, setPeople] = useState<Person[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({
+    personId: '',
+    startDate: new Date(),
+    endDate: new Date(),
+    description: ''
+  });
+  const [editingVacation, setEditingVacation] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({
     personId: '',
     startDate: new Date(),
     endDate: new Date(),
@@ -77,6 +84,66 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
     return people.find(p => p.id === personId);
   };
 
+  // Colors for a date based on vacations' person colors
+  const getColorsForDate = (date: Date) => {
+    const dayVacs = getVacationsForDate(date);
+    const colors = dayVacs
+      .map(v => getPersonById(v.person_id || '')?.color)
+      .filter(Boolean) as string[];
+    const unique = Array.from(new Set(colors));
+    return unique.slice(0, 3);
+  };
+
+  // Custom day content with colored dots
+  const DayContent = (props: any) => {
+    const { date } = props;
+    const day = format(date, 'd');
+    const colors = getColorsForDate(date);
+    return (
+      <div className="flex flex-col items-center justify-center">
+        <span>{day}</span>
+        {colors.length > 0 && (
+          <div className="mt-0.5 flex gap-1">
+            {colors.map((c, idx) => (
+              <span
+                key={idx}
+                className="inline-block w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const openEdit = (vacation: any) => {
+    setEditingVacation(vacation);
+    setEditForm({
+      personId: vacation.person_id || '',
+      startDate: parseISO(vacation.start_date),
+      endDate: parseISO(vacation.end_date),
+      description: vacation.description || ''
+    });
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingVacation) return;
+    try {
+      await updateVacation(editingVacation.id, {
+        person_id: editForm.personId || null,
+        start_date: format(editForm.startDate, 'yyyy-MM-dd'),
+        end_date: format(editForm.endDate, 'yyyy-MM-dd'),
+        description: editForm.description || null,
+      });
+      setEditingVacation(null);
+      toast({ title: 'Éxito', description: 'Vacación actualizada' });
+    } catch (error) {
+      console.error('Error updating vacation:', error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -93,6 +160,7 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
       await createVacation({
         user_id: user.id,
         project_id: projectId,
+        person_id: form.personId,
         start_date: format(form.startDate, 'yyyy-MM-dd'),
         end_date: format(form.endDate, 'yyyy-MM-dd'),
         description: form.description || null,
@@ -139,17 +207,8 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
                 locale={es}
-                className={cn("rounded-md border p-3 pointer-events-auto")}
-                modifiers={{
-                  vacation: (date) => getVacationsForDate(date).length > 0
-                }}
-                modifiersStyles={{
-                  vacation: { 
-                    backgroundColor: 'hsl(var(--primary))', 
-                    color: 'hsl(var(--primary-foreground))',
-                    fontWeight: 'bold'
-                  }
-                }}
+                className={cn("rounded-md border p-3 pointer-events-auto scale-110 md:scale-125 origin-top")}
+                components={{ DayContent: DayContent as any }}
               />
             </div>
 
@@ -164,7 +223,7 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
               ) : (
                 <div className="space-y-3">
                   {dayVacations.map((vacation) => {
-                    const person = people.find(p => p.id === form.personId); // For now, show the selected person
+                    const person = getPersonById(vacation.person_id || '');
                     return (
                       <Card key={vacation.id} className="p-4">
                         <div className="flex items-center justify-between">
@@ -183,6 +242,19 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
                                 <p className="text-sm mt-1">{vacation.description}</p>
                               )}
                             </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => openEdit(vacation)}>
+                              Editar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => deleteVacation(vacation.id)}
+                            >
+                              Eliminar
+                            </Button>
                           </div>
                         </div>
                       </Card>
@@ -270,6 +342,77 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
               <Button type="submit">
                 Registrar Vacaciones
               </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit vacation dialog */}
+      <Dialog open={!!editingVacation} onOpenChange={(open) => !open && setEditingVacation(null)}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Editar Vacación</DialogTitle>
+            <DialogDescription>Actualiza los datos de la vacación</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-person">Miembro del Equipo</Label>
+              <Select
+                value={editForm.personId}
+                onValueChange={(value) => setEditForm({ ...editForm, personId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un miembro" />
+                </SelectTrigger>
+                <SelectContent>
+                  {people.map((person) => (
+                    <SelectItem key={person.id} value={person.id}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: person.color }} />
+                        {person.name} - {person.role}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-start">Fecha de Inicio</Label>
+                <Input
+                  type="date"
+                  value={format(editForm.startDate, 'yyyy-MM-dd')}
+                  onChange={(e) => setEditForm({ ...editForm, startDate: new Date(e.target.value) })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-end">Fecha de Fin</Label>
+                <Input
+                  type="date"
+                  value={format(editForm.endDate, 'yyyy-MM-dd')}
+                  onChange={(e) => setEditForm({ ...editForm, endDate: new Date(e.target.value) })}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-description">Descripción (opcional)</Label>
+              <Textarea
+                id="edit-description"
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                placeholder="Descripción de las vacaciones"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setEditingVacation(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit">Guardar cambios</Button>
             </div>
           </form>
         </DialogContent>

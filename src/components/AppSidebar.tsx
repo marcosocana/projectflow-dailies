@@ -68,7 +68,7 @@ export function AppSidebar({ currentProject }: AppSidebarProps) {
       data-sidebar="content"
     >
       <div className="p-2">
-        <nav className="space-y-1">
+        <nav className="flex flex-col items-center gap-4">
           <TooltipProvider>
             {menuItems.map((item) => (
               <div key={item.title}>
@@ -85,7 +85,7 @@ export function AppSidebar({ currentProject }: AppSidebarProps) {
                         }`
                       }
                     >
-                      <item.icon className="h-5 w-5" />
+                      <item.icon className="h-6 w-6" />
                     </NavLink>
                   </TooltipTrigger>
                   <TooltipContent side="right" className="ml-2">

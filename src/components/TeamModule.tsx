@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Trash2, UserPlus } from 'lucide-react';
+import { Trash2, UserPlus, Pencil } from 'lucide-react';
 
 interface TeamModuleProps {
   projectId: string;
@@ -18,6 +18,13 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
   const [people, setPeople] = useState<any[]>([]);
   const [createPersonOpen, setCreatePersonOpen] = useState(false);
   const [personForm, setPersonForm] = useState({
+    name: '',
+    role: '',
+    color: '#3B82F6'
+  });
+  const [editPersonOpen, setEditPersonOpen] = useState(false);
+  const [editingPerson, setEditingPerson] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({
     name: '',
     role: '',
     color: '#3B82F6'
@@ -85,6 +92,30 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
     });
   };
 
+  const openEdit = (person: any) => {
+    setEditingPerson(person);
+    setEditForm({ name: person.name, role: person.role, color: person.color });
+    setEditPersonOpen(true);
+  };
+
+  const updatePerson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPerson) return;
+    const { error } = await supabase
+      .from('people')
+      .update({ name: editForm.name, role: editForm.role, color: editForm.color })
+      .eq('id', editingPerson.id);
+
+    if (error) {
+      return toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' });
+    }
+
+    setEditPersonOpen(false);
+    setEditingPerson(null);
+    loadPeople();
+    toast({ title: 'Éxito', description: 'Miembro actualizado' });
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -132,14 +163,23 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deletePerson(person.id)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEdit(person)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deletePerson(person.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -204,6 +244,59 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
               <Button type="submit">
                 Añadir persona
               </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Person Dialog */}
+      <Dialog open={editPersonOpen} onOpenChange={setEditPersonOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar persona</DialogTitle>
+            <DialogDescription>Actualiza la información del miembro</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={updatePerson} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Nombre</Label>
+              <Input
+                id="edit-name"
+                value={editForm.name}
+                onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-role">Rol</Label>
+              <Input
+                id="edit-role"
+                value={editForm.role}
+                onChange={e => setEditForm(prev => ({ ...prev, role: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-color">Color</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="edit-color"
+                  type="color"
+                  value={editForm.color}
+                  onChange={e => setEditForm(prev => ({ ...prev, color: e.target.value }))}
+                  className="w-10 h-10 rounded border cursor-pointer"
+                />
+                <Input
+                  value={editForm.color}
+                  onChange={e => setEditForm(prev => ({ ...prev, color: e.target.value }))}
+                  className="font-mono"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setEditPersonOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">Guardar cambios</Button>
             </div>
           </form>
         </DialogContent>
