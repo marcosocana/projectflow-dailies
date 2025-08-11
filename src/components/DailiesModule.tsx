@@ -476,8 +476,10 @@ export default function DailiesModule({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+          <div className="grid gap-6 md:grid-cols-3">
+            {/* Calendar */}
             <div>
+              <h3 className="text-lg font-semibold mb-4">Calendario</h3>
               <Calendar
                 mode="single"
                 selected={date}
@@ -487,7 +489,8 @@ export default function DailiesModule({
               />
             </div>
 
-            <div>
+            {/* Tasks List */}
+            <div className="md:col-span-2">
               <Table className="mt-0">
                 <TableHeader>
                   <TableRow>
