@@ -11,9 +11,15 @@ export interface Project {
   updated_at: string;
 }
 
+export interface ProjectWithAccess extends Project {
+  hasAccess?: boolean;
+}
+
 export function useProjectAccess() {
   const [isAccessing, setIsAccessing] = useState(false);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [userProjects, setUserProjects] = useState<ProjectWithAccess[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
   const { toast } = useToast();
 
   const accessProject = async (password: string) => {
@@ -52,6 +58,33 @@ export function useProjectAccess() {
     } finally {
       setIsAccessing(false);
     }
+  };
+
+  const fetchUserProjects = async () => {
+    setLoadingProjects(true);
+    try {
+      // Por ahora retornamos array vacío, se implementará cuando se configure la relación
+      setUserProjects([]);
+      return [];
+    } catch (error: any) {
+      console.error('Error fetching user projects:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los proyectos",
+        variant: "destructive",
+      });
+      return [];
+    } finally {
+      setLoadingProjects(false);
+    }
+  };
+
+  const accessProjectDirectly = async (project: ProjectWithAccess) => {
+    setCurrentProject(project);
+    toast({
+      title: "Acceso concedido",
+      description: `Bienvenido al proyecto "${project.name}"`,
+    });
   };
 
   const accessDailies = async (projectId: string, dailiesPassword: string) => {
@@ -93,9 +126,13 @@ export function useProjectAccess() {
 
   return {
     accessProject,
+    accessProjectDirectly,
     accessDailies,
     leaveProject,
+    fetchUserProjects,
     currentProject,
+    userProjects,
     isAccessing,
+    loadingProjects,
   };
 }

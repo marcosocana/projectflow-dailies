@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { Plus, Edit2, Trash2, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { Plus, Edit2, Trash2, RefreshCw, Check, X } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useProfiles, type Profile } from '@/hooks/useProfiles';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -19,8 +20,18 @@ interface UsersModuleProps {
   projectId: string;
 }
 
+const sections = [
+  { id: 'tasks', name: 'Tareas', description: 'Gestión de incidencias y tareas' },
+  { id: 'dailies', name: 'Dailies', description: 'Seguimiento diario del proyecto' },
+  { id: 'vacations', name: 'Vacaciones', description: 'Gestión de vacaciones del equipo' },
+  { id: 'users', name: 'Usuarios', description: 'Gestión de miembros del equipo' },
+  { id: 'notes', name: 'Notas', description: 'Notas compartidas del proyecto' },
+  { id: 'settings', name: 'Configuración', description: 'Configuración del proyecto' },
+];
+
 export default function UsersModule({ projectId }: UsersModuleProps) {
   const { profiles, loading, updateProfile, deleteProfile } = useProfiles();
+  const { permissions, updatePermission, hasPermission } = useUserPermissions(projectId);
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
   
@@ -30,7 +41,6 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
     email: '',
     full_name: '',
     color: '#3B82F6',
-    role: 'viewer' as 'admin' | 'manager' | 'viewer',
   });
   const [generatedPassword, setGeneratedPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -95,7 +105,6 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
       email: '',
       full_name: '',
       color: '#3B82F6',
-      role: 'viewer',
     });
     setGeneratedPassword('');
     setShowPassword(false);
@@ -107,7 +116,6 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
       email: '',
       full_name: profile.full_name,
       color: profile.color,
-      role: 'viewer',
     });
     setIsDialogOpen(true);
   };
@@ -139,6 +147,10 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
     }
   };
 
+  const handlePermissionToggle = async (userId: string, section: string, checked: boolean) => {
+    await updatePermission(userId, section, checked);
+  };
+
   if (loading) {
     return <div className="p-6 text-center">Cargando usuarios...</div>;
   }
@@ -148,7 +160,7 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Gestión de Usuarios</h1>
-          <p className="text-muted-foreground">Administra los miembros del equipo</p>
+          <p className="text-muted-foreground">Administra los miembros del equipo y sus permisos por sección</p>
         </div>
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -233,22 +245,6 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
                   </div>
                 </div>
 
-                {!editingProfile && (
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Rol</Label>
-                    <Select value={formData.role} onValueChange={(value: any) => setFormData(prev => ({ ...prev, role: value }))}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">Admin - Acceso completo</SelectItem>
-                        <SelectItem value="manager">Manager - Gestión de proyecto</SelectItem>
-                        <SelectItem value="viewer">Viewer - Solo lectura</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="outline" onClick={handleCloseDialog}>
                     Cancelar
@@ -265,92 +261,118 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Usuarios del sistema</CardTitle>
+          <CardTitle>Usuarios y Permisos por Sección</CardTitle>
           <CardDescription>
-            Lista de todos los usuarios registrados
+            Gestiona qué secciones puede ver y editar cada usuario
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Usuario</TableHead>
-                <TableHead>Color</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Creado</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {profiles.map((profile) => (
-                <TableRow key={profile.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{profile.full_name}</div>
-                      <div className="text-sm text-muted-foreground">ID: {profile.user_id}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div 
-                        className="w-4 h-4 rounded-full border" 
-                        style={{ backgroundColor: profile.color }}
-                      />
-                      <span className="text-sm">{profile.color}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={profile.is_active}
-                        onCheckedChange={() => handleToggleActive(profile)}
-                        disabled={profile.user_id === currentUser?.id}
-                      />
-                      <Badge variant={profile.is_active ? "default" : "secondary"}>
-                        {profile.is_active ? 'Activo' : 'Inactivo'}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {new Date(profile.created_at).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(profile)}
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRegeneratePassword(profile.user_id)}
-                        disabled={profile.user_id === currentUser?.id}
-                      >
-                        <RefreshCw className="h-4 w-4" />
-                      </Button>
-                      
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm('¿Estás seguro de que quieres eliminar este usuario?')) {
-                            deleteProfile(profile.id);
-                          }
-                        }}
-                        disabled={profile.user_id === currentUser?.id}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Usuario</TableHead>
+                  <TableHead>Estado</TableHead>
+                  {sections.map((section) => (
+                    <TableHead key={section.id} className="text-center">
+                      <div className="flex flex-col items-center">
+                        <span className="font-medium">{section.name}</span>
+                        <span className="text-xs text-muted-foreground">{section.description}</span>
+                      </div>
+                    </TableHead>
+                  ))}
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {profiles.map((profile) => (
+                  <TableRow key={profile.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="w-4 h-4 rounded-full border" 
+                          style={{ backgroundColor: profile.color }}
+                        />
+                        <div>
+                          <div className="font-medium">{profile.full_name}</div>
+                          <div className="text-sm text-muted-foreground">ID: {profile.user_id.substring(0, 8)}...</div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={profile.is_active}
+                          onCheckedChange={() => handleToggleActive(profile)}
+                          disabled={profile.user_id === currentUser?.id}
+                        />
+                        <Badge variant={profile.is_active ? "default" : "secondary"}>
+                          {profile.is_active ? 'Activo' : 'Inactivo'}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    {sections.map((section) => (
+                      <TableCell key={section.id} className="text-center">
+                        <Checkbox
+                          checked={hasPermission(profile.user_id, section.id)}
+                          onCheckedChange={(checked) => 
+                            handlePermissionToggle(profile.user_id, section.id, !!checked)
+                          }
+                          disabled={profile.user_id === currentUser?.id}
+                        />
+                      </TableCell>
+                    ))}
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(profile)}
+                          title="Editar perfil"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRegeneratePassword(profile.user_id)}
+                          disabled={profile.user_id === currentUser?.id}
+                          title="Regenerar contraseña"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                        
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm('¿Estás seguro de que quieres eliminar este usuario?')) {
+                              deleteProfile(profile.id);
+                            }
+                          }}
+                          disabled={profile.user_id === currentUser?.id}
+                          title="Eliminar usuario"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          
+          <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+            <h4 className="font-medium mb-2">Instrucciones:</h4>
+            <ul className="text-sm text-muted-foreground space-y-1">
+              <li>• Marca las casillas para permitir acceso a cada sección</li>
+              <li>• Si una sección no está marcada, no aparecerá en el menú del usuario</li>
+              <li>• Los usuarios pueden ver y editar el contenido de las secciones marcadas</li>
+              <li>• No puedes modificar tus propios permisos</li>
+            </ul>
+          </div>
         </CardContent>
       </Card>
     </div>

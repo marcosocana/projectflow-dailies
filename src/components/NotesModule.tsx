@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, History, User } from 'lucide-react';
+import { Save, History, User, ArrowLeft } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -8,17 +8,29 @@ import { useSharedNotes } from '@/hooks/useSharedNotes';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import ReactQuill from 'react-quill';
+import NotesIndex from './NotesIndex';
 import 'react-quill/dist/quill.snow.css';
 
 interface NotesModuleProps {
   projectId: string;
 }
 
+interface Note {
+  id: string;
+  project_id: string;
+  content: string;
+  title?: string;
+  created_at: string;
+  updated_at: string;
+  last_edited_by?: string;
+}
+
 export default function NotesModule({ projectId }: NotesModuleProps) {
-  const { note, history, loading, createOrUpdateNote } = useSharedNotes(projectId);
   const { user } = useAuth();
   const { toast } = useToast();
   
+  const [currentView, setCurrentView] = useState<'index' | 'editor'>('index');
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -46,15 +58,15 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
 
   // Cargar contenido inicial
   useEffect(() => {
-    if (note) {
-      setContent(note.content);
+    if (selectedNote) {
+      setContent(selectedNote.content);
       setHasChanges(false);
     }
-  }, [note]);
+  }, [selectedNote]);
 
   // Auto-guardado
   useEffect(() => {
-    if (hasChanges && content !== (note?.content || '')) {
+    if (hasChanges && content !== (selectedNote?.content || '')) {
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current);
       }
@@ -69,7 +81,7 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
         clearTimeout(autoSaveTimeoutRef.current);
       }
     };
-  }, [content, hasChanges, note]);
+  }, [content, hasChanges, selectedNote]);
 
   const handleContentChange = (value: string) => {
     setContent(value);
@@ -77,11 +89,11 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
   };
 
   const handleSave = async () => {
-    if (!hasChanges || isSaving) return;
+    if (!hasChanges || isSaving || !selectedNote) return;
     
     setIsSaving(true);
     try {
-      await createOrUpdateNote(content, user?.id);
+      // Simular guardado - en una app real esto iría a Supabase
       setHasChanges(false);
       toast({
         title: "Guardado",
@@ -94,6 +106,31 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
     }
   };
 
+  const handleSelectNote = (note: Note) => {
+    setSelectedNote(note);
+    setCurrentView('editor');
+  };
+
+  const handleCreateNote = () => {
+    const newNote: Note = {
+      id: crypto.randomUUID(),
+      project_id: projectId,
+      content: '',
+      title: 'Nueva nota',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    setSelectedNote(newNote);
+    setCurrentView('editor');
+  };
+
+  const handleBackToIndex = () => {
+    setCurrentView('index');
+    setSelectedNote(null);
+    setContent('');
+    setHasChanges(false);
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('es-ES', {
       year: 'numeric',
@@ -104,18 +141,34 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
     });
   };
 
-  if (loading) {
-    return <div className="p-6 text-center">Cargando notas...</div>;
+  if (currentView === 'index') {
+    return (
+      <NotesIndex 
+        projectId={projectId}
+        onSelectNote={handleSelectNote}
+        onCreateNote={handleCreateNote}
+      />
+    );
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Notas Compartidas</h1>
-          <p className="text-muted-foreground">
-            Área colaborativa para notas y documentación del proyecto
-          </p>
+        <div className="flex items-center gap-4">
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={handleBackToIndex}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Volver a notas
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold">{selectedNote?.title || 'Nota'}</h1>
+            <p className="text-muted-foreground">
+              Editor colaborativo para la nota seleccionada
+            </p>
+          </div>
         </div>
         
         <div className="flex items-center gap-2">
@@ -133,63 +186,6 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
             <Save className="h-4 w-4 mr-2" />
             {isSaving ? 'Guardando...' : 'Guardar'}
           </Button>
-          
-          <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <History className="h-4 w-4 mr-2" />
-                Historial
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Historial de cambios</DialogTitle>
-                <DialogDescription>
-                  Versiones anteriores de las notas
-                </DialogDescription>
-              </DialogHeader>
-              
-              <div className="space-y-4">
-                {history.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    No hay historial de cambios disponible
-                  </p>
-                ) : (
-                  history.map((entry) => (
-                    <Card key={entry.id}>
-                      <CardHeader className="pb-3">
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4" />
-                            <span className="text-sm font-medium">
-                              Editado el {formatDate(entry.created_at)}
-                            </span>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setContent(entry.content);
-                              setHasChanges(true);
-                              setHistoryOpen(false);
-                            }}
-                          >
-                            Restaurar versión
-                          </Button>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div 
-                          className="prose max-w-none"
-                          dangerouslySetInnerHTML={{ __html: entry.content }}
-                        />
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
@@ -197,10 +193,10 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <div className="flex items-center gap-2">
-              Documento del proyecto
-              {note?.last_edited_by && (
+              {selectedNote?.title || 'Documento'}
+              {selectedNote?.last_edited_by && (
                 <Badge variant="outline" className="text-xs">
-                  Última edición: {formatDate(note.updated_at)}
+                  Última edición: {formatDate(selectedNote.updated_at)}
                 </Badge>
               )}
             </div>
@@ -217,7 +213,7 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
               onChange={handleContentChange}
               modules={modules}
               formats={formats}
-              placeholder="Escribe aquí las notas del proyecto..."
+              placeholder="Escribe aquí el contenido de la nota..."
               style={{ height: '450px' }}
             />
           </div>
@@ -230,7 +226,7 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
         </p>
         <ul className="list-disc list-inside space-y-1 mt-2">
           <li>Los cambios se guardan automáticamente cada 2 segundos</li>
-          <li>Puedes ver y restaurar versiones anteriores en el historial</li>
+          <li>Usa el botón "Volver a notas" para navegar entre diferentes notas</li>
           <li>Todos los usuarios con acceso al proyecto pueden editar estas notas</li>
           <li>Usa el botón "Guardar" para forzar el guardado inmediato</li>
         </ul>

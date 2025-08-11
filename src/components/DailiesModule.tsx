@@ -469,7 +469,7 @@ export default function DailiesModule({
           
         </CardHeader>
         <CardContent>
-          <Calendar mode="single" selected={date} onSelect={d => d && setDate(d)} locale={es} className="rounded-md border p-3 pointer-events-auto py-[19px] mx-[57px] px-[13px]" />
+          <Calendar mode="single" selected={date} onSelect={d => d && setDate(d)} locale={es} className="rounded-md border p-3 pointer-events-auto w-full mx-auto" />
         </CardContent>
       </Card>
 

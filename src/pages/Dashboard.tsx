@@ -25,8 +25,9 @@ const Dashboard = () => {
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const { user, signOut } = useAuth();
   const { toast } = useToast();
-  const { accessProject, accessDailies, currentProject, isAccessing } = useProjectAccess();
+  const { accessProject, accessProjectDirectly, fetchUserProjects, currentProject, userProjects, isAccessing, loadingProjects } = useProjectAccess();
   const navigate = useNavigate();
+  const [showProjectsList, setShowProjectsList] = useState(false);
   const handleSignOut = async () => {
     await signOut();
     toast({
@@ -61,10 +62,10 @@ const handleProjectCreated = (projectId: string, projectNumber: number) => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border">
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background">
         <div className="container mx-auto px-4 py-4">
           {/* Desktop Header */}
-          <div className="hidden md:flex justify-between items-center">
+          <div className="flex justify-between items-center">
             <div className="flex items-center gap-4">
               {currentProject?.logo_url ? (
                 <img 
@@ -92,55 +93,145 @@ const handleProjectCreated = (projectId: string, projectNumber: number) => {
               </Button>
             </div>
           </div>
-
         </div>
       </header>
 
 {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 pt-24">
         {!currentProject ? (
-          <div className="max-w-2xl mx-auto space-y-6">
-            {/* Project Access */}
-            <Card>
-              <CardHeader className="text-center space-y-4">
-                <div className="flex justify-center">
-                  <img 
-                    src={vecturaLogo} 
-                    alt="Vectura" 
-                    className="h-16 w-auto object-contain"
-                  />
-                </div>
-                <div>
-                  <CardTitle>Acceder a Proyecto</CardTitle>
-                  <CardDescription>
-                    Introduce la contraseña del proyecto para acceder
-                  </CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleProjectAccess} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="project-password">Contraseña del Proyecto</Label>
-                    <Input
-                      id="project-password"
-                      type="password"
-                      value={projectPassword}
-                      onChange={(e) => setProjectPassword(e.target.value)}
-                      placeholder="Introduce la contraseña del proyecto"
-                      required
-                    />
+          <div className="max-w-4xl mx-auto space-y-6">
+            {!showProjectsList ? (
+              <>
+                {/* Mis Proyectos */}
+                <Card>
+                  <CardHeader className="text-center space-y-4">
+                    <div className="flex justify-center">
+                      <img 
+                        src={vecturaLogo} 
+                        alt="Vectura" 
+                        className="h-16 w-auto object-contain"
+                      />
+                    </div>
+                    <div>
+                      <CardTitle>Mis Proyectos</CardTitle>
+                      <CardDescription>
+                        Selecciona un proyecto al que tienes acceso
+                      </CardDescription>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <Button 
+                        onClick={async () => {
+                          setShowProjectsList(true);
+                          await fetchUserProjects();
+                        }}
+                        disabled={loadingProjects}
+                        className="w-full"
+                      >
+                        {loadingProjects ? 'Cargando proyectos...' : 'Ver mis proyectos'}
+                      </Button>
+                      
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="w-full border-t" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                          <span className="bg-background px-2 text-muted-foreground">
+                            O accede con contraseña
+                          </span>
+                        </div>
+                      </div>
+
+                      <form onSubmit={handleProjectAccess} className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="project-password">Contraseña del Proyecto</Label>
+                          <Input
+                            id="project-password"
+                            type="password"
+                            value={projectPassword}
+                            onChange={(e) => setProjectPassword(e.target.value)}
+                            placeholder="Introduce la contraseña del proyecto"
+                            required
+                          />
+                        </div>
+                        <Button type="submit" disabled={isAccessing} className="w-full" variant="outline">
+                          {isAccessing ? 'Accediendo...' : 'Acceder con contraseña'}
+                        </Button>
+                      </form>
+                      
+                      <div className="text-center">
+                        <Button variant="ghost" onClick={() => setCreateProjectOpen(true)}>
+                          Crear nuevo proyecto
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Proyectos Disponibles</CardTitle>
+                      <CardDescription>
+                        Haz clic en un proyecto para acceder directamente
+                      </CardDescription>
+                    </div>
+                    <Button variant="outline" onClick={() => setShowProjectsList(false)}>
+                      Volver
+                    </Button>
                   </div>
-                  <Button type="submit" disabled={isAccessing} className="w-full">
-                    {isAccessing ? 'Accediendo...' : 'Acceder al Proyecto'}
-                  </Button>
-                </form>
-                <div className="mt-4 text-center">
-                  <Button variant="outline" onClick={() => setCreateProjectOpen(true)}>
-                    Crear nuevo proyecto
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                </CardHeader>
+                <CardContent>
+                  {userProjects.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground mb-4">
+                        No tienes acceso a ningún proyecto aún
+                      </p>
+                      <Button onClick={() => setCreateProjectOpen(true)}>
+                        Crear tu primer proyecto
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {userProjects.map((project) => (
+                        <Card 
+                          key={project.id}
+                          className="cursor-pointer hover:shadow-md transition-shadow"
+                          onClick={() => accessProjectDirectly(project)}
+                        >
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center gap-3">
+                              {project.logo_url ? (
+                                <img 
+                                  src={project.logo_url} 
+                                  alt={`${project.name} logo`}
+                                  className="h-8 w-8 object-contain"
+                                />
+                              ) : (
+                                <div className="h-8 w-8 bg-primary/20 rounded flex items-center justify-center">
+                                  <span className="text-xs font-bold">
+                                    {project.name.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                              )}
+                              <div>
+                                <CardTitle className="text-lg">{project.name}</CardTitle>
+                                <CardDescription>
+                                  Proyecto #{project.project_number}
+                                </CardDescription>
+                              </div>
+                            </div>
+                          </CardHeader>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Create Project Modal */}
             <Dialog open={createProjectOpen} onOpenChange={setCreateProjectOpen}>
@@ -158,20 +249,9 @@ const handleProjectCreated = (projectId: string, projectNumber: number) => {
           </div>
         ) : (
           <SidebarProvider>
-            <div className="min-h-screen flex w-full">
+            <div className="min-h-screen flex w-full pt-20">
               <AppSidebar currentProject={currentProject} />
               <SidebarInset className="flex-1">
-                <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b">
-                  <SidebarTrigger className="-ml-1" />
-                  <div className="flex items-center gap-2 ml-auto">
-                    <span className="text-sm text-muted-foreground">
-                      {user?.email}
-                    </span>
-                    <Button variant="outline" size="sm" onClick={handleSignOut}>
-                      <LogOut className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </header>
                 <main className="flex-1 p-6">
                   <Routes>
                     <Route path="/" element={<Navigate to="tasks" replace />} />

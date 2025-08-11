@@ -66,27 +66,16 @@ const menuItems = [
 ];
 
 export function AppSidebar({ currentProject }: AppSidebarProps) {
-  const { state } = useSidebar();
   const location = useLocation();
   const currentPath = location.pathname;
 
-  const isActive = (path: string) => currentPath === path;
-
   return (
     <Sidebar
-      className={state === "collapsed" ? "w-14" : "w-60"}
-      collapsible="icon"
+      className="w-14"
+      collapsible="none"
     >
-      <div className="p-4">
-        <SidebarTrigger className="mb-4" />
-      </div>
-
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>
-            {currentProject?.name || 'Vectura'}
-          </SidebarGroupLabel>
-
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => (
@@ -97,13 +86,12 @@ export function AppSidebar({ currentProject }: AppSidebarProps) {
                       end 
                       className={({ isActive }) =>
                         isActive 
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium" 
-                          : "hover:bg-sidebar-accent/50"
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium flex items-center justify-center" 
+                          : "hover:bg-sidebar-accent/50 flex items-center justify-center"
                       }
-                      title={state === "collapsed" ? item.description : undefined}
+                      title={item.description}
                     >
                       <item.icon className="h-4 w-4" />
-                      {state !== "collapsed" && <span>{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
