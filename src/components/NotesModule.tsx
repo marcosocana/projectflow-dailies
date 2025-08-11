@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,8 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSharedNotes, SharedNote } from '@/hooks/useSharedNotes';
 import { useAuth } from '@/hooks/useAuth';
-import { ArrowLeft, Save, FileText, Edit2, Trash2 } from 'lucide-react';
+import { ArrowLeft, FileText, Edit2, Trash2, Check } from 'lucide-react';
 import NotesIndex from '@/components/NotesIndex';
+import { useToast } from '@/hooks/use-toast';
 
 interface NotesModuleProps {
   projectId: string;
@@ -17,39 +18,55 @@ interface NotesModuleProps {
 export default function NotesModule({ projectId }: NotesModuleProps) {
   const { notes, loading, createNote, updateNote, deleteNote } = useSharedNotes(projectId);
   const { user } = useAuth();
+  const { toast } = useToast();
   const [selectedNote, setSelectedNote] = useState<SharedNote | null>(null);
   const [content, setContent] = useState('');
   const [noteTitle, setNoteTitle] = useState('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Auto-save functionality
+  const autoSave = useCallback(async (noteId: string, newContent: string, newTitle: string) => {
+    if (!noteId) return;
+    
+    setIsSaving(true);
+    try {
+      const updatedContent = newContent.replace(/<h1>.*?<\/h1>/, `<h1>${newTitle}</h1>`);
+      await updateNote(noteId, updatedContent, newTitle);
+    } catch (error) {
+      console.error('Auto-save failed:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [updateNote]);
 
   // Sync content when note is selected
   useEffect(() => {
     if (selectedNote) {
       setContent(selectedNote.content);
       setNoteTitle(selectedNote.title);
-      setHasChanges(false);
     }
   }, [selectedNote]);
 
+  // Auto-save on content change with debounce
+  useEffect(() => {
+    if (!selectedNote) return;
+    
+    const timer = setTimeout(() => {
+      if (content !== selectedNote.content || noteTitle !== selectedNote.title) {
+        autoSave(selectedNote.id, content, noteTitle);
+      }
+    }, 2000); // Auto-save after 2 seconds of inactivity
+
+    return () => clearTimeout(timer);
+  }, [content, noteTitle, selectedNote, autoSave]);
+
   const handleContentChange = (value: string) => {
     setContent(value);
-    setHasChanges(true);
   };
 
   const handleTitleChange = (newTitle: string) => {
     setNoteTitle(newTitle);
-    setHasChanges(true);
-  };
-
-  const handleSave = async () => {
-    if (!selectedNote) return;
-    
-    // Actualizar el contenido con el título
-    const updatedContent = content.replace(/<h1>.*?<\/h1>/, `<h1>${noteTitle}</h1>`);
-    await updateNote(selectedNote.id, updatedContent, noteTitle);
-    setHasChanges(false);
-    setIsEditingTitle(false);
   };
 
   const handleCreateNote = async () => {
@@ -67,7 +84,6 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
     setSelectedNote(null);
     setContent('');
     setNoteTitle('');
-    setHasChanges(false);
     setIsEditingTitle(false);
   };
 
@@ -75,8 +91,20 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
     if (!selectedNote) return;
     
     if (confirm('¿Estás seguro de que quieres eliminar esta nota?')) {
-      await deleteNote(selectedNote.id);
-      handleBackToIndex();
+      try {
+        await deleteNote(selectedNote.id);
+        toast({
+          title: "Nota eliminada",
+          description: "La nota ha sido eliminada correctamente",
+        });
+        handleBackToIndex();
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "No se pudo eliminar la nota",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -142,6 +170,12 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
         </div>
         
         <div className="flex items-center gap-2">
+          {isSaving && (
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              <Check className="h-4 w-4 animate-pulse" />
+              Guardando...
+            </div>
+          )}
           <Button 
             variant="destructive"
             size="sm"
@@ -150,14 +184,6 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
           >
             <Trash2 className="h-4 w-4" />
             Eliminar
-          </Button>
-          <Button 
-            onClick={handleSave} 
-            disabled={!hasChanges}
-            className="flex items-center gap-2"
-          >
-            <Save className="h-4 w-4" />
-            Guardar cambios
           </Button>
         </div>
       </div>
