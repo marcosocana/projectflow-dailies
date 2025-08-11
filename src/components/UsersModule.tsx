@@ -44,6 +44,7 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
   });
   const [generatedPassword, setGeneratedPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [selectedPermissions, setSelectedPermissions] = useState<Record<string, boolean>>({});
 
   const generateSecurePassword = () => {
     const length = 12;
@@ -64,22 +65,23 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
       setGeneratedPassword(password);
       
       try {
-        // Crear usuario en Supabase Auth
-        const { data: authData, error: signUpError } = await supabase.auth.admin.createUser({
+        // Crear usuario usando signup regular
+        const { data: authData, error: signUpError } = await supabase.auth.signUp({
           email: formData.email,
           password: password,
-          email_confirm: true,
-          user_metadata: {
-            full_name: formData.full_name,
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+            data: {
+              full_name: formData.full_name,
+            }
           }
         });
 
         if (signUpError) throw signUpError;
 
-        // El perfil se crea automáticamente por el trigger, pero vamos a actualizarlo
         if (authData.user) {
           // Esperar un poco para que el trigger se ejecute
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 1000));
           
           // Actualizar el perfil con los datos adicionales
           const { error: updateError } = await supabase
@@ -106,6 +108,20 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
           if (accessError) {
             console.error('Error creating project access:', accessError);
           }
+
+          // Crear permisos por defecto para las secciones seleccionadas
+          const permissionPromises = Object.entries(selectedPermissions)
+            .filter(([_, isSelected]) => isSelected)
+            .map(([section, _]) => 
+              supabase.from('user_permissions').insert({
+                user_id: authData.user.id,
+                project_id: projectId,
+                section,
+                can_access: true,
+              })
+            );
+
+          await Promise.all(permissionPromises);
         }
 
         toast({
@@ -142,6 +158,7 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
     });
     setGeneratedPassword('');
     setShowPassword(false);
+    setSelectedPermissions({});
   };
 
   const handleEdit = (profile: Profile) => {
@@ -278,6 +295,37 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
                     </span>
                   </div>
                 </div>
+
+                {!editingProfile && (
+                  <div className="space-y-3">
+                    <Label>Permisos de sección</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Selecciona las secciones a las que tendrá acceso este usuario
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {sections.map((section) => (
+                        <div key={section.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`permission-${section.id}`}
+                            checked={selectedPermissions[section.id] || false}
+                            onCheckedChange={(checked) => 
+                              setSelectedPermissions(prev => ({
+                                ...prev,
+                                [section.id]: !!checked
+                              }))
+                            }
+                          />
+                          <Label 
+                            htmlFor={`permission-${section.id}`}
+                            className="text-sm font-normal"
+                          >
+                            {section.name}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="outline" onClick={handleCloseDialog}>
