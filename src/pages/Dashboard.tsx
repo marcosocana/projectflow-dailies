@@ -96,6 +96,7 @@ const Dashboard = () => {
         <h1 className="text-2xl font-bold ml-[10px]">
           {currentProject ? currentProject.name : 'Vectura'}
         </h1>
+  </div>
 
       <div className="flex items-center gap-4">
         <span className="text-sm text-muted-foreground">{user?.email}</span>
