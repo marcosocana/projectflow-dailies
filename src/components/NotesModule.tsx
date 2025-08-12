@@ -6,12 +6,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { useSharedNotes } from '@/hooks/useSharedNotes';
-import { Plus, Edit, Trash2, FileText, Clock } from 'lucide-react';
+import { Plus, FileText, Clock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
-
+import { useNavigate } from 'react-router-dom';
 interface NotesModuleProps {
   projectId: string;
 }
@@ -23,7 +23,11 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedNote, setSelectedNote] = useState<any>(null);
   const [noteForm, setNoteForm] = useState({ title: '', content: '' });
-
+  const navigate = useNavigate();
+  const hiddenIds: string[] = (() => {
+    try { return JSON.parse(localStorage.getItem(`hidden_notes_${projectId}`) || '[]'); } catch { return []; }
+  })();
+  const visibleNotes = notes.filter((n: any) => !hiddenIds.includes(n.id));
   useEffect(() => {
     document.title = 'Notas Compartidas';
   }, []);
@@ -62,9 +66,7 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
   };
 
   const openEditDialog = (note: any) => {
-    setSelectedNote(note);
-    setNoteForm({ title: note.title, content: note.content });
-    setIsEditOpen(true);
+    navigate(`/notes/${note.id}`);
   };
 
   const openDeleteDialog = (note: any) => {
@@ -90,7 +92,7 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
         </Button>
       </div>
 
-      {notes.length === 0 ? (
+      {visibleNotes.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <FileText className="h-12 w-12 text-muted-foreground mb-4" />
@@ -104,31 +106,13 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {notes.map((note) => (
+          {visibleNotes.map((note) => (
             <Card key={note.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <CardTitle className="text-lg line-clamp-2 flex-1 mr-2">
                     {note.title}
                   </CardTitle>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={(e) => { e.stopPropagation(); openEditDialog(note); }}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={(e) => { e.stopPropagation(); openDeleteDialog(note); }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
                 </div>
               </CardHeader>
               <CardContent onClick={() => openEditDialog(note)} className="cursor-pointer">
@@ -195,65 +179,7 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog para editar nota */}
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Editar Nota</DialogTitle>
-            <DialogDescription>
-              Modifica el contenido de la nota
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Título</label>
-              <Input
-                value={noteForm.title}
-                onChange={(e) => setNoteForm(prev => ({ ...prev, title: e.target.value }))}
-                placeholder="Título de la nota..."
-                className="mt-1"
-                aria-label="Título de la nota"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Contenido</label>
-              <div className="mt-1 border rounded-md">
-                <ReactQuill
-                  theme="snow"
-                  value={noteForm.content}
-                  onChange={(value) => setNoteForm(prev => ({ ...prev, content: value }))}
-                />
-              </div>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 mt-6">
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleEditNote}>
-              Guardar Cambios
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
-      {/* Dialog para confirmar eliminación */}
-      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar nota?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción no se puede deshacer. La nota "{selectedNote?.title}" será eliminada permanentemente.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteNote} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

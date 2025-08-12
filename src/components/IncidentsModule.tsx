@@ -25,10 +25,10 @@ type IncidentStatus = Database['public']['Enums']['incident_status'];
 type IncidentCategory = Database['public']['Enums']['incident_category'];
 
 const STATUS_OPTIONS = [
-  { value: 'pending', label: 'Pendiente' },
   { value: 'in_progress', label: 'En curso' },
+  { value: 'pending', label: 'Pendientes' },
   { value: 'in_qa', label: 'En pruebas' },
-  { value: 'resolved', label: 'Resuelto (PRO)' },
+  { value: 'resolved', label: 'Resueltas' },
   { value: 'closed', label: 'Cerradas' },
 ];
 
@@ -481,11 +481,11 @@ setDetailForm({
     return () => clearTimeout(handler);
   }, [detailForm, selected, detailEvidenceFile]);
 
-const statusOrder = ['pending', 'in_progress', 'in_qa', 'resolved', 'closed'];
+const statusOrder = ['in_progress', 'pending', 'in_qa', 'resolved', 'closed'];
 const STATUS_LABELS: Record<string, string> = { 
   in_progress: 'En curso', 
-  pending: 'Pendiente', 
-  resolved: 'Resuelto', 
+  pending: 'Pendientes', 
+  resolved: 'Resueltas', 
   closed: 'Cerradas',
   in_qa: 'En pruebas'
 };

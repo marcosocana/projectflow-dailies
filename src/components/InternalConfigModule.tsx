@@ -75,7 +75,7 @@ export default function InternalConfigModule({ projectId, dailiesPassword }: Int
         </TabsList>
         
         <TabsContent value="dailies" className="space-y-4">
-          <DailiesModule projectId={projectId} />
+          <DailiesModule projectId={projectId} initiallyUnlocked={true} />
         </TabsContent>
         
         <TabsContent value="team" className="space-y-4">

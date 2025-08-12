@@ -17,6 +17,7 @@ import ProjectInformationModule from '@/components/ProjectInformationModule';
 // import HomeModule from '@/components/HomeModule';
 import InternalConfigModule from '@/components/InternalConfigModule';
 import { AppSidebar } from '@/components/AppSidebar';
+import NoteDetail from '@/components/NoteDetail';
 import { LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import vecturaLogo from '@/assets/vectura-logo.png';
@@ -173,6 +174,7 @@ const Dashboard = () => {
                 <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
                 <Route path="vacations" element={<VacationsCalendarModule projectId={currentProject.id} />} />
                 <Route path="notes" element={<NotesModule projectId={currentProject.id} />} />
+                <Route path="notes/:noteId" element={<NoteDetail projectId={currentProject.id} />} />
                 <Route path="config" element={<InternalConfigModule projectId={currentProject.id} dailiesPassword={(currentProject as any).dailies_password || 'default'} />} />
                 <Route path="info" element={<ProjectInformationModule projectId={currentProject.id} />} />
               </Routes>
