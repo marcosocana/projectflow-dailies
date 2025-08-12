@@ -33,11 +33,14 @@ const Dashboard = () => {
     accessProject,
     currentProject,
     isAccessing,
+    leaveProject,
   } = useProjectAccess();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
     await signOut();
+    leaveProject();
+    navigate('/');
     toast({
       title: "Sesión cerrada",
       description: "Has cerrado sesión correctamente."

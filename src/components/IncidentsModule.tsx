@@ -172,6 +172,7 @@ const importInputRef = useRef<HTMLInputElement>(null);
 const [totalIncidents, setTotalIncidents] = useState<number>(0);
 const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
 const [totalImprovements, setTotalImprovements] = useState<number>(0);
+const [improvementStatusCounts, setImprovementStatusCounts] = useState<Record<string, number>>({});
 
 // Pagination state
 const [currentPage, setCurrentPage] = useState(1);
@@ -238,9 +239,10 @@ const fetchIncidents = async () => {
     
     // Calculate KPIs (siempre con todos los datos, sin filtros de UI)
     const all = data || [];
+
+    // Incidencias (categoría incident)
     const onlyIncidents = all.filter((i) => i.category === 'incident');
     setTotalIncidents(onlyIncidents.length);
-
     const statusGrouped: Record<string, number> = {};
     onlyIncidents.forEach((incident) => {
       const status = incident.status;
@@ -248,8 +250,15 @@ const fetchIncidents = async () => {
     });
     setStatusCounts(statusGrouped);
 
-    const improvements = all.filter((i) => i.category === 'improvement').length;
-    setTotalImprovements(improvements);
+    // Mejoras (categoría improvement)
+    const onlyImprovements = all.filter((i) => i.category === 'improvement');
+    setTotalImprovements(onlyImprovements.length);
+    const improvementGrouped: Record<string, number> = {};
+    onlyImprovements.forEach((imp) => {
+      const status = imp.status;
+      improvementGrouped[status] = (improvementGrouped[status] || 0) + 1;
+    });
+    setImprovementStatusCounts(improvementGrouped);
   } catch (e: any) {
     toast({ title: 'Error', description: 'No se pudieron cargar las incidencias', variant: 'destructive' });
   } finally {
@@ -575,17 +584,21 @@ setDetailForm({
               );
             })}
             {Object.keys(statusCounts)
-.filter((k) => !(statusOrder as readonly string[]).includes(k))
+              .filter((k) => !(statusOrder as readonly string[]).includes(k))
               .map((k) => {
-                const selected = statusFilters.includes(k as any);
+                const selected = categoryFilter === 'incident' && statusFilters.length === 1 && statusFilters[0] === (k as any);
                 return (
                   <div
                     key={k}
                     className={`w-24 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
-                      setStatusFilters((prev) => prev.includes(k as any)
-                        ? prev.filter((s) => s !== (k as any))
-                        : [...prev, k as any]);
+                      if (selected) {
+                        setCategoryFilter(null);
+                        setStatusFilters([]);
+                      } else {
+                        setCategoryFilter('incident' as any);
+                        setStatusFilters([k as any]);
+                      }
                       setCurrentPage(1);
                     }}
                   >
@@ -598,6 +611,10 @@ setDetailForm({
         </CardContent>
       </Card>
 
+    </div>
+
+    {/* KPIs de mejoras (segunda fila) */}
+    <div className="grid gap-4 md:grid-cols-4">
       {/* Total mejoras (categoría Mejora) */}
       <Card
         className={`transition-colors cursor-pointer ${categoryFilter === 'improvement' && statusFilters.length === 0 ? 'ring-2 ring-primary bg-primary/10 border-primary/20' : 'hover:bg-accent/30'}`}
@@ -622,6 +639,72 @@ setDetailForm({
         </CardHeader>
         <CardContent>
           <div className="text-3xl font-bold">{totalImprovements}</div>
+        </CardContent>
+      </Card>
+
+      {/* Mejoras por estado */}
+      <Card className="md:col-span-3">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ListChecks className="h-4 w-4" /> Mejoras por estado
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-4">
+            {Object.keys(improvementStatusCounts).length === 0 && (
+              <span className="text-muted-foreground text-sm">Sin datos</span>
+            )}
+            {statusOrder.map((key) => {
+              const selected = categoryFilter === 'improvement' && statusFilters.length === 1 && statusFilters[0] === (key as any);
+              return (
+                <div
+                  key={key}
+                  className={`w-24 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
+                  onClick={() => {
+                    if (selected) {
+                      setCategoryFilter(null);
+                      setStatusFilters([]);
+                    } else {
+                      setCategoryFilter('improvement' as any);
+                      setStatusFilters([key as any]);
+                    }
+                    setCurrentPage(1);
+                  }}
+                  role="button"
+                  aria-label={`Filtrar mejoras por estado ${STATUS_LABELS[key] || key}`}
+                >
+                  <div className="text-3xl font-bold">{improvementStatusCounts[key] || 0}</div>
+                  <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1`}>
+                    {STATUS_LABELS[key] || key}
+                  </Badge>
+                </div>
+              );
+            })}
+            {Object.keys(improvementStatusCounts)
+              .filter((k) => !(statusOrder as readonly string[]).includes(k))
+              .map((k) => {
+                const selected = categoryFilter === 'improvement' && statusFilters.length === 1 && statusFilters[0] === (k as any);
+                return (
+                  <div
+                    key={k}
+                    className={`w-24 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
+                    onClick={() => {
+                      if (selected) {
+                        setCategoryFilter(null);
+                        setStatusFilters([]);
+                      } else {
+                        setCategoryFilter('improvement' as any);
+                        setStatusFilters([k as any]);
+                      }
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <div className="text-3xl font-bold">{improvementStatusCounts[k] || 0}</div>
+                    <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1">{k}</Badge>
+                  </div>
+                );
+              })}
+          </div>
         </CardContent>
       </Card>
     </div>
