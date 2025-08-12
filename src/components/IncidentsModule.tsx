@@ -518,78 +518,21 @@ setDetailForm({
   <div className="space-y-6">
     {/* KPIs arriba del todo */}
     <div className="grid gap-3 md:grid-cols-12">
-      {/* Total incidencias (categoría Incidencia) */}
-      <Card
-        className={`md:col-span-3 transition-colors cursor-pointer ${categoryFilter === 'incident' && statusFilters.length === 0 ? 'ring-2 ring-primary bg-primary/10 border-primary/20' : 'hover:bg-accent/30'}`}
-        onClick={() => {
-          const isSelected = categoryFilter === 'incident' && statusFilters.length === 0;
-          if (isSelected) {
-            setCategoryFilter(null);
-            setStatusFilters([]);
-          } else {
-            setCategoryFilter('incident' as any);
-            setStatusFilters([]);
-          }
-          setCurrentPage(1);
-        }}
-        role="button"
-        aria-label="Filtrar por Incidencias"
-      >
-        <CardHeader className="p-3">
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <AlertTriangle className="h-3 w-3" /> Total incidencias
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-3">
-          <div className="text-2xl font-bold">{totalIncidents}</div>
-        </CardContent>
-      </Card>
-
-      {/* Incidencias por estado (solo cuentan las de categoría Incidencia) */}
-      <Card className="md:col-span-9">
-        <CardHeader className="p-3">
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <ListChecks className="h-3 w-3" /> Incidencias por estado
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-3">
-          <div className="flex flex-wrap gap-3">
-            {Object.keys(statusCounts).length === 0 && (
-              <span className="text-muted-foreground text-sm">Sin datos</span>
-            )}
-            {statusOrder.map((key) => {
-              const selected = categoryFilter === 'incident' && statusFilters.length === 1 && statusFilters[0] === (key as any);
-              return (
-                <div
-                  key={key}
-                  className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
-                  onClick={() => {
-                    if (selected) {
-                      setCategoryFilter(null);
-                      setStatusFilters([]);
-                    } else {
-                      setCategoryFilter('incident' as any);
-                      setStatusFilters([key as any]);
-                    }
-                    setCurrentPage(1);
-                  }}
-                  role="button"
-                  aria-label={`Filtrar por estado ${STATUS_LABELS[key] || key}`}
-                >
-                  <div className="text-xl font-bold">{statusCounts[key] || 0}</div>
-                  <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[10px] px-1 py-0.5`}>
-                    {STATUS_LABELS[key] || key}
-                  </Badge>
-                </div>
-              );
-            })}
-            {Object.keys(statusCounts)
-              .filter((k) => !(statusOrder as readonly string[]).includes(k))
-              .map((k) => {
-                const selected = categoryFilter === 'incident' && statusFilters.length === 1 && statusFilters[0] === (k as any);
+      {/* KPIs Incidencias en una sola fila con "Total" como primer KPI */}
+      <div className="grid gap-3 md:grid-cols-12">
+        <Card className="md:col-span-12">
+          <CardHeader className="p-3">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <ListChecks className="h-3 w-3" /> Incidencias por estado
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3">
+            <div className="flex items-stretch gap-3 flex-wrap md:flex-nowrap">
+              {/* Total como primer KPI */}
+              {(() => {
+                const selected = categoryFilter === 'incident' && statusFilters.length === 0;
                 return (
                   <div
-                    key={k}
                     className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
                       if (selected) {
@@ -597,69 +540,121 @@ setDetailForm({
                         setStatusFilters([]);
                       } else {
                         setCategoryFilter('incident' as any);
-                        setStatusFilters([k as any]);
+                        setStatusFilters([]);
                       }
                       setCurrentPage(1);
                     }}
+                    role="button"
+                    aria-label="Filtrar incidencias: Total"
                   >
-                    <div className="text-xl font-bold">{statusCounts[k] || 0}</div>
-                    <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">{k}</Badge>
+                    <div className="text-xl font-bold">{totalIncidents}</div>
+                    <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">Total</Badge>
+                  </div>
+                );
+              })()}
+
+              {/* Estados estándar en orden */}
+              {statusOrder.map((key) => {
+                const selected = categoryFilter === 'incident' && statusFilters.length === 1 && statusFilters[0] === (key as any);
+                return (
+                  <div
+                    key={key}
+                    className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
+                    onClick={() => {
+                      if (selected) {
+                        setCategoryFilter(null);
+                        setStatusFilters([]);
+                      } else {
+                        setCategoryFilter('incident' as any);
+                        setStatusFilters([key as any]);
+                      }
+                      setCurrentPage(1);
+                    }}
+                    role="button"
+                    aria-label={`Filtrar por estado ${STATUS_LABELS[key] || key}`}
+                  >
+                    <div className="text-xl font-bold">{statusCounts[key] || 0}</div>
+                    <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[10px] px-1 py-0.5`}>
+                      {STATUS_LABELS[key] || key}
+                    </Badge>
                   </div>
                 );
               })}
-          </div>
-        </CardContent>
-      </Card>
+
+              {/* Cualquier estado desconocido extra */}
+              {Object.keys(statusCounts)
+                .filter((k) => !(statusOrder as readonly string[]).includes(k))
+                .map((k) => {
+                  const selected = categoryFilter === 'incident' && statusFilters.length === 1 && statusFilters[0] === (k as any);
+                  return (
+                    <div
+                      key={k}
+                      className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
+                      onClick={() => {
+                        if (selected) {
+                          setCategoryFilter(null);
+                          setStatusFilters([]);
+                        } else {
+                          setCategoryFilter('incident' as any);
+                          setStatusFilters([k as any]);
+                        }
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <div className="text-xl font-bold">{statusCounts[k] || 0}</div>
+                      <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">{k}</Badge>
+                    </div>
+                  );
+                })}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
     </div>
 
-    {/* KPIs de mejoras (segunda fila) */}
+    {/* KPIs de mejoras en una sola fila con "Total" como primer KPI */}
     <div className="grid gap-3 md:grid-cols-12">
-      {/* Total mejoras (categoría Mejora) */}
-      <Card
-        className={`md:col-span-3 transition-colors cursor-pointer ${categoryFilter === 'improvement' && statusFilters.length === 0 ? 'ring-2 ring-primary bg-primary/10 border-primary/20' : 'hover:bg-accent/30'}`}
-        onClick={() => {
-          const isSelected = categoryFilter === 'improvement' && statusFilters.length === 0;
-          if (isSelected) {
-            setCategoryFilter(null);
-            setStatusFilters([]);
-          } else {
-            setCategoryFilter('improvement' as any);
-            setStatusFilters([]);
-          }
-          setCurrentPage(1);
-        }}
-        role="button"
-        aria-label="Filtrar por Mejoras"
-      >
-        <CardHeader className="p-3">
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <CheckCircle2 className="h-3 w-3" /> Total mejoras
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-3">
-          <div className="text-2xl font-bold">{totalImprovements}</div>
-        </CardContent>
-      </Card>
-
-      {/* Mejoras por estado */}
-      <Card className="md:col-span-9">
+      <Card className="md:col-span-12">
         <CardHeader className="p-3">
           <CardTitle className="flex items-center gap-2 text-sm">
             <ListChecks className="h-3 w-3" /> Mejoras por estado
           </CardTitle>
         </CardHeader>
         <CardContent className="p-3">
-          <div className="flex flex-wrap gap-3">
-            {Object.keys(improvementStatusCounts).length === 0 && (
-              <span className="text-muted-foreground text-sm">Sin datos</span>
-            )}
+          <div className="flex items-stretch gap-3 flex-wrap md:flex-nowrap">
+            {/* Total como primer KPI */}
+            {(() => {
+              const selected = categoryFilter === 'improvement' && statusFilters.length === 0;
+              return (
+                <div
+                  className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
+                  onClick={() => {
+                    if (selected) {
+                      setCategoryFilter(null);
+                      setStatusFilters([]);
+                    } else {
+                      setCategoryFilter('improvement' as any);
+                      setStatusFilters([]);
+                    }
+                    setCurrentPage(1);
+                  }}
+                  role="button"
+                  aria-label="Filtrar mejoras: Total"
+                >
+                  <div className="text-xl font-bold">{totalImprovements}</div>
+                  <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">Total</Badge>
+                </div>
+              );
+            })()}
+
+            {/* Estados estándar en orden */}
             {statusOrder.map((key) => {
               const selected = categoryFilter === 'improvement' && statusFilters.length === 1 && statusFilters[0] === (key as any);
               return (
                 <div
                   key={key}
-                  className={`w-24 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
+                  className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                   onClick={() => {
                     if (selected) {
                       setCategoryFilter(null);
@@ -680,6 +675,8 @@ setDetailForm({
                 </div>
               );
             })}
+
+            {/* Cualquier estado desconocido extra */}
             {Object.keys(improvementStatusCounts)
               .filter((k) => !(statusOrder as readonly string[]).includes(k))
               .map((k) => {
@@ -687,7 +684,7 @@ setDetailForm({
                 return (
                   <div
                     key={k}
-                    className={`w-24 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
+                    className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
                       if (selected) {
                         setCategoryFilter(null);
