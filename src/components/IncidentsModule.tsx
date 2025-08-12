@@ -40,6 +40,23 @@ const CATEGORY_OPTIONS = [
 const ENV_OPTIONS = ['DEV','PRE','PRO','Otro'] as const;
 const DEVICE_OPTIONS = ['Web','APP','Otro'] as const;
 
+// Status constants available module-wide to avoid TDZ issues
+const statusOrder = ['in_progress', 'pending', 'in_qa', 'resolved', 'closed'] as const;
+const STATUS_LABELS: Record<string, string> = {
+  in_progress: 'En curso',
+  pending: 'Pendientes',
+  in_qa: 'En pruebas',
+  resolved: 'Resueltas',
+  closed: 'Cerradas',
+};
+const STATUS_BADGE_CLS: Record<string, string> = {
+  in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
+  pending: 'bg-muted text-muted-foreground',
+  in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]',
+  resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
+  closed: 'bg-destructive text-destructive-foreground',
+};
+
 /* UI helpers */
 function StatusBadge({ status }: { status: IncidentStatus }) {
   const label = STATUS_OPTIONS.find((s) => s.value === status)?.label ?? status;
@@ -185,7 +202,7 @@ const sorted = useMemo(() => {
       bv = new Date(b.occurred_at).getTime();
     } else if (key === 'status') {
       const idx = (s: string) => {
-        const i = statusOrder.indexOf(s);
+        const i = (statusOrder as readonly string[]).indexOf(s);
         return i === -1 ? Number.MAX_SAFE_INTEGER : i;
       };
       av = idx(a.status);
@@ -487,21 +504,6 @@ setDetailForm({
     return () => clearTimeout(handler);
   }, [detailForm, selected, detailEvidenceFile]);
 
-const statusOrder = ['in_progress', 'pending', 'in_qa', 'resolved', 'closed'];
-const STATUS_LABELS: Record<string, string> = { 
-  in_progress: 'En curso', 
-  pending: 'Pendientes', 
-  resolved: 'Resueltas', 
-  closed: 'Cerradas',
-  in_qa: 'En pruebas'
-};
-  const STATUS_BADGE_CLS: Record<string, string> = {
-    in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
-    pending: 'bg-muted text-muted-foreground',
-    resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
-    in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]',
-    closed: 'bg-destructive text-destructive-foreground',
-  };
 
   return (
   <div className="space-y-6">
@@ -573,7 +575,7 @@ const STATUS_LABELS: Record<string, string> = {
               );
             })}
             {Object.keys(statusCounts)
-              .filter((k) => !statusOrder.includes(k))
+.filter((k) => !(statusOrder as readonly string[]).includes(k))
               .map((k) => {
                 const selected = statusFilters.includes(k as any);
                 return (
