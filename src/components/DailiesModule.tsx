@@ -76,6 +76,14 @@ export default function DailiesModule({
   const [people, setPeople] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [incidents, setIncidents] = useState<any[]>([]);
+  // Estado para modal de detalle de incidencia
+  const [incidentDetailsOpen, setIncidentDetailsOpen] = useState(false);
+  const [selectedIncident, setSelectedIncident] = useState<any | null>(null);
+  const [incidentForm, setIncidentForm] = useState<{ name: string; status: 'pending' | 'in_progress' | 'in_qa' | 'resolved' | 'closed'; description: string }>({
+    name: '',
+    status: 'pending',
+    description: ''
+  });
   const [personForm, setPersonForm] = useState({
     name: '',
     role: '',
@@ -101,7 +109,7 @@ export default function DailiesModule({
       data: incs
     }] = await Promise.all([supabase.from('people').select('*').eq('project_id', projectId).order('created_at', {
       ascending: true
-    }), supabase.from('incidents').select('id,name').eq('project_id', projectId).order('created_at', {
+    }), supabase.from('incidents').select('id,name,incident_number,status,category').eq('project_id', projectId).order('created_at', {
       ascending: false
     })]);
     setPeople(ppl || []);
@@ -371,6 +379,52 @@ export default function DailiesModule({
     });
     setTaskComments(data || []);
   };
+
+  // Helpers para formatear etiqueta de incidencia
+  const getTicketCode = (incident: any) => {
+    const num = incident?.incident_number ?? null;
+    if (num === null || num === undefined) return null;
+    return `T${String(num).padStart(4, '0')}`;
+  };
+  const formatIncidentLabel = (incident: any) => {
+    const code = getTicketCode(incident);
+    return code ? `${code} - ${incident.name}` : incident.name;
+  };
+
+  // Handlers del modal de incidencia
+  const [incidentLoading, setIncidentLoading] = useState(false);
+  const openIncidentDetails = async (incidentId: string) => {
+    try {
+      setIncidentLoading(true);
+      const { data } = await supabase.from('incidents').select('*').eq('id', incidentId).single();
+      if (data) {
+        setSelectedIncident(data);
+        setIncidentForm({
+          name: data.name || '',
+          status: (data.status as any) || 'pending',
+          description: data.description || ''
+        });
+        setIncidentDetailsOpen(true);
+      }
+    } finally {
+      setIncidentLoading(false);
+    }
+  };
+
+  const handleIncidentSave = async () => {
+    if (!selectedIncident) return;
+    const update: any = {
+      name: incidentForm.name,
+      status: incidentForm.status,
+      description: incidentForm.description || null,
+    };
+    const { error } = await supabase.from('incidents').update(update).eq('id', selectedIncident.id);
+    if (!error) {
+      setIncidents(prev => prev.map(i => i.id === selectedIncident.id ? { ...i, ...update } : i));
+      setSelectedIncident(prev => prev ? { ...prev, ...update } : prev);
+    }
+  };
+
   const openDetails = async (task: any) => {
     setSelectedTask(task);
     setEditForm({
@@ -528,7 +582,13 @@ export default function DailiesModule({
                           )}
                         </TableCell>
                         <TableCell>
-                          {inc ? inc.name : <span className="text-muted-foreground">—</span>}
+                          {inc ? (
+                            <Button variant="link" className="px-0" onClick={() => openIncidentDetails(inc.id)}>
+                              {formatIncidentLabel(inc)}
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="flex gap-1">
                           <Button variant="ghost" size="icon" onClick={() => openDetails(t)} aria-label="Ver">
@@ -614,7 +674,7 @@ export default function DailiesModule({
                 <SelectTrigger><SelectValue placeholder="Ninguna" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Ninguna</SelectItem>
-                  {incidents.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
+                  {incidents.map(i => <SelectItem key={i.id} value={i.id}>{formatIncidentLabel(i)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -691,7 +751,7 @@ export default function DailiesModule({
                     <SelectTrigger><SelectValue placeholder="Ninguna" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Ninguna</SelectItem>
-                      {incidents.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
+                      {incidents.map(i => <SelectItem key={i.id} value={i.id}>{formatIncidentLabel(i)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -906,6 +966,52 @@ export default function DailiesModule({
               {people.length === 0 && <div className="text-sm text-muted-foreground">Sin personas aún</div>}
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal detalle de incidencia (desde Seguimiento diario) */}
+      <Dialog open={incidentDetailsOpen} onOpenChange={(o) => { setIncidentDetailsOpen(o); if (!o) { setSelectedIncident(null); } }}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedIncident ? `${getTicketCode(selectedIncident) ? getTicketCode(selectedIncident) + ' - ' : ''}${selectedIncident.name}` : 'Incidencia'}
+            </DialogTitle>
+            <DialogDescription>Editar información de la incidencia</DialogDescription>
+          </DialogHeader>
+
+          {selectedIncident ? (
+            <div className="space-y-4">
+              <div>
+                <Label>Nombre</Label>
+                <Input value={incidentForm.name} onChange={(e) => setIncidentForm(f => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Estado</Label>
+                <Select value={incidentForm.status} onValueChange={(v) => setIncidentForm(f => ({ ...f, status: v as any }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pendiente</SelectItem>
+                    <SelectItem value="in_progress">En curso</SelectItem>
+                    <SelectItem value="in_qa">En pruebas</SelectItem>
+                    <SelectItem value="resolved">Resuelta</SelectItem>
+                    <SelectItem value="closed">Cerrada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Descripción</Label>
+                <Textarea value={incidentForm.description} onChange={(e) => setIncidentForm(f => ({ ...f, description: e.target.value }))} />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIncidentDetailsOpen(false)}>Cerrar</Button>
+                <Button onClick={handleIncidentSave} disabled={incidentLoading}>Guardar</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">Cargando...</div>
+          )}
         </DialogContent>
       </Dialog>
     </div>);
