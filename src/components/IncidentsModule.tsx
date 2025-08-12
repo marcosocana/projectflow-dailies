@@ -27,9 +27,9 @@ type IncidentCategory = Database['public']['Enums']['incident_category'];
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
   { value: 'in_progress', label: 'En curso' },
-  { value: 'in_qa', label: 'En pruebas (QA)' },
+  { value: 'in_qa', label: 'En pruebas' },
   { value: 'resolved', label: 'Resuelto (PRO)' },
-  { value: 'closed', label: 'Cerrado' },
+  { value: 'closed', label: 'Cerradas' },
 ];
 
 const CATEGORY_OPTIONS = [
@@ -481,14 +481,14 @@ setDetailForm({
     return () => clearTimeout(handler);
   }, [detailForm, selected, detailEvidenceFile]);
 
-  const statusOrder = ['in_progress', 'pending', 'resolved'];
-  const STATUS_LABELS: Record<string, string> = { 
-    in_progress: 'En curso', 
-    pending: 'Pendiente', 
-    resolved: 'Resuelto', 
-    closed: 'Cerrado',
-    in_qa: 'En QA'
-  };
+const statusOrder = ['pending', 'in_progress', 'in_qa', 'resolved', 'closed'];
+const STATUS_LABELS: Record<string, string> = { 
+  in_progress: 'En curso', 
+  pending: 'Pendiente', 
+  resolved: 'Resuelto', 
+  closed: 'Cerradas',
+  in_qa: 'En pruebas'
+};
   const STATUS_BADGE_CLS: Record<string, string> = {
     in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
     pending: 'bg-muted text-muted-foreground',
@@ -641,32 +641,6 @@ setDetailForm({
           </div>
         </div>
 
-        {/* Selector de paginación */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Mostrar:</span>
-            <Select value={pageSize.toString()} onValueChange={(value) => {
-              setPageSize(Number(value));
-              setCurrentPage(1);
-            }}>
-              <SelectTrigger className="w-20">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="10">10</SelectItem>
-                <SelectItem value="25">25</SelectItem>
-                <SelectItem value="50">50</SelectItem>
-              </SelectContent>
-            </Select>
-            <span className="text-sm text-muted-foreground">
-              resultados por página
-            </span>
-          </div>
-          
-          <div className="text-sm text-muted-foreground">
-            Mostrando {((currentPage - 1) * pageSize) + 1} a {Math.min(currentPage * pageSize, sorted.length)} de {sorted.length} resultados
-          </div>
-        </div>
 
         <Table>
           <TableHeader>
@@ -727,52 +701,69 @@ setDetailForm({
           </TableBody>
         </Table>
 
-        {/* Paginación */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-4">
-            <Button
-              variant="outline"
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-            >
-              Anterior
-            </Button>
-            
-            <div className="flex items-center gap-1">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                }
-                
-                return (
-                  <Button
-                    key={pageNum}
-                    variant={pageNum === currentPage ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCurrentPage(pageNum)}
-                  >
-                    {pageNum}
-                  </Button>
-                );
-              })}
-            </div>
-            
-            <Button
-              variant="outline"
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-            >
-              Siguiente
-            </Button>
+        {/* Controles de paginación abajo */}
+        <div className="flex items-center justify-between gap-4 mt-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Mostrar:</span>
+            <Select value={pageSize.toString()} onValueChange={(value) => {
+              setPageSize(Number(value));
+              setCurrentPage(1);
+            }}>
+              <SelectTrigger className="w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground">resultados por página</span>
           </div>
-        )}
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 ml-auto">
+              <Button
+                variant="outline"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+              >
+                Anterior
+              </Button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={pageNum === currentPage ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNum)}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Siguiente
+              </Button>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
 

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +9,8 @@ import { useSharedNotes } from '@/hooks/useSharedNotes';
 import { Plus, Edit, Trash2, FileText, Clock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 interface NotesModuleProps {
   projectId: string;
@@ -83,7 +84,7 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Notas Compartidas</h1>
-        <Button onClick={openCreateDialog}>
+        <Button onClick={openCreateDialog} aria-label="Crear nueva nota">
           <Plus className="h-4 w-4 mr-2" />
           Nueva Nota
         </Button>
@@ -115,7 +116,7 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      onClick={() => openEditDialog(note)}
+                      onClick={(e) => { e.stopPropagation(); openEditDialog(note); }}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -123,18 +124,18 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => openDeleteDialog(note)}
+                      onClick={(e) => { e.stopPropagation(); openDeleteDialog(note); }}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent onClick={() => openEditDialog(note)} className="cursor-pointer">
                 <div 
                   className="text-sm text-muted-foreground line-clamp-4 mb-3"
                   dangerouslySetInnerHTML={{ 
-                    __html: note.content.replace(/<[^>]*>/g, '').substring(0, 150) + '...' 
+                    __html: note.content.replace(/<[^>]*>/g, '').substring(0, 150) + '...'
                   }}
                 />
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -169,17 +170,18 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
                 onChange={(e) => setNoteForm(prev => ({ ...prev, title: e.target.value }))}
                 placeholder="Título de la nota..."
                 className="mt-1"
+                aria-label="Título de la nota"
               />
             </div>
             <div>
               <label className="text-sm font-medium">Contenido</label>
-              <Textarea
-                value={noteForm.content}
-                onChange={(e) => setNoteForm(prev => ({ ...prev, content: e.target.value }))}
-                placeholder="Escribe el contenido de la nota..."
-                rows={6}
-                className="mt-1"
-              />
+              <div className="mt-1 border rounded-md">
+                <ReactQuill
+                  theme="snow"
+                  value={noteForm.content}
+                  onChange={(value) => setNoteForm(prev => ({ ...prev, content: value }))}
+                />
+              </div>
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-6">
@@ -210,17 +212,18 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
                 onChange={(e) => setNoteForm(prev => ({ ...prev, title: e.target.value }))}
                 placeholder="Título de la nota..."
                 className="mt-1"
+                aria-label="Título de la nota"
               />
             </div>
             <div>
               <label className="text-sm font-medium">Contenido</label>
-              <Textarea
-                value={noteForm.content}
-                onChange={(e) => setNoteForm(prev => ({ ...prev, content: e.target.value }))}
-                placeholder="Escribe el contenido de la nota..."
-                rows={6}
-                className="mt-1"
-              />
+              <div className="mt-1 border rounded-md">
+                <ReactQuill
+                  theme="snow"
+                  value={noteForm.content}
+                  onChange={(value) => setNoteForm(prev => ({ ...prev, content: value }))}
+                />
+              </div>
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-6">

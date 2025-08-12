@@ -66,12 +66,6 @@ export default function InternalConfigModule({ projectId, dailiesPassword }: Int
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Configuración Interna</h1>
-        <Button 
-          variant="outline" 
-          onClick={() => setHasAccess(false)}
-        >
-          Bloquear acceso
-        </Button>
       </div>
 
       <Tabs defaultValue="dailies" className="w-full">

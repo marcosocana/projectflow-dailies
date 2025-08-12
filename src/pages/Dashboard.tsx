@@ -14,7 +14,7 @@ import IncidentsModule from '@/components/IncidentsModule';
 import VacationsCalendarModule from '@/components/VacationsCalendarModule';
 import NotesModule from '@/components/NotesModule';
 import ProjectInformationModule from '@/components/ProjectInformationModule';
-import HomeModule from '@/components/HomeModule';
+// import HomeModule from '@/components/HomeModule';
 import InternalConfigModule from '@/components/InternalConfigModule';
 import { AppSidebar } from '@/components/AppSidebar';
 import { LogOut } from 'lucide-react';
@@ -169,8 +169,7 @@ const Dashboard = () => {
             <AppSidebar currentProject={currentProject} />
             <main className="ml-16 p-6 pt-[64pxpx]">
               <Routes>
-                <Route path="/" element={<Navigate to="home" replace />} />
-                <Route path="home" element={<HomeModule projectId={currentProject.id} />} />
+                <Route path="/" element={<Navigate to="tasks" replace />} />
                 <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
                 <Route path="vacations" element={<VacationsCalendarModule projectId={currentProject.id} />} />
                 <Route path="notes" element={<NotesModule projectId={currentProject.id} />} />

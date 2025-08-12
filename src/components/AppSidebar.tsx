@@ -13,7 +13,6 @@ import {
   Calendar,
   FileText,
   Info,
-  AlertTriangle,
   Home,
   Settings
 } from 'lucide-react';
@@ -24,15 +23,9 @@ interface AppSidebarProps {
 
 const menuItems = [
   { 
-    title: "Home", 
-    url: "home", 
-    icon: Home,
-    description: "Resumen del proyecto" 
-  },
-  { 
     title: "Incidencias", 
     url: "tasks", 
-    icon: AlertTriangle,
+    icon: Home,
     description: "Gestión de incidencias y mejoras" 
   },
   { 
