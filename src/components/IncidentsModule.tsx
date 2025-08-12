@@ -105,11 +105,10 @@ export default function IncidentsModule({ projectId }: IncidentsModuleProps) {
 const [incidents, setIncidents] = useState<any[]>([]);
 const [loading, setLoading] = useState(false);
 const [statusFilters, setStatusFilters] = useState<IncidentStatus[]>([]);
-const [categoryFilters, setCategoryFilters] = useState<IncidentCategory[]>([]);
 const [categoryFilter, setCategoryFilter] = useState<IncidentCategory | null>(null);
 
 const [search, setSearch] = useState('');
-const [sortKey, setSortKey] = useState<'name' | 'status' | 'category' | 'occurred_at'>('occurred_at');
+const [sortKey, setSortKey] = useState<'name' | 'status' | 'category' | 'occurred_at'>('status');
 const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
 const toggleSort = (key: 'name' | 'status' | 'category' | 'occurred_at') => {
@@ -165,25 +164,34 @@ const filtered = useMemo(() => {
   const term = search.trim().toLowerCase();
   return incidents.filter((i) =>
     (statusFilters.length ? statusFilters.includes(i.status) : true) &&
-    ((categoryFilters.length ? categoryFilters.includes(i.category) : true) && (categoryFilter ? i.category === categoryFilter : true)) &&
+    (categoryFilter ? i.category === categoryFilter : true) &&
     (term
       ? [i.id, `T${String(i.incident_number ?? 0).padStart(5, '0')}`, i.name, i.description, i.environment, i.device, i.status, i.category, i.additional_comments]
           .filter(Boolean)
           .some((v: any) => String(v).toLowerCase().includes(term))
       : true)
   );
-}, [incidents, statusFilters, categoryFilters, categoryFilter, search]);
+}, [incidents, statusFilters, categoryFilter, search]);
 
 const sorted = useMemo(() => {
   const arr = [...filtered];
   arr.sort((a, b) => {
     const key = sortKey;
-    let av = a[key];
-    let bv = b[key];
+    let av: any = a[key as keyof typeof a];
+    let bv: any = b[key as keyof typeof b];
+
     if (key === 'occurred_at') {
       av = new Date(a.occurred_at).getTime();
       bv = new Date(b.occurred_at).getTime();
+    } else if (key === 'status') {
+      const idx = (s: string) => {
+        const i = statusOrder.indexOf(s);
+        return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+      };
+      av = idx(a.status);
+      bv = idx(b.status);
     }
+
     if (av < bv) return sortDir === 'asc' ? -1 : 1;
     if (av > bv) return sortDir === 'asc' ? 1 : -1;
     return 0;
@@ -501,11 +509,16 @@ const STATUS_LABELS: Record<string, string> = {
     <div className="grid gap-4 md:grid-cols-4">
       {/* Total incidencias (categoría Incidencia) */}
       <Card
-        className={`transition-colors cursor-pointer ${categoryFilters.includes('incident' as any) ? 'ring-2 ring-primary bg-primary/10 border-primary/20' : 'hover:bg-accent/30'}`}
+        className={`transition-colors cursor-pointer ${categoryFilter === 'incident' && statusFilters.length === 0 ? 'ring-2 ring-primary bg-primary/10 border-primary/20' : 'hover:bg-accent/30'}`}
         onClick={() => {
-          setCategoryFilters((prev) => prev.includes('incident' as any)
-            ? prev.filter((c) => c !== ('incident' as any))
-            : [...prev, 'incident' as any]);
+          const isSelected = categoryFilter === 'incident' && statusFilters.length === 0;
+          if (isSelected) {
+            setCategoryFilter(null);
+            setStatusFilters([]);
+          } else {
+            setCategoryFilter('incident' as any);
+            setStatusFilters([]);
+          }
           setCurrentPage(1);
         }}
         role="button"
@@ -534,15 +547,19 @@ const STATUS_LABELS: Record<string, string> = {
               <span className="text-muted-foreground text-sm">Sin datos</span>
             )}
             {statusOrder.map((key) => {
-              const selected = statusFilters.includes(key as any);
+              const selected = categoryFilter === 'incident' && statusFilters.length === 1 && statusFilters[0] === (key as any);
               return (
                 <div
                   key={key}
                   className={`w-24 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                   onClick={() => {
-                    setStatusFilters((prev) => prev.includes(key as any)
-                      ? prev.filter((s) => s !== (key as any))
-                      : [...prev, key as any]);
+                    if (selected) {
+                      setCategoryFilter(null);
+                      setStatusFilters([]);
+                    } else {
+                      setCategoryFilter('incident' as any);
+                      setStatusFilters([key as any]);
+                    }
                     setCurrentPage(1);
                   }}
                   role="button"
@@ -581,11 +598,16 @@ const STATUS_LABELS: Record<string, string> = {
 
       {/* Total mejoras (categoría Mejora) */}
       <Card
-        className={`transition-colors cursor-pointer ${categoryFilters.includes('improvement' as any) ? 'ring-2 ring-primary bg-primary/10 border-primary/20' : 'hover:bg-accent/30'}`}
+        className={`transition-colors cursor-pointer ${categoryFilter === 'improvement' && statusFilters.length === 0 ? 'ring-2 ring-primary bg-primary/10 border-primary/20' : 'hover:bg-accent/30'}`}
         onClick={() => {
-          setCategoryFilters((prev) => prev.includes('improvement' as any)
-            ? prev.filter((c) => c !== ('improvement' as any))
-            : [...prev, 'improvement' as any]);
+          const isSelected = categoryFilter === 'improvement' && statusFilters.length === 0;
+          if (isSelected) {
+            setCategoryFilter(null);
+            setStatusFilters([]);
+          } else {
+            setCategoryFilter('improvement' as any);
+            setStatusFilters([]);
+          }
           setCurrentPage(1);
         }}
         role="button"
