@@ -60,7 +60,7 @@ export function AppSidebar({ currentProject }: AppSidebarProps) {
 
   return (
     <aside 
-      className="fixed left-0 top-[64px] w-16 h-[calc(100vh-64px)] bg-white border-r border-border shadow-sm overflow-y-auto z-40"
+      className="hidden md:block fixed left-0 top-[64px] w-16 h-[calc(100vh-64px)] bg-white border-r border-border shadow-sm overflow-y-auto z-40"
       data-sidebar="content"
     >
       <div className="p-2">
