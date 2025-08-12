@@ -916,116 +916,15 @@ const deviceValue = form.device || '';
     </Dialog>
 
     {/* Ver más */}
-    <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Detalle de incidencia</DialogTitle>
-          <DialogDescription>Ver información completa y comentarios</DialogDescription>
-        </DialogHeader>
-        {selected && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="md:col-span-2">
-                <Label>Nombre</Label>
-                <Input value={detailForm.name} onChange={(e) => setDetailForm((f) => ({ ...f, name: e.target.value }))} />
-              </div>
-              <div>
-                <Label>Estado</Label>
-                <Select value={detailForm.status} onValueChange={(v) => setDetailForm((f) => ({ ...f, status: v as IncidentStatus }))}>
-                  <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
-                  <SelectContent>
-                    {STATUS_OPTIONS.map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Categoría</Label>
-                <Select value={detailForm.category} onValueChange={(v) => setDetailForm((f) => ({ ...f, category: v as IncidentCategory }))}>
-                  <SelectTrigger><SelectValue placeholder="Categoría" /></SelectTrigger>
-                  <SelectContent>
-                    {CATEGORY_OPTIONS.map((c) => (<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Fecha</Label>
-                <Input type="datetime-local" value={new Date(detailForm.occurredAt).toISOString().slice(0,16)} onChange={(e) => setDetailForm((f) => ({ ...f, occurredAt: new Date(e.target.value).toISOString() }))} />
-              </div>
-              <div>
-<Label>Entorno</Label>
-<Select value={detailForm.env} onValueChange={(v) => setDetailForm((f) => ({ ...f, env: v }))}>
-  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-  <SelectContent>
-    {ENV_OPTIONS.map((opt) => (
-      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-    ))}
-  </SelectContent>
-</Select>
-              </div>
-              <div>
-<Label>Dispositivo</Label>
-<Select value={detailForm.dev} onValueChange={(v) => setDetailForm((f) => ({ ...f, dev: v }))}>
-  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-  <SelectContent>
-    {DEVICE_OPTIONS.map((opt) => (
-      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-    ))}
-  </SelectContent>
-</Select>
-              </div>
-              <div className="md:col-span-2">
-                <Label>Descripción</Label>
-                <Textarea value={detailForm.description} onChange={(e) => setDetailForm((f) => ({ ...f, description: e.target.value }))} />
-              </div>
-            </div>
-
-            <div className="pt-2 space-y-3">
-              <div>
-                <Label className="text-xs text-muted-foreground">Evidencia (archivo)</Label>
-                <Input 
-                  type="file" 
-                  accept="image/*,application/pdf" 
-                  onChange={(e) => setDetailEvidenceFile(e.target.files?.[0] ?? null)} 
-                />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Evidencia actual</Label>
-                <div>
-                  {selected.evidence && selected.evidence.startsWith('incidents/') ? (
-                    <a className="text-primary underline" href="#" onClick={async (e) => { e.preventDefault(); const url = await getUrl(selected.evidence); if (url) window.open(url, '_blank'); }}>Ver archivo</a>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t">
-              <Label className="text-xs text-muted-foreground">Comentarios</Label>
-              <div className="space-y-3 max-h-48 overflow-auto mt-2 pr-1">
-                {comments.map((c) => (
-                  <div key={c.id} className="rounded-md border p-2">
-                    <div className="text-xs text-muted-foreground">{(c.user_email || 'Anónimo')} • {new Date(c.created_at).toLocaleString()}</div>
-                    <div className="text-sm whitespace-pre-wrap">{c.content}</div>
-                  </div>
-                ))}
-                {comments.length === 0 && (
-                  <div className="text-sm text-muted-foreground">Sin comentarios aún</div>
-                )}
-              </div>
-              <form onSubmit={addComment} className="mt-3 flex gap-2">
-                <Input
-                  placeholder="Escribe un comentario..."
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                />
-                <Button type="submit" disabled={!user}>Enviar</Button>
-              </form>
-            </div>
-          </div>
-          )}
-        </DialogContent>
-      </Dialog>
+    <IncidentDetailDialog
+      open={detailsOpen}
+      onOpenChange={setDetailsOpen}
+      incidentId={selected?.id ?? null}
+      onPatched={(id, payload) => {
+        setIncidents((prev) => prev.map((i) => (i.id === id ? { ...i, ...payload } : i)));
+        setSelected((prev: any) => (prev && prev.id === id ? { ...prev, ...payload } : prev));
+      }}
+    />
     </div>
   );
 }
