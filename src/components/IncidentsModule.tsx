@@ -364,7 +364,7 @@ const deviceValue = form.device || '';
 
   const downloadTemplate = () => {
     const headers = [[
-      'Name','Description','Environment','Device','OccurredAt(ISO)','Status','Category','Evidence(Url)','AdditionalComments'
+      'Name','Description','Environment','Device','OccurredAt(ISO)','Status','Category','Epic','Evidence(Url)','AdditionalComments'
     ]];
     const ws = XLSX.utils.aoa_to_sheet(headers);
     const wb = XLSX.utils.book_new();
@@ -381,6 +381,7 @@ const deviceValue = form.device || '';
       OccurredAt: i.occurred_at,
       Status: i.status,
       Category: i.category,
+      Epic: i.epic,
       Evidence: i.evidence,
       AdditionalComments: i.additional_comments,
       Id: i.id,
@@ -406,6 +407,7 @@ const deviceValue = form.device || '';
         occurred_at: r.OccurredAt ?? r.Fecha ?? new Date().toISOString(),
         status: r.Status ?? 'pending',
         category: r.Category ?? 'incident',
+        epic: r.Epic ?? r['Épica'] ?? r.Epica ?? '',
         additional_comments: r.AdditionalComments ?? r['Comentarios adicionales'] ?? '',
         evidence: r.Evidence ?? null,
         project_id: projectId,

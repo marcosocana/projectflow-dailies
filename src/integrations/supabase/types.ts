@@ -126,6 +126,7 @@ export type Database = {
           description: string | null
           device: string | null
           environment: string | null
+          epic: string | null
           evidence: string | null
           id: string
           incident_number: number
@@ -143,6 +144,7 @@ export type Database = {
           description?: string | null
           device?: string | null
           environment?: string | null
+          epic?: string | null
           evidence?: string | null
           id?: string
           incident_number?: number
@@ -160,6 +162,7 @@ export type Database = {
           description?: string | null
           device?: string | null
           environment?: string | null
+          epic?: string | null
           evidence?: string | null
           id?: string
           incident_number?: number

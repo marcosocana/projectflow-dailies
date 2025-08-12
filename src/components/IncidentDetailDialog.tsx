@@ -60,11 +60,22 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     occurredAt: new Date().toISOString(),
     status: 'pending',
     category: 'incident',
+    epic: '',
     additionalComments: '',
     env: '',
     dev: '',
     evidenceLink: '',
   });
+  const [epicOptions, setEpicOptions] = useState<string[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    const loadEpics = async () => {
+      const { data } = await supabase.from('incidents').select('epic').not('epic','is', null);
+      const uniq = Array.from(new Set((data || []).map((d: any) => d.epic).filter(Boolean)));
+      setEpicOptions(uniq as string[]);
+    };
+    loadEpics();
+  }, [open]);
 
   const resetState = () => {
     setSelected(null);
@@ -73,7 +84,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     setDetailEvidenceFile(null);
     isInitialDetailLoad.current = true;
     setDetailForm({
-      name: '', description: '', occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', additionalComments: '', env: '', dev: '', evidenceLink: ''
+      name: '', description: '', occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', epic: '', additionalComments: '', env: '', dev: '', evidenceLink: ''
     });
   };
 
@@ -92,6 +103,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           occurredAt: data.occurred_at ? new Date(data.occurred_at).toISOString() : new Date().toISOString(),
           status: data.status || 'pending',
           category: data.category || 'incident',
+          epic: data.epic || '',
           additionalComments: data.additional_comments || '',
           env: pick(data.environment || '', ENV_OPTIONS),
           dev: pick(data.device || '', DEVICE_OPTIONS),
@@ -127,6 +139,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         occurred_at: new Date(detailForm.occurredAt).toISOString(),
         status: detailForm.status,
         category: detailForm.category,
+        epic: detailForm.epic,
         evidence: selected.evidence,
       };
       if (detailEvidenceFile) {
@@ -187,6 +200,13 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
                     {CATEGORY_OPTIONS.map((c) => (<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label>Épica</Label>
+                <Input list="epic-suggestions" placeholder="Escribe o selecciona..." value={detailForm.epic} onChange={(e) => setDetailForm((f) => ({ ...f, epic: e.target.value }))} />
+                <datalist id="epic-suggestions">
+                  {epicOptions.map((opt) => (<option key={opt} value={opt} />))}
+                </datalist>
               </div>
               <div>
                 <Label>Fecha</Label>
