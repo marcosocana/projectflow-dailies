@@ -132,20 +132,20 @@ export function useProjectAccess() {
       }
 
       if (project.dailies_password !== dailiesPassword) {
-        throw new Error('Contraseña de dailies incorrecta');
+        throw new Error('Contraseña de seguimiento diario incorrecta');
       }
 
       toast({
-        title: "Acceso a dailies concedido",
-        description: "Puedes gestionar las dailies del proyecto",
+        title: "Acceso a seguimiento diario concedido",
+        description: "Puedes gestionar el seguimiento diario del proyecto",
       });
 
       return true;
     } catch (error: any) {
       console.error('Error accessing dailies:', error);
       toast({
-        title: "Error de acceso a dailies",
-        description: error.message || "No se pudo acceder a las dailies",
+        title: "Error de acceso a seguimiento diario",
+        description: error.message || "No se pudo acceder al seguimiento diario",
         variant: "destructive",
       });
       throw error;

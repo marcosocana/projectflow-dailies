@@ -22,7 +22,7 @@ interface UsersModuleProps {
 
 const sections = [
   { id: 'tasks', name: 'Tareas', description: 'Gestión de incidencias y tareas' },
-  { id: 'dailies', name: 'Dailies', description: 'Seguimiento diario del proyecto' },
+  { id: 'dailies', name: 'Seguimiento diario', description: 'Seguimiento diario del proyecto' },
   { id: 'vacations', name: 'Vacaciones', description: 'Gestión de vacaciones del equipo' },
   { id: 'users', name: 'Usuarios', description: 'Gestión de miembros del equipo' },
   { id: 'notes', name: 'Notas', description: 'Notas compartidas del proyecto' },

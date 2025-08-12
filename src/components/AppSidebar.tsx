@@ -44,7 +44,7 @@ const menuItems = [
     title: "Configuración interna", 
     url: "config", 
     icon: Settings,
-    description: "Dailies y gestión del equipo" 
+    description: "Seguimiento diario y gestión del equipo" 
   },
   { 
     title: "Información", 

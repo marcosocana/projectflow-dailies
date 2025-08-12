@@ -70,7 +70,7 @@ export default function InternalConfigModule({ projectId, dailiesPassword }: Int
 
       <Tabs defaultValue="dailies" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="dailies">Dailies</TabsTrigger>
+          <TabsTrigger value="dailies">Seguimiento diario</TabsTrigger>
           <TabsTrigger value="team">Gestión del Equipo</TabsTrigger>
         </TabsList>
         

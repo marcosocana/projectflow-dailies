@@ -19,6 +19,7 @@ import InternalConfigModule from '@/components/InternalConfigModule';
 import { AppSidebar } from '@/components/AppSidebar';
 import NoteDetail from '@/components/NoteDetail';
 import NoteCreate from '@/components/NoteCreate';
+import ScrollToTop from '@/components/ScrollToTop';
 import { LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import vecturaLogo from '@/assets/vectura-logo.png';
@@ -170,6 +171,7 @@ const Dashboard = () => {
           <div className="min-h-screen">
             <AppSidebar currentProject={currentProject} />
             <main className="ml-16 p-6 pt-[64pxpx]">
+              <ScrollToTop />
               <Routes>
                 <Route path="/" element={<Navigate to="tasks" replace />} />
                 <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />

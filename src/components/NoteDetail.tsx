@@ -74,8 +74,9 @@ const handleSave = async () => {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Detalle de nota</h1>
         <div className="flex gap-2">
-<Button variant="secondary" onClick={() => setIsDeleteOpen(true)}>Eliminar</Button>
-<Button onClick={handleSave} disabled={!isDirty || saving}>{saving ? 'Guardando...' : 'Guardar cambios'}</Button>
+          <Button variant="outline" onClick={() => navigate('/notes')}>Volver atrás</Button>
+          <Button variant="secondary" onClick={() => setIsDeleteOpen(true)}>Eliminar</Button>
+          <Button onClick={handleSave} disabled={!isDirty || saving}>{saving ? 'Guardando...' : 'Guardar cambios'}</Button>
         </div>
       </div>
 

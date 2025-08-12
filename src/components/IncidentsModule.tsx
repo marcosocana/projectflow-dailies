@@ -501,7 +501,12 @@ const STATUS_LABELS: Record<string, string> = {
   <div className="space-y-6">
     {/* KPIs arriba del todo */}
     <div className="grid gap-4 md:grid-cols-4">
-      <Card>
+      <Card
+        className="cursor-pointer hover:bg-accent/30 transition-colors"
+        onClick={() => { setStatusFilters([]); setCategoryFilter(null); setCurrentPage(1); }}
+        role="button"
+        aria-label="Ver todas las incidencias"
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <AlertTriangle className="h-4 w-4" /> Total incidencias
@@ -524,7 +529,13 @@ const STATUS_LABELS: Record<string, string> = {
               <span className="text-muted-foreground text-sm">Sin datos</span>
             )}
             {statusOrder.map(key => (
-              <div key={key} className="w-24 text-center">
+              <div
+                key={key}
+                className="w-24 text-center cursor-pointer select-none hover:opacity-80"
+                onClick={() => { setStatusFilters([key as any]); setCategoryFilter(null); setCurrentPage(1); }}
+                role="button"
+                aria-label={`Filtrar por estado ${STATUS_LABELS[key] || key}`}
+              >
                 <div className="text-3xl font-bold">{statusCounts[key] || 0}</div>
                 <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1`}>
                   {STATUS_LABELS[key] || key}
@@ -534,7 +545,11 @@ const STATUS_LABELS: Record<string, string> = {
             {Object.keys(statusCounts)
               .filter(k => !statusOrder.includes(k))
               .map(k => (
-                <div key={k} className="w-24 text-center">
+                <div
+                  key={k}
+                  className="w-24 text-center cursor-pointer select-none hover:opacity-80"
+                  onClick={() => { setStatusFilters([k as any]); setCategoryFilter(null); setCurrentPage(1); }}
+                >
                   <div className="text-3xl font-bold">{statusCounts[k] || 0}</div>
                   <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1">{k}</Badge>
                 </div>
@@ -543,7 +558,12 @@ const STATUS_LABELS: Record<string, string> = {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card
+        className="cursor-pointer hover:bg-accent/30 transition-colors"
+        onClick={() => { setCategoryFilter('improvement' as any); setStatusFilters([]); setCurrentPage(1); }}
+        role="button"
+        aria-label="Ver solo mejoras"
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <CheckCircle2 className="h-4 w-4" /> Total mejoras

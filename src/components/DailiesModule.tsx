@@ -436,12 +436,12 @@ export default function DailiesModule({
   if (!unlocked) {
     return <Card>
         <CardHeader>
-          <CardTitle>Acceso a Dailies</CardTitle>
-          <CardDescription>Introduce la contraseña especial de dailies</CardDescription>
+          <CardTitle>Acceso a Seguimiento diario</CardTitle>
+          <CardDescription>Introduce la contraseña de seguimiento diario</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onUnlock} className="flex gap-2 max-w-md">
-            <Input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Contraseña de dailies" required />
+            <Input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Contraseña de seguimiento diario" required />
             <Button type="submit">Acceder</Button>
           </form>
         </CardContent>
@@ -453,8 +453,7 @@ export default function DailiesModule({
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <CardTitle>Dailies</CardTitle>
-              <CardDescription>Calendario y tareas del día</CardDescription>
+              <CardTitle>Seguimiento diario</CardTitle>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
