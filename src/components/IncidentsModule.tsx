@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, MoreVertical, RefreshCcw } from 'lucide-react';
+import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, MoreVertical, RefreshCcw, AlertTriangle, ListChecks, CheckCircle2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/hooks/useAuth';
 import type { Database } from '@/integrations/supabase/types';
@@ -151,6 +151,15 @@ const [comments, setComments] = useState<any[]>([]);
 const [commentText, setCommentText] = useState('');
 const importInputRef = useRef<HTMLInputElement>(null);
 
+// KPIs state
+const [totalIncidents, setTotalIncidents] = useState<number>(0);
+const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+const [totalImprovements, setTotalImprovements] = useState<number>(0);
+
+// Pagination state
+const [currentPage, setCurrentPage] = useState(1);
+const [pageSize, setPageSize] = useState(25);
+
 const filtered = useMemo(() => {
   const term = search.trim().toLowerCase();
   return incidents.filter((i) =>
@@ -181,6 +190,15 @@ const sorted = useMemo(() => {
   return arr;
 }, [filtered, sortKey, sortDir]);
 
+// Paginated results
+const paginatedIncidents = useMemo(() => {
+  const start = (currentPage - 1) * pageSize;
+  const end = start + pageSize;
+  return sorted.slice(start, end);
+}, [sorted, currentPage, pageSize]);
+
+const totalPages = Math.ceil(sorted.length / pageSize);
+
 const fetchIncidents = async () => {
   setLoading(true);
   try {
@@ -194,6 +212,21 @@ const fetchIncidents = async () => {
     const { data, error } = await query;
     if (error) throw error;
     setIncidents(data || []);
+    
+    // Calculate KPIs
+    const total = data?.length || 0;
+    setTotalIncidents(total);
+    
+    const statusGrouped: Record<string, number> = {};
+    (data || []).forEach(incident => {
+      const status = incident.status;
+      statusGrouped[status] = (statusGrouped[status] || 0) + 1;
+    });
+    setStatusCounts(statusGrouped);
+    
+    const improvements = data?.filter(incident => incident.category === 'improvement').length || 0;
+    setTotalImprovements(improvements);
+    
   } catch (e: any) {
     toast({ title: 'Error', description: 'No se pudieron cargar las incidencias', variant: 'destructive' });
   } finally {
@@ -448,8 +481,80 @@ setDetailForm({
     return () => clearTimeout(handler);
   }, [detailForm, selected, detailEvidenceFile]);
 
+  const statusOrder = ['in_progress', 'pending', 'resolved'];
+  const STATUS_LABELS: Record<string, string> = { 
+    in_progress: 'En curso', 
+    pending: 'Pendiente', 
+    resolved: 'Resuelto', 
+    closed: 'Cerrado',
+    in_qa: 'En QA'
+  };
+  const STATUS_BADGE_CLS: Record<string, string> = {
+    in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
+    pending: 'bg-muted text-muted-foreground',
+    resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
+    in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]',
+    closed: 'bg-destructive text-destructive-foreground',
+  };
+
   return (
   <div className="space-y-6">
+    {/* KPIs arriba del todo */}
+    <div className="grid gap-4 md:grid-cols-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <AlertTriangle className="h-4 w-4" /> Total incidencias
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-3xl font-bold">{totalIncidents}</div>
+        </CardContent>
+      </Card>
+
+      <Card className="md:col-span-2">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ListChecks className="h-4 w-4" /> Incidencias por estado
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-4">
+            {Object.keys(statusCounts).length === 0 && (
+              <span className="text-muted-foreground text-sm">Sin datos</span>
+            )}
+            {statusOrder.map(key => (
+              <div key={key} className="w-24 text-center">
+                <div className="text-3xl font-bold">{statusCounts[key] || 0}</div>
+                <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1`}>
+                  {STATUS_LABELS[key] || key}
+                </Badge>
+              </div>
+            ))}
+            {Object.keys(statusCounts)
+              .filter(k => !statusOrder.includes(k))
+              .map(k => (
+                <div key={k} className="w-24 text-center">
+                  <div className="text-3xl font-bold">{statusCounts[k] || 0}</div>
+                  <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1">{k}</Badge>
+                </div>
+              ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <CheckCircle2 className="h-4 w-4" /> Total mejoras
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-3xl font-bold">{totalImprovements}</div>
+        </CardContent>
+      </Card>
+    </div>
+
     <Card>
       <CardHeader>
           <div className="flex items-start justify-between gap-4">
@@ -536,6 +641,33 @@ setDetailForm({
           </div>
         </div>
 
+        {/* Selector de paginación */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Mostrar:</span>
+            <Select value={pageSize.toString()} onValueChange={(value) => {
+              setPageSize(Number(value));
+              setCurrentPage(1);
+            }}>
+              <SelectTrigger className="w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground">
+              resultados por página
+            </span>
+          </div>
+          
+          <div className="text-sm text-muted-foreground">
+            Mostrando {((currentPage - 1) * pageSize) + 1} a {Math.min(currentPage * pageSize, sorted.length)} de {sorted.length} resultados
+          </div>
+        </div>
+
         <Table>
           <TableHeader>
             <TableRow>
@@ -557,7 +689,7 @@ setDetailForm({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.map((i) => (
+            {paginatedIncidents.map((i) => (
               <TableRow key={i.id}>
                 <TableCell className="font-mono text-xs">{`T${String(i.incident_number ?? 0).padStart(5, '0')}`}</TableCell>
                 <TableCell className="font-medium">{i.name}</TableCell>
@@ -587,13 +719,60 @@ setDetailForm({
                 </TableCell>
               </TableRow>
             ))}
-            {sorted.length === 0 && (
+            {paginatedIncidents.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground">No hay incidencias</TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
+
+        {/* Paginación */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+            >
+              Anterior
+            </Button>
+            
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={pageNum === currentPage ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(pageNum)}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+            
+            <Button
+              variant="outline"
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Siguiente
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
 

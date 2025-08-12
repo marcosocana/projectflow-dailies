@@ -1,26 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useSharedNotes, SharedNote } from '@/hooks/useSharedNotes';
-import { useAuth } from '@/hooks/useAuth';
-import { ArrowLeft, FileText, Edit2, Trash2, Check } from 'lucide-react';
-import NotesIndex from '@/components/NotesIndex';
-import { useToast } from '@/hooks/use-toast';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { useSharedNotes } from '@/hooks/useSharedNotes';
+import { Plus, Edit, Trash2, FileText, Clock } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface NotesModuleProps {
   projectId: string;
@@ -28,225 +17,240 @@ interface NotesModuleProps {
 
 export default function NotesModule({ projectId }: NotesModuleProps) {
   const { notes, loading, createNote, updateNote, deleteNote } = useSharedNotes(projectId);
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [selectedNote, setSelectedNote] = useState<SharedNote | null>(null);
-  const [content, setContent] = useState('');
-  const [noteTitle, setNoteTitle] = useState('');
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [selectedNote, setSelectedNote] = useState<any>(null);
+  const [noteForm, setNoteForm] = useState({ title: '', content: '' });
 
-  // Auto-save functionality
-  const autoSave = useCallback(async (noteId: string, newContent: string, newTitle: string) => {
-    if (!noteId) return;
-    
-    setIsSaving(true);
-    try {
-      const updatedContent = newContent.replace(/<h1>.*?<\/h1>/, `<h1>${newTitle}</h1>`);
-      await updateNote(noteId, updatedContent, newTitle);
-    } catch (error) {
-      console.error('Auto-save failed:', error);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [updateNote]);
-
-  // Sync content when note is selected
   useEffect(() => {
-    if (selectedNote) {
-      setContent(selectedNote.content);
-      setNoteTitle(selectedNote.title);
-    }
-  }, [selectedNote]);
-
-  // Auto-save on content change with debounce
-  useEffect(() => {
-    if (!selectedNote) return;
-    
-    const timer = setTimeout(() => {
-      if (content !== selectedNote.content || noteTitle !== selectedNote.title) {
-        autoSave(selectedNote.id, content, noteTitle);
-      }
-    }, 2000); // Auto-save after 2 seconds of inactivity
-
-    return () => clearTimeout(timer);
-  }, [content, noteTitle, selectedNote, autoSave]);
-
-  const handleContentChange = (value: string) => {
-    setContent(value);
-  };
-
-  const handleTitleChange = (newTitle: string) => {
-    setNoteTitle(newTitle);
-  };
+    document.title = 'Notas Compartidas';
+  }, []);
 
   const handleCreateNote = async () => {
-    const newNote = await createNote('Nueva nota');
+    if (!noteForm.title.trim()) return;
+    
+    const newNote = await createNote(noteForm.title);
     if (newNote) {
-      setSelectedNote(newNote);
+      await updateNote(newNote.id, noteForm.content, noteForm.title);
+      setNoteForm({ title: '', content: '' });
+      setIsCreateOpen(false);
     }
   };
 
-  const handleSelectNote = (note: any) => {
-    setSelectedNote(note);
-  };
-
-  const handleBackToIndex = () => {
+  const handleEditNote = async () => {
+    if (!selectedNote || !noteForm.title.trim()) return;
+    
+    await updateNote(selectedNote.id, noteForm.content, noteForm.title);
+    setIsEditOpen(false);
     setSelectedNote(null);
-    setContent('');
-    setNoteTitle('');
-    setIsEditingTitle(false);
+    setNoteForm({ title: '', content: '' });
   };
 
   const handleDeleteNote = async () => {
     if (!selectedNote) return;
     
-    try {
-      await deleteNote(selectedNote.id);
-      toast({
-        title: "Nota eliminada",
-        description: "La nota ha sido eliminada correctamente",
-      });
-      setShowDeleteDialog(false);
-      handleBackToIndex();
-    } catch (error) {
-      console.error('Error deleting note:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo eliminar la nota",
-        variant: "destructive",
-      });
-      setShowDeleteDialog(false);
-    }
+    await deleteNote(selectedNote.id);
+    setIsDeleteOpen(false);
+    setSelectedNote(null);
+  };
+
+  const openCreateDialog = () => {
+    setNoteForm({ title: '', content: '' });
+    setIsCreateOpen(true);
+  };
+
+  const openEditDialog = (note: any) => {
+    setSelectedNote(note);
+    setNoteForm({ title: note.title, content: note.content });
+    setIsEditOpen(true);
+  };
+
+  const openDeleteDialog = (note: any) => {
+    setSelectedNote(note);
+    setIsDeleteOpen(true);
   };
 
   if (loading) {
-    return <div className="p-6 text-center">Cargando notas...</div>;
-  }
-
-  // Mostrar índice si no hay nota seleccionada
-  if (!selectedNote) {
     return (
-      <NotesIndex 
-        projectId={projectId}
-        onSelectNote={handleSelectNote}
-        onCreateNote={handleCreateNote}
-      />
+      <div className="flex items-center justify-center min-h-48">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={handleBackToIndex}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Volver al índice
-          </Button>
-          
-          <div className="flex items-center gap-2">
-            {isEditingTitle ? (
-              <div className="flex items-center gap-2">
-                <Input
-                  value={noteTitle}
-                  onChange={(e) => handleTitleChange(e.target.value)}
-                  className="text-2xl font-bold border-0 px-0 focus-visible:ring-0"
-                  onBlur={() => setIsEditingTitle(false)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      setIsEditingTitle(false);
-                    }
-                  }}
-                  autoFocus
-                />
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <h1 className="text-3xl font-bold">{noteTitle}</h1>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsEditingTitle(true)}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <Edit2 className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {isSaving && (
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <Check className="h-4 w-4 animate-pulse" />
-              Guardando...
-            </div>
-          )}
-          <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-            <AlertDialogTrigger asChild>
-              <Button 
-                variant="destructive"
-                size="sm"
-                className="flex items-center gap-2"
-              >
-                <Trash2 className="h-4 w-4" />
-                Eliminar
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Confirmar eliminación</AlertDialogTitle>
-                <AlertDialogDescription>
-                  ¿Estás seguro de que quieres eliminar la nota "{noteTitle}"? Esta acción no se puede deshacer.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteNote} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Eliminar
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Notas Compartidas</h1>
+        <Button onClick={openCreateDialog}>
+          <Plus className="h-4 w-4 mr-2" />
+          Nueva Nota
+        </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Gestión de Notas</CardTitle>
-          <CardDescription>
-            Editor de notas compartidas del proyecto
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="min-h-[500px]">
-            <ReactQuill
-              theme="snow"
-              value={content}
-              onChange={handleContentChange}
-              modules={{
-                toolbar: [
-                  [{ 'header': [1, 2, 3, false] }],
-                  ['bold', 'italic', 'underline', 'strike'],
-                  [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                  ['blockquote', 'code-block'],
-                  ['link'],
-                  ['clean']
-                ],
-              }}
-              placeholder="Escribe el contenido de la nota..."
-              style={{ border: 'none' }}
-            />
+      {notes.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No hay notas aún</h3>
+            <p className="text-muted-foreground mb-4">Crea tu primera nota compartida</p>
+            <Button onClick={openCreateDialog}>
+              <Plus className="h-4 w-4 mr-2" />
+              Crear primera nota
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {notes.map((note) => (
+            <Card key={note.id} className="hover:shadow-md transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <CardTitle className="text-lg line-clamp-2 flex-1 mr-2">
+                    {note.title}
+                  </CardTitle>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => openEditDialog(note)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => openDeleteDialog(note)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div 
+                  className="text-sm text-muted-foreground line-clamp-4 mb-3"
+                  dangerouslySetInnerHTML={{ 
+                    __html: note.content.replace(/<[^>]*>/g, '').substring(0, 150) + '...' 
+                  }}
+                />
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  <span>
+                    {formatDistanceToNow(new Date(note.updated_at), { 
+                      addSuffix: true, 
+                      locale: es 
+                    })}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Dialog para crear nota */}
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nueva Nota</DialogTitle>
+            <DialogDescription>
+              Crea una nueva nota compartida para el proyecto
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Título</label>
+              <Input
+                value={noteForm.title}
+                onChange={(e) => setNoteForm(prev => ({ ...prev, title: e.target.value }))}
+                placeholder="Título de la nota..."
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Contenido</label>
+              <Textarea
+                value={noteForm.content}
+                onChange={(e) => setNoteForm(prev => ({ ...prev, content: e.target.value }))}
+                placeholder="Escribe el contenido de la nota..."
+                rows={6}
+                className="mt-1"
+              />
+            </div>
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex justify-end gap-2 mt-6">
+            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCreateNote}>
+              Crear Nota
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para editar nota */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Nota</DialogTitle>
+            <DialogDescription>
+              Modifica el contenido de la nota
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Título</label>
+              <Input
+                value={noteForm.title}
+                onChange={(e) => setNoteForm(prev => ({ ...prev, title: e.target.value }))}
+                placeholder="Título de la nota..."
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Contenido</label>
+              <Textarea
+                value={noteForm.content}
+                onChange={(e) => setNoteForm(prev => ({ ...prev, content: e.target.value }))}
+                placeholder="Escribe el contenido de la nota..."
+                rows={6}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-6">
+            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleEditNote}>
+              Guardar Cambios
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para confirmar eliminación */}
+      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar nota?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. La nota "{selectedNote?.title}" será eliminada permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteNote} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

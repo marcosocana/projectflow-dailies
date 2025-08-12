@@ -11,12 +11,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
 import CreateProjectForm from '@/components/CreateProjectForm';
 import IncidentsModule from '@/components/IncidentsModule';
-import DailiesModule from '@/components/DailiesModule';
 import VacationsCalendarModule from '@/components/VacationsCalendarModule';
 import NotesModule from '@/components/NotesModule';
 import ProjectInformationModule from '@/components/ProjectInformationModule';
-import TeamModule from '@/components/TeamModule';
 import HomeModule from '@/components/HomeModule';
+import InternalConfigModule from '@/components/InternalConfigModule';
 import { AppSidebar } from '@/components/AppSidebar';
 import { LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -173,10 +172,9 @@ const Dashboard = () => {
                 <Route path="/" element={<Navigate to="home" replace />} />
                 <Route path="home" element={<HomeModule projectId={currentProject.id} />} />
                 <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
-                <Route path="dailies" element={<DailiesModule projectId={currentProject.id} />} />
-                <Route path="team" element={<TeamModule projectId={currentProject.id} />} />
                 <Route path="vacations" element={<VacationsCalendarModule projectId={currentProject.id} />} />
                 <Route path="notes" element={<NotesModule projectId={currentProject.id} />} />
+                <Route path="config" element={<InternalConfigModule projectId={currentProject.id} dailiesPassword={(currentProject as any).dailies_password || 'default'} />} />
                 <Route path="info" element={<ProjectInformationModule projectId={currentProject.id} />} />
               </Routes>
             </main>
