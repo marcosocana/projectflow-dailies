@@ -105,6 +105,7 @@ export default function IncidentsModule({ projectId }: IncidentsModuleProps) {
 const [incidents, setIncidents] = useState<any[]>([]);
 const [loading, setLoading] = useState(false);
 const [statusFilters, setStatusFilters] = useState<IncidentStatus[]>([]);
+const [categoryFilters, setCategoryFilters] = useState<IncidentCategory[]>([]);
 const [categoryFilter, setCategoryFilter] = useState<IncidentCategory | null>(null);
 
 const [search, setSearch] = useState('');
@@ -164,14 +165,14 @@ const filtered = useMemo(() => {
   const term = search.trim().toLowerCase();
   return incidents.filter((i) =>
     (statusFilters.length ? statusFilters.includes(i.status) : true) &&
-    (categoryFilter ? i.category === categoryFilter : true) &&
+    ((categoryFilters.length ? categoryFilters.includes(i.category) : true) && (categoryFilter ? i.category === categoryFilter : true)) &&
     (term
       ? [i.id, `T${String(i.incident_number ?? 0).padStart(5, '0')}`, i.name, i.description, i.environment, i.device, i.status, i.category, i.additional_comments]
           .filter(Boolean)
           .some((v: any) => String(v).toLowerCase().includes(term))
       : true)
   );
-}, [incidents, statusFilters, categoryFilter, search]);
+}, [incidents, statusFilters, categoryFilters, categoryFilter, search]);
 
 const sorted = useMemo(() => {
   const arr = [...filtered];
@@ -202,31 +203,28 @@ const totalPages = Math.ceil(sorted.length / pageSize);
 const fetchIncidents = async () => {
   setLoading(true);
   try {
-    let query = supabase
+    const { data, error } = await supabase
       .from('incidents')
       .select('*')
       .eq('project_id', projectId)
       .order('occurred_at', { ascending: true });
-    if (statusFilters.length) query = query.in('status', statusFilters as any);
-    if (categoryFilter) query = query.eq('category', categoryFilter);
-    const { data, error } = await query;
     if (error) throw error;
     setIncidents(data || []);
     
-    // Calculate KPIs
-    const total = data?.length || 0;
-    setTotalIncidents(total);
-    
+    // Calculate KPIs (siempre con todos los datos, sin filtros de UI)
+    const all = data || [];
+    const onlyIncidents = all.filter((i) => i.category === 'incident');
+    setTotalIncidents(onlyIncidents.length);
+
     const statusGrouped: Record<string, number> = {};
-    (data || []).forEach(incident => {
+    onlyIncidents.forEach((incident) => {
       const status = incident.status;
       statusGrouped[status] = (statusGrouped[status] || 0) + 1;
     });
     setStatusCounts(statusGrouped);
-    
-    const improvements = data?.filter(incident => incident.category === 'improvement').length || 0;
+
+    const improvements = all.filter((i) => i.category === 'improvement').length;
     setTotalImprovements(improvements);
-    
   } catch (e: any) {
     toast({ title: 'Error', description: 'No se pudieron cargar las incidencias', variant: 'destructive' });
   } finally {
@@ -234,7 +232,7 @@ const fetchIncidents = async () => {
   }
 };
 
-  useEffect(() => { fetchIncidents(); }, [projectId, statusFilters, categoryFilter]);
+  useEffect(() => { fetchIncidents(); }, [projectId]);
 
   const resetForm = () => {
     setForm({
@@ -501,11 +499,17 @@ const STATUS_LABELS: Record<string, string> = {
   <div className="space-y-6">
     {/* KPIs arriba del todo */}
     <div className="grid gap-4 md:grid-cols-4">
+      {/* Total incidencias (categoría Incidencia) */}
       <Card
-        className="cursor-pointer hover:bg-accent/30 transition-colors"
-        onClick={() => { setStatusFilters([]); setCategoryFilter(null); setCurrentPage(1); }}
+        className={`transition-colors cursor-pointer ${categoryFilters.includes('incident' as any) ? 'ring-2 ring-primary bg-primary/10 border-primary/20' : 'hover:bg-accent/30'}`}
+        onClick={() => {
+          setCategoryFilters((prev) => prev.includes('incident' as any)
+            ? prev.filter((c) => c !== ('incident' as any))
+            : [...prev, 'incident' as any]);
+          setCurrentPage(1);
+        }}
         role="button"
-        aria-label="Ver todas las incidencias"
+        aria-label="Filtrar por Incidencias"
       >
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -517,6 +521,7 @@ const STATUS_LABELS: Record<string, string> = {
         </CardContent>
       </Card>
 
+      {/* Incidencias por estado (solo cuentan las de categoría Incidencia) */}
       <Card className="md:col-span-2">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -528,41 +533,63 @@ const STATUS_LABELS: Record<string, string> = {
             {Object.keys(statusCounts).length === 0 && (
               <span className="text-muted-foreground text-sm">Sin datos</span>
             )}
-            {statusOrder.map(key => (
-              <div
-                key={key}
-                className="w-24 text-center cursor-pointer select-none hover:opacity-80"
-                onClick={() => { setStatusFilters([key as any]); setCategoryFilter(null); setCurrentPage(1); }}
-                role="button"
-                aria-label={`Filtrar por estado ${STATUS_LABELS[key] || key}`}
-              >
-                <div className="text-3xl font-bold">{statusCounts[key] || 0}</div>
-                <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1`}>
-                  {STATUS_LABELS[key] || key}
-                </Badge>
-              </div>
-            ))}
-            {Object.keys(statusCounts)
-              .filter(k => !statusOrder.includes(k))
-              .map(k => (
+            {statusOrder.map((key) => {
+              const selected = statusFilters.includes(key as any);
+              return (
                 <div
-                  key={k}
-                  className="w-24 text-center cursor-pointer select-none hover:opacity-80"
-                  onClick={() => { setStatusFilters([k as any]); setCategoryFilter(null); setCurrentPage(1); }}
+                  key={key}
+                  className={`w-24 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
+                  onClick={() => {
+                    setStatusFilters((prev) => prev.includes(key as any)
+                      ? prev.filter((s) => s !== (key as any))
+                      : [...prev, key as any]);
+                    setCurrentPage(1);
+                  }}
+                  role="button"
+                  aria-label={`Filtrar por estado ${STATUS_LABELS[key] || key}`}
                 >
-                  <div className="text-3xl font-bold">{statusCounts[k] || 0}</div>
-                  <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1">{k}</Badge>
+                  <div className="text-3xl font-bold">{statusCounts[key] || 0}</div>
+                  <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1`}>
+                    {STATUS_LABELS[key] || key}
+                  </Badge>
                 </div>
-              ))}
+              );
+            })}
+            {Object.keys(statusCounts)
+              .filter((k) => !statusOrder.includes(k))
+              .map((k) => {
+                const selected = statusFilters.includes(k as any);
+                return (
+                  <div
+                    key={k}
+                    className={`w-24 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
+                    onClick={() => {
+                      setStatusFilters((prev) => prev.includes(k as any)
+                        ? prev.filter((s) => s !== (k as any))
+                        : [...prev, k as any]);
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <div className="text-3xl font-bold">{statusCounts[k] || 0}</div>
+                    <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1">{k}</Badge>
+                  </div>
+                );
+              })}
           </div>
         </CardContent>
       </Card>
 
+      {/* Total mejoras (categoría Mejora) */}
       <Card
-        className="cursor-pointer hover:bg-accent/30 transition-colors"
-        onClick={() => { setCategoryFilter('improvement' as any); setStatusFilters([]); setCurrentPage(1); }}
+        className={`transition-colors cursor-pointer ${categoryFilters.includes('improvement' as any) ? 'ring-2 ring-primary bg-primary/10 border-primary/20' : 'hover:bg-accent/30'}`}
+        onClick={() => {
+          setCategoryFilters((prev) => prev.includes('improvement' as any)
+            ? prev.filter((c) => c !== ('improvement' as any))
+            : [...prev, 'improvement' as any]);
+          setCurrentPage(1);
+        }}
         role="button"
-        aria-label="Ver solo mejoras"
+        aria-label="Filtrar por Mejoras"
       >
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
