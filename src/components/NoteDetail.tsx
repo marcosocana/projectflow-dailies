@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useSharedNotes } from '@/hooks/useSharedNotes';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
@@ -18,25 +19,36 @@ export default function NoteDetail({ projectId }: NoteDetailProps) {
 
   const note = useMemo(() => notes.find(n => n.id === noteId), [notes, noteId]);
 
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+const [title, setTitle] = useState('');
+const [content, setContent] = useState('');
+const [originalTitle, setOriginalTitle] = useState('');
+const [originalContent, setOriginalContent] = useState('');
+const [saving, setSaving] = useState(false);
+const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+const isDirty = useMemo(() => title !== originalTitle || content !== originalContent, [title, content, originalTitle, originalContent]);
 
   useEffect(() => {
     if (!note) refetch();
   }, [note, refetch]);
 
-  useEffect(() => {
-    if (note) {
-      setTitle(note.title);
-      setContent(note.content);
-      document.title = `Nota: ${note.title}`;
-    }
-  }, [note]);
+useEffect(() => {
+  if (note) {
+    setTitle(note.title);
+    setContent(note.content);
+    setOriginalTitle(note.title);
+    setOriginalContent(note.content);
+    document.title = `Nota: ${note.title}`;
+  }
+}, [note]);
 
-  const handleSave = async () => {
-    if (!noteId) return;
-    await updateNote(noteId, content, title || 'Sin título');
-  };
+const handleSave = async () => {
+  if (!noteId || !isDirty) return;
+  setSaving(true);
+  await updateNote(noteId, content, title || 'Sin título');
+  setOriginalTitle(title || 'Sin título');
+  setOriginalContent(content);
+  setSaving(false);
+};
 
   const handleDeleteSoft = () => {
     if (!noteId) return;
@@ -62,9 +74,8 @@ export default function NoteDetail({ projectId }: NoteDetailProps) {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Detalle de nota</h1>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate('/notes')}>Volver a notas</Button>
-          <Button variant="secondary" onClick={handleDeleteSoft}>Eliminar</Button>
-          <Button onClick={handleSave}>Guardar cambios</Button>
+<Button variant="secondary" onClick={() => setIsDeleteOpen(true)}>Eliminar</Button>
+<Button onClick={handleSave} disabled={!isDirty || saving}>{saving ? 'Guardando...' : 'Guardar cambios'}</Button>
         </div>
       </div>
 
@@ -85,8 +96,23 @@ export default function NoteDetail({ projectId }: NoteDetailProps) {
           <div className="border rounded-md">
             <ReactQuill theme="snow" value={content} onChange={setContent} />
           </div>
-        </CardContent>
+</CardContent>
       </Card>
+
+      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar nota?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción ocultará la nota de la lista, pero seguirá existiendo en la base de datos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteSoft}>Eliminar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

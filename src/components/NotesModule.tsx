@@ -1,78 +1,53 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { useSharedNotes } from '@/hooks/useSharedNotes';
-import { Plus, FileText, Clock } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import { es } from 'date-fns/locale';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import { useProfiles } from '@/hooks/useProfiles';
+import { Plus, FileText, Clock, Search } from 'lucide-react';
+import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 interface NotesModuleProps {
   projectId: string;
 }
 
 export default function NotesModule({ projectId }: NotesModuleProps) {
-  const { notes, loading, createNote, updateNote, deleteNote } = useSharedNotes(projectId);
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [selectedNote, setSelectedNote] = useState<any>(null);
-  const [noteForm, setNoteForm] = useState({ title: '', content: '' });
+  const { notes, loading } = useSharedNotes(projectId);
   const navigate = useNavigate();
+  const { profiles } = useProfiles();
+  const [searchQuery, setSearchQuery] = useState('');
   const hiddenIds: string[] = (() => {
     try { return JSON.parse(localStorage.getItem(`hidden_notes_${projectId}`) || '[]'); } catch { return []; }
   })();
-  const visibleNotes = notes.filter((n: any) => !hiddenIds.includes(n.id));
+  const visibleNotes = useMemo(() => notes.filter((n: any) => !hiddenIds.includes(n.id)), [notes, hiddenIds]);
+  const filteredNotes = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return visibleNotes;
+    const strip = (html: string) => html.replace(/<[^>]*>/g, ' ');
+    return visibleNotes.filter((n: any) =>
+      (n.title || '').toLowerCase().includes(q) ||
+      strip(n.content).toLowerCase().includes(q)
+    );
+  }, [visibleNotes, searchQuery]);
   useEffect(() => {
     document.title = 'Notas Compartidas';
   }, []);
 
-  const handleCreateNote = async () => {
-    if (!noteForm.title.trim()) return;
-    
-    const newNote = await createNote(noteForm.title);
-    if (newNote) {
-      await updateNote(newNote.id, noteForm.content, noteForm.title);
-      setNoteForm({ title: '', content: '' });
-      setIsCreateOpen(false);
-    }
-  };
+const openCreate = () => {
+  navigate('/notes/new');
+};
 
-  const handleEditNote = async () => {
-    if (!selectedNote || !noteForm.title.trim()) return;
-    
-    await updateNote(selectedNote.id, noteForm.content, noteForm.title);
-    setIsEditOpen(false);
-    setSelectedNote(null);
-    setNoteForm({ title: '', content: '' });
-  };
+const openEditDialog = (note: any) => {
+  navigate(`/notes/${note.id}`);
+};
 
-  const handleDeleteNote = async () => {
-    if (!selectedNote) return;
-    
-    await deleteNote(selectedNote.id);
-    setIsDeleteOpen(false);
-    setSelectedNote(null);
-  };
+const authorName = (note: any) => {
+  const p = profiles.find(p => p.user_id === note.last_edited_by);
+  return p?.full_name || 'Usuario';
+};
 
-  const openCreateDialog = () => {
-    setNoteForm({ title: '', content: '' });
-    setIsCreateOpen(true);
-  };
-
-  const openEditDialog = (note: any) => {
-    navigate(`/notes/${note.id}`);
-  };
-
-  const openDeleteDialog = (note: any) => {
-    setSelectedNote(note);
-    setIsDeleteOpen(true);
-  };
+const formatDate = (iso: string) => format(new Date(iso), 'dd/MM/yyyy');
 
   if (loading) {
     return (
@@ -82,15 +57,24 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Notas Compartidas</h1>
-        <Button onClick={openCreateDialog} aria-label="Crear nueva nota">
-          <Plus className="h-4 w-4 mr-2" />
-          Nueva Nota
-        </Button>
-      </div>
+return (
+  <div className="space-y-6">
+    <div className="flex items-center justify-between">
+      <h1 className="text-2xl font-bold">Notas Compartidas</h1>
+      <Button onClick={openCreate} aria-label="Crear nueva nota">
+        <Plus className="h-4 w-4 mr-2" />
+        Nueva Nota
+      </Button>
+    </div>
+    <div className="relative max-w-md">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <Input
+        placeholder="Buscar notas..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="pl-10"
+      />
+    </div>
 
       {visibleNotes.length === 0 ? (
         <Card>
@@ -137,49 +121,4 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
         </div>
       )}
 
-      {/* Dialog para crear nota */}
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Nueva Nota</DialogTitle>
-            <DialogDescription>
-              Crea una nueva nota compartida para el proyecto
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Título</label>
-              <Input
-                value={noteForm.title}
-                onChange={(e) => setNoteForm(prev => ({ ...prev, title: e.target.value }))}
-                placeholder="Título de la nota..."
-                className="mt-1"
-                aria-label="Título de la nota"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Contenido</label>
-              <div className="mt-1 border rounded-md">
-                <ReactQuill
-                  theme="snow"
-                  value={noteForm.content}
-                  onChange={(value) => setNoteForm(prev => ({ ...prev, content: value }))}
-                />
-              </div>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 mt-6">
-            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleCreateNote}>
-              Crear Nota
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-
-    </div>
-  );
 }
