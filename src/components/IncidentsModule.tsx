@@ -16,6 +16,7 @@ import { useAuth } from '@/hooks/useAuth';
 import type { Database } from '@/integrations/supabase/types';
 import type React from 'react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu';
+import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 
 interface IncidentsModuleProps {
   projectId: string;
@@ -146,26 +147,10 @@ const [form, setForm] = useState({
   additionalComments: '',
 });
 const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
-const [detailEvidenceFile, setDetailEvidenceFile] = useState<File | null>(null);
-// Editable detail modal form
-const [detailForm, setDetailForm] = useState({
-  name: '',
-  description: '',
-  occurredAt: new Date().toISOString(),
-  status: 'pending' as IncidentStatus,
-  category: 'incident' as IncidentCategory,
-  additionalComments: '',
-  env: '' as string,
-  dev: '' as string,
-  evidenceLink: '',
-});
-const isInitialDetailLoad = useRef(true);
 
 const [createOpen, setCreateOpen] = useState(false);
 const [detailsOpen, setDetailsOpen] = useState(false);
 const [selected, setSelected] = useState<any | null>(null);
-const [comments, setComments] = useState<any[]>([]);
-const [commentText, setCommentText] = useState('');
 const importInputRef = useRef<HTMLInputElement>(null);
 
 // KPIs state
@@ -278,7 +263,7 @@ const fetchIncidents = async () => {
   };
 
   const handleUploadEvidence = async (incidentId: string, file?: File) => {
-    const fileToUpload = file || evidenceFile || detailEvidenceFile;
+    const fileToUpload = file || evidenceFile;
     if (!fileToUpload) return null;
     const ext = fileToUpload.name.split('.').pop();
     const filePath = `incidents/${incidentId}/${crypto.randomUUID()}.${ext}`;
@@ -436,82 +421,9 @@ const deviceValue = form.device || '';
     }
   };
 
-  // Comments
-  const loadComments = async (incidentId: string) => {
-    const { data } = await supabase
-      .from('incident_comments')
-      .select('*')
-      .eq('incident_id', incidentId)
-      .order('created_at', { ascending: true });
-    setComments(data || []);
-  };
+  // Comentarios y autosave gestionados por IncidentDetailDialog
 
-  const addComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selected || !user || !commentText.trim()) return;
-    const { error } = await supabase
-      .from('incident_comments')
-      .insert({ incident_id: selected.id, user_id: user.id, user_email: user.email, content: commentText.trim() });
-    if (!error) {
-      setCommentText('');
-      loadComments(selected.id);
-    } else {
-      toast({ title: 'Error', description: 'No se pudo añadir el comentario', variant: 'destructive' });
-    }
-  };
-
-  // Initialize detail form when an incident is selected
-  useEffect(() => {
-    if (!selected) return;
-    isInitialDetailLoad.current = true;
-const pick = (raw: string, allowed: readonly string[]) =>
-  (raw || '').split(',').map((s) => s.trim()).find((v) => allowed.includes(v)) || '';
-setDetailForm({
-  name: selected.name || '',
-  description: selected.description || '',
-  occurredAt: selected.occurred_at ? new Date(selected.occurred_at).toISOString() : new Date().toISOString(),
-  status: (selected.status || 'pending') as IncidentStatus,
-  category: (selected.category || 'incident') as IncidentCategory,
-  additionalComments: selected.additional_comments || '',
-  env: pick(selected.environment || '', ENV_OPTIONS),
-  dev: pick(selected.device || '', DEVICE_OPTIONS),
-  evidenceLink: selected.evidence && !selected.evidence.startsWith('incidents/') ? selected.evidence : '',
-});
-  }, [selected]);
-
-  // Autosave detail form (500ms debounce)
-  useEffect(() => {
-    if (!selected) return;
-    if (isInitialDetailLoad.current) { isInitialDetailLoad.current = false; return; }
-    const handler = setTimeout(async () => {
-      const payload: any = {
-        name: detailForm.name,
-        description: detailForm.description,
-        environment: detailForm.env,
-        device: detailForm.dev,
-        occurred_at: new Date(detailForm.occurredAt).toISOString(),
-        status: detailForm.status,
-        category: detailForm.category,
-        evidence: selected.evidence,
-      };
-      
-      // Handle file upload if there's a new file
-      if (detailEvidenceFile) {
-        try {
-          const path = await handleUploadEvidence(selected.id);
-          payload.evidence = path;
-          setDetailEvidenceFile(null); // Clear after upload
-        } catch (e) {
-          console.error('Error uploading file:', e);
-        }
-      }
-      
-      await supabase.from('incidents').update(payload).eq('id', selected.id);
-      setSelected((prev: any) => (prev ? { ...prev, ...payload } : prev));
-      setIncidents((prev) => prev.map((i) => (i.id === selected.id ? { ...i, ...payload } : i)));
-    }, 500);
-    return () => clearTimeout(handler);
-  }, [detailForm, selected, detailEvidenceFile]);
+  // Detalle de incidencia gestionado por componente reutilizable
 
 
   return (
@@ -842,7 +754,7 @@ setDetailForm({
                   )}
                 </TableCell>
                 <TableCell className="flex justify-end gap-2">
-                  <Button variant="ghost" size="icon" onClick={async () => { setSelected(i); setDetailsOpen(true); await loadComments(i.id); }} aria-label="Ver más">
+                  <Button variant="ghost" size="icon" onClick={async () => { setSelected(i); setDetailsOpen(true); }} aria-label="Ver más">
                     <Eye className="h-4 w-4" />
                   </Button>
                   <Button variant="ghost" size="icon" onClick={() => onDelete(i.id)} aria-label="Eliminar" className="text-foreground">

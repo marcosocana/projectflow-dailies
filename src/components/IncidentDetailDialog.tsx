@@ -1,0 +1,257 @@
+import { useEffect, useRef, useState } from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+
+// Options same as IncidentsModule to keep UI identical
+const STATUS_OPTIONS = [
+  { value: 'in_progress', label: 'En curso' },
+  { value: 'pending', label: 'Pendientes' },
+  { value: 'in_qa', label: 'En pruebas' },
+  { value: 'resolved', label: 'Resueltas' },
+  { value: 'closed', label: 'Cerradas' },
+] as const;
+
+const CATEGORY_OPTIONS = [
+  { value: 'incident', label: 'Incidencia' },
+  { value: 'improvement', label: 'Mejora' },
+] as const;
+
+const ENV_OPTIONS = ['DEV','PRE','PRO','Otro'] as const;
+const DEVICE_OPTIONS = ['Web','APP','Otro'] as const;
+
+function useSignedUrl(bucket: string) {
+  const cache = useRef(new Map<string, string>());
+  const getUrl = async (path: string | null | undefined) => {
+    if (!path) return null;
+    if (cache.current.has(path)) return cache.current.get(path)!;
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60);
+    if (error) return null;
+    cache.current.set(path, data.signedUrl);
+    return data.signedUrl;
+  };
+  return { getUrl };
+}
+
+interface IncidentDetailDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  incidentId: string | null;
+  onPatched?: (id: string, payload: any) => void;
+}
+
+export default function IncidentDetailDialog({ open, onOpenChange, incidentId, onPatched }: IncidentDetailDialogProps) {
+  const { user } = useAuth();
+  const { getUrl } = useSignedUrl('project-files');
+
+  const [selected, setSelected] = useState<any | null>(null);
+  const [detailEvidenceFile, setDetailEvidenceFile] = useState<File | null>(null);
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentText, setCommentText] = useState('');
+  const isInitialDetailLoad = useRef(true);
+  const [detailForm, setDetailForm] = useState({
+    name: '',
+    description: '',
+    occurredAt: new Date().toISOString(),
+    status: 'pending',
+    category: 'incident',
+    additionalComments: '',
+    env: '',
+    dev: '',
+    evidenceLink: '',
+  });
+
+  const resetState = () => {
+    setSelected(null);
+    setComments([]);
+    setCommentText('');
+    setDetailEvidenceFile(null);
+    isInitialDetailLoad.current = true;
+    setDetailForm({
+      name: '', description: '', occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', additionalComments: '', env: '', dev: '', evidenceLink: ''
+    });
+  };
+
+  useEffect(() => {
+    if (!open) { resetState(); return; }
+    if (!incidentId) return;
+    const fetchIncident = async () => {
+      const { data } = await supabase.from('incidents').select('*').eq('id', incidentId).single();
+      if (data) {
+        setSelected(data);
+        const pick = (raw: string, allowed: readonly string[]) =>
+          (raw || '').split(',').map((s) => s.trim()).find((v) => (allowed as readonly string[]).includes(v)) || '';
+        setDetailForm({
+          name: data.name || '',
+          description: data.description || '',
+          occurredAt: data.occurred_at ? new Date(data.occurred_at).toISOString() : new Date().toISOString(),
+          status: data.status || 'pending',
+          category: data.category || 'incident',
+          additionalComments: data.additional_comments || '',
+          env: pick(data.environment || '', ENV_OPTIONS),
+          dev: pick(data.device || '', DEVICE_OPTIONS),
+          evidenceLink: data.evidence && !String(data.evidence).startsWith('incidents/') ? data.evidence : '',
+        });
+        const { data: cmts } = await supabase.from('incident_comments').select('*').eq('incident_id', data.id).order('created_at', { ascending: true });
+        setComments(cmts || []);
+        isInitialDetailLoad.current = false;
+      }
+    };
+    fetchIncident();
+  }, [open, incidentId]);
+
+  const handleUploadEvidence = async (incidentId: string, file?: File) => {
+    const fileToUpload = file || detailEvidenceFile;
+    if (!fileToUpload) return null;
+    const ext = fileToUpload.name.split('.').pop();
+    const filePath = `incidents/${incidentId}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage.from('project-files').upload(filePath, fileToUpload);
+    if (error) throw error;
+    return filePath;
+  };
+
+  useEffect(() => {
+    if (!open || !selected) return;
+    if (isInitialDetailLoad.current) return;
+    const handler = setTimeout(async () => {
+      const payload: any = {
+        name: detailForm.name,
+        description: detailForm.description,
+        environment: detailForm.env,
+        device: detailForm.dev,
+        occurred_at: new Date(detailForm.occurredAt).toISOString(),
+        status: detailForm.status,
+        category: detailForm.category,
+        evidence: selected.evidence,
+      };
+      if (detailEvidenceFile) {
+        try {
+          const path = await handleUploadEvidence(selected.id);
+          payload.evidence = path;
+          setDetailEvidenceFile(null);
+        } catch (e) {
+          console.error('Error uploading file:', e);
+        }
+      }
+      await supabase.from('incidents').update(payload).eq('id', selected.id);
+      setSelected((prev: any) => (prev ? { ...prev, ...payload } : prev));
+      onPatched?.(selected.id, payload);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [detailForm, selected, detailEvidenceFile, open]);
+
+  const addComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selected || !user || !commentText.trim()) return;
+    const { error } = await supabase.from('incident_comments').insert({ incident_id: selected.id, user_id: user.id, user_email: user.email, content: commentText.trim() });
+    if (!error) {
+      setCommentText('');
+      const { data: cmts } = await supabase.from('incident_comments').select('*').eq('incident_id', selected.id).order('created_at', { ascending: true });
+      setComments(cmts || []);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Detalle de incidencia</DialogTitle>
+          <DialogDescription>Ver información completa y comentarios</DialogDescription>
+        </DialogHeader>
+        {selected && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="md:col-span-2">
+                <Label>Nombre</Label>
+                <Input value={detailForm.name} onChange={(e) => setDetailForm((f) => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Estado</Label>
+                <Select value={detailForm.status} onValueChange={(v) => setDetailForm((f) => ({ ...f, status: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Categoría</Label>
+                <Select value={detailForm.category} onValueChange={(v) => setDetailForm((f) => ({ ...f, category: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Categoría" /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORY_OPTIONS.map((c) => (<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Fecha</Label>
+                <Input type="datetime-local" value={new Date(detailForm.occurredAt).toISOString().slice(0,16)} onChange={(e) => setDetailForm((f) => ({ ...f, occurredAt: new Date(e.target.value).toISOString() }))} />
+              </div>
+              <div>
+                <Label>Entorno</Label>
+                <Select value={detailForm.env} onValueChange={(v) => setDetailForm((f) => ({ ...f, env: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                  <SelectContent>
+                    {ENV_OPTIONS.map((opt) => (<SelectItem key={opt} value={opt}>{opt}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Dispositivo</Label>
+                <Select value={detailForm.dev} onValueChange={(v) => setDetailForm((f) => ({ ...f, dev: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                  <SelectContent>
+                    {DEVICE_OPTIONS.map((opt) => (<SelectItem key={opt} value={opt}>{opt}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="md:col-span-2">
+                <Label>Descripción</Label>
+                <Textarea value={detailForm.description} onChange={(e) => setDetailForm((f) => ({ ...f, description: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="pt-2 space-y-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Evidencia (archivo)</Label>
+                <Input type="file" accept="image/*,application/pdf" onChange={(e) => setDetailEvidenceFile(e.target.files?.[0] ?? null)} />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Evidencia actual</Label>
+                <div>
+                  {selected.evidence && String(selected.evidence).startsWith('incidents/') ? (
+                    <a className="text-primary underline" href="#" onClick={async (e) => { e.preventDefault(); const url = await getUrl(selected.evidence); if (url) window.open(url, '_blank'); }}>Ver archivo</a>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t">
+              <Label className="text-xs text-muted-foreground">Comentarios</Label>
+              <div className="space-y-3 max-h-48 overflow-auto mt-2 pr-1">
+                {comments.map((c) => (
+                  <div key={c.id} className="rounded-md border p-2">
+                    <div className="text-xs text-muted-foreground">{(c.user_email || 'Anónimo')} • {new Date(c.created_at).toLocaleString()}</div>
+                    <div className="text-sm whitespace-pre-wrap">{c.content}</div>
+                  </div>
+                ))}
+                {comments.length === 0 && (<div className="text-sm text-muted-foreground">Sin comentarios aún</div>)}
+              </div>
+              <form onSubmit={addComment} className="mt-3 flex gap-2">
+                <Input placeholder="Escribe un comentario..." value={commentText} onChange={(e) => setCommentText(e.target.value)} />
+                <Button type="submit" disabled={!user}>Enviar</Button>
+              </form>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}

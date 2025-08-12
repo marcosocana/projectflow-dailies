@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 import { es } from 'date-fns/locale';
 import type { TablesInsert } from '@/integrations/supabase/types';
 import { Trash2, Eye, Pencil, RefreshCcw, List } from 'lucide-react';
@@ -78,12 +79,7 @@ export default function DailiesModule({
   const [incidents, setIncidents] = useState<any[]>([]);
   // Estado para modal de detalle de incidencia
   const [incidentDetailsOpen, setIncidentDetailsOpen] = useState(false);
-  const [selectedIncident, setSelectedIncident] = useState<any | null>(null);
-  const [incidentForm, setIncidentForm] = useState<{ name: string; status: 'pending' | 'in_progress' | 'in_qa' | 'resolved' | 'closed'; description: string }>({
-    name: '',
-    status: 'pending',
-    description: ''
-  });
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const [personForm, setPersonForm] = useState({
     name: '',
     role: '',
@@ -391,39 +387,11 @@ export default function DailiesModule({
     return code ? `${code} - ${incident.name}` : incident.name;
   };
 
-  // Handlers del modal de incidencia
-  const [incidentLoading, setIncidentLoading] = useState(false);
-  const openIncidentDetails = async (incidentId: string) => {
-    try {
-      setIncidentLoading(true);
-      const { data } = await supabase.from('incidents').select('*').eq('id', incidentId).single();
-      if (data) {
-        setSelectedIncident(data);
-        setIncidentForm({
-          name: data.name || '',
-          status: (data.status as any) || 'pending',
-          description: data.description || ''
-        });
-        setIncidentDetailsOpen(true);
-      }
-    } finally {
-      setIncidentLoading(false);
-    }
+  const openIncidentDetails = (incidentId: string) => {
+    setSelectedIncidentId(incidentId);
+    setIncidentDetailsOpen(true);
   };
 
-  const handleIncidentSave = async () => {
-    if (!selectedIncident) return;
-    const update: any = {
-      name: incidentForm.name,
-      status: incidentForm.status,
-      description: incidentForm.description || null,
-    };
-    const { error } = await supabase.from('incidents').update(update).eq('id', selectedIncident.id);
-    if (!error) {
-      setIncidents(prev => prev.map(i => i.id === selectedIncident.id ? { ...i, ...update } : i));
-      setSelectedIncident(prev => prev ? { ...prev, ...update } : prev);
-    }
-  };
 
   const openDetails = async (task: any) => {
     setSelectedTask(task);
@@ -970,49 +938,13 @@ export default function DailiesModule({
       </Dialog>
 
       {/* Modal detalle de incidencia (desde Seguimiento diario) */}
-      <Dialog open={incidentDetailsOpen} onOpenChange={(o) => { setIncidentDetailsOpen(o); if (!o) { setSelectedIncident(null); } }}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedIncident ? `${getTicketCode(selectedIncident) ? getTicketCode(selectedIncident) + ' - ' : ''}${selectedIncident.name}` : 'Incidencia'}
-            </DialogTitle>
-            <DialogDescription>Editar información de la incidencia</DialogDescription>
-          </DialogHeader>
-
-          {selectedIncident ? (
-            <div className="space-y-4">
-              <div>
-                <Label>Nombre</Label>
-                <Input value={incidentForm.name} onChange={(e) => setIncidentForm(f => ({ ...f, name: e.target.value }))} />
-              </div>
-              <div>
-                <Label>Estado</Label>
-                <Select value={incidentForm.status} onValueChange={(v) => setIncidentForm(f => ({ ...f, status: v as any }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pendiente</SelectItem>
-                    <SelectItem value="in_progress">En curso</SelectItem>
-                    <SelectItem value="in_qa">En pruebas</SelectItem>
-                    <SelectItem value="resolved">Resuelta</SelectItem>
-                    <SelectItem value="closed">Cerrada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Descripción</Label>
-                <Textarea value={incidentForm.description} onChange={(e) => setIncidentForm(f => ({ ...f, description: e.target.value }))} />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIncidentDetailsOpen(false)}>Cerrar</Button>
-                <Button onClick={handleIncidentSave} disabled={incidentLoading}>Guardar</Button>
-              </div>
-            </div>
-          ) : (
-            <div className="text-sm text-muted-foreground">Cargando...</div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <IncidentDetailDialog
+        open={incidentDetailsOpen}
+        onOpenChange={(o) => { setIncidentDetailsOpen(o); if (!o) { setSelectedIncidentId(null); } }}
+        incidentId={selectedIncidentId}
+        onPatched={(id, payload) => {
+          setIncidents(prev => prev.map(i => i.id === id ? { ...i, ...payload } : i));
+        }}
+      />
     </div>);
 }
