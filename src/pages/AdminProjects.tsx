@@ -107,20 +107,21 @@ const AdminProjects = () => {
     const file = event.target.files?.[0];
     if (!file || !editingProject) return;
 
-    if (!file.type.startsWith('image/')) {
+    // Validaciones de requisitos
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
       toast({
-        title: "Error",
-        description: "Solo se permiten archivos de imagen",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Formato no permitido. Usa JPG, PNG o GIF.',
+        variant: 'destructive',
       });
       return;
     }
-
     if (file.size > 5 * 1024 * 1024) {
       toast({
-        title: "Error",
-        description: "La imagen no puede superar los 5MB",
-        variant: "destructive",
+        title: 'Error',
+        description: 'La imagen no puede superar los 5MB.',
+        variant: 'destructive',
       });
       return;
     }
@@ -133,33 +134,52 @@ const AdminProjects = () => {
       const { error: uploadError } = await supabase.storage
         .from('project-logos')
         .upload(fileName, file);
-
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
         .from('project-logos')
         .getPublicUrl(fileName);
 
-      // Update the editing project state
+      // Guardar inmediatamente en BD
+      const { error: updateError } = await supabase
+        .from('projects')
+        .update({ logo_url: publicUrl })
+        .eq('id', editingProject.id);
+      if (updateError) throw updateError;
+
       setEditingProject(prev => prev ? { ...prev, logo_url: publicUrl } : null);
+      await load();
 
       toast({
-        title: "Éxito",
-        description: "Logo subido correctamente",
+        title: 'Éxito',
+        description: 'Logo subido y guardado correctamente',
       });
     } catch (error: any) {
       toast({
-        title: "Error",
-        description: error.message || "Error al subir el logo",
-        variant: "destructive",
+        title: 'Error',
+        description: error.message || 'Error al subir/guardar el logo',
+        variant: 'destructive',
       });
     } finally {
       setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  const handleRemoveLogo = () => {
-    setEditingProject(prev => prev ? { ...prev, logo_url: null } : null);
+  const handleRemoveLogo = async () => {
+    if (!editingProject) return;
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({ logo_url: null })
+        .eq('id', editingProject.id);
+      if (error) throw error;
+      setEditingProject(prev => prev ? { ...prev, logo_url: null } : null);
+      await load();
+      toast({ title: 'Logo eliminado', description: 'Se ha eliminado el logo del proyecto' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'No se pudo eliminar el logo', variant: 'destructive' });
+    }
   };
 
   const handleSave = async () => {
@@ -441,7 +461,7 @@ const AdminProjects = () => {
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/*"
+                        accept="image/png,image/jpeg,image/gif"
                         onChange={handleLogoUpload}
                         className="hidden"
                       />
