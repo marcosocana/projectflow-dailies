@@ -517,10 +517,10 @@ setDetailForm({
   return (
   <div className="space-y-6">
     {/* KPIs arriba del todo */}
-    <div className="grid gap-4 md:grid-cols-4">
+    <div className="grid gap-3 md:grid-cols-12">
       {/* Total incidencias (categoría Incidencia) */}
       <Card
-        className={`transition-colors cursor-pointer ${categoryFilter === 'incident' && statusFilters.length === 0 ? 'ring-2 ring-primary bg-primary/10 border-primary/20' : 'hover:bg-accent/30'}`}
+        className={`md:col-span-3 transition-colors cursor-pointer ${categoryFilter === 'incident' && statusFilters.length === 0 ? 'ring-2 ring-primary bg-primary/10 border-primary/20' : 'hover:bg-accent/30'}`}
         onClick={() => {
           const isSelected = categoryFilter === 'incident' && statusFilters.length === 0;
           if (isSelected) {
@@ -535,25 +535,25 @@ setDetailForm({
         role="button"
         aria-label="Filtrar por Incidencias"
       >
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <AlertTriangle className="h-4 w-4" /> Total incidencias
+        <CardHeader className="p-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <AlertTriangle className="h-3 w-3" /> Total incidencias
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold">{totalIncidents}</div>
+        <CardContent className="p-3">
+          <div className="text-2xl font-bold">{totalIncidents}</div>
         </CardContent>
       </Card>
 
       {/* Incidencias por estado (solo cuentan las de categoría Incidencia) */}
-      <Card className="md:col-span-2">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ListChecks className="h-4 w-4" /> Incidencias por estado
+      <Card className="md:col-span-9">
+        <CardHeader className="p-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <ListChecks className="h-3 w-3" /> Incidencias por estado
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4">
+        <CardContent className="p-3">
+          <div className="flex flex-wrap gap-3">
             {Object.keys(statusCounts).length === 0 && (
               <span className="text-muted-foreground text-sm">Sin datos</span>
             )}
@@ -562,7 +562,7 @@ setDetailForm({
               return (
                 <div
                   key={key}
-                  className={`w-24 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
+                  className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                   onClick={() => {
                     if (selected) {
                       setCategoryFilter(null);
@@ -576,8 +576,8 @@ setDetailForm({
                   role="button"
                   aria-label={`Filtrar por estado ${STATUS_LABELS[key] || key}`}
                 >
-                  <div className="text-3xl font-bold">{statusCounts[key] || 0}</div>
-                  <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1`}>
+                  <div className="text-xl font-bold">{statusCounts[key] || 0}</div>
+                  <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[10px] px-1 py-0.5`}>
                     {STATUS_LABELS[key] || key}
                   </Badge>
                 </div>
@@ -590,7 +590,7 @@ setDetailForm({
                 return (
                   <div
                     key={k}
-                    className={`w-24 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
+                    className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
                       if (selected) {
                         setCategoryFilter(null);
@@ -602,8 +602,8 @@ setDetailForm({
                       setCurrentPage(1);
                     }}
                   >
-                    <div className="text-3xl font-bold">{statusCounts[k] || 0}</div>
-                    <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1">{k}</Badge>
+                    <div className="text-xl font-bold">{statusCounts[k] || 0}</div>
+                    <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">{k}</Badge>
                   </div>
                 );
               })}
@@ -614,10 +614,10 @@ setDetailForm({
     </div>
 
     {/* KPIs de mejoras (segunda fila) */}
-    <div className="grid gap-4 md:grid-cols-4">
+    <div className="grid gap-3 md:grid-cols-12">
       {/* Total mejoras (categoría Mejora) */}
       <Card
-        className={`transition-colors cursor-pointer ${categoryFilter === 'improvement' && statusFilters.length === 0 ? 'ring-2 ring-primary bg-primary/10 border-primary/20' : 'hover:bg-accent/30'}`}
+        className={`md:col-span-3 transition-colors cursor-pointer ${categoryFilter === 'improvement' && statusFilters.length === 0 ? 'ring-2 ring-primary bg-primary/10 border-primary/20' : 'hover:bg-accent/30'}`}
         onClick={() => {
           const isSelected = categoryFilter === 'improvement' && statusFilters.length === 0;
           if (isSelected) {
@@ -632,25 +632,25 @@ setDetailForm({
         role="button"
         aria-label="Filtrar por Mejoras"
       >
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <CheckCircle2 className="h-4 w-4" /> Total mejoras
+        <CardHeader className="p-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <CheckCircle2 className="h-3 w-3" /> Total mejoras
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold">{totalImprovements}</div>
+        <CardContent className="p-3">
+          <div className="text-2xl font-bold">{totalImprovements}</div>
         </CardContent>
       </Card>
 
       {/* Mejoras por estado */}
-      <Card className="md:col-span-3">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ListChecks className="h-4 w-4" /> Mejoras por estado
+      <Card className="md:col-span-9">
+        <CardHeader className="p-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <ListChecks className="h-3 w-3" /> Mejoras por estado
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4">
+        <CardContent className="p-3">
+          <div className="flex flex-wrap gap-3">
             {Object.keys(improvementStatusCounts).length === 0 && (
               <span className="text-muted-foreground text-sm">Sin datos</span>
             )}
@@ -673,8 +673,8 @@ setDetailForm({
                   role="button"
                   aria-label={`Filtrar mejoras por estado ${STATUS_LABELS[key] || key}`}
                 >
-                  <div className="text-3xl font-bold">{improvementStatusCounts[key] || 0}</div>
-                  <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1`}>
+                  <div className="text-xl font-bold">{improvementStatusCounts[key] || 0}</div>
+                  <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[10px] px-1 py-0.5`}>
                     {STATUS_LABELS[key] || key}
                   </Badge>
                 </div>
@@ -699,8 +699,8 @@ setDetailForm({
                       setCurrentPage(1);
                     }}
                   >
-                    <div className="text-3xl font-bold">{improvementStatusCounts[k] || 0}</div>
-                    <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1">{k}</Badge>
+                    <div className="text-xl font-bold">{improvementStatusCounts[k] || 0}</div>
+                    <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">{k}</Badge>
                   </div>
                 );
               })}
@@ -713,7 +713,7 @@ setDetailForm({
       <CardHeader>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <CardTitle>Gestión de Incidencias</CardTitle>
+              <CardTitle>Gestión de tareas</CardTitle>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button onClick={() => { resetForm(); setCreateOpen(true); }}>
