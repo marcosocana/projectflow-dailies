@@ -40,7 +40,7 @@ const CATEGORY_OPTIONS = [
 
 const ENV_OPTIONS = ['DEV','PRE','PRO','Otro','Desconocido'] as const;
 const DEVICE_OPTIONS = ['APP','Web','Otro','Desconocido'] as const;
-const EPIC_OPTIONS = ['Epic 1', 'Epic 2', 'Epic 3', 'Otro'] as const;
+// Dynamic epic options will be calculated from database
 
 // Status constants available module-wide to avoid TDZ issues
 const statusOrder = ['in_progress', 'pending', 'in_qa', 'resolved', 'closed'] as const;
@@ -120,6 +120,11 @@ const [loading, setLoading] = useState(false);
 const [channelFilter, setChannelFilter] = useState<string>('all');
 const [environmentFilter, setEnvironmentFilter] = useState<string>('all');
 const [epicFilter, setEpicFilter] = useState<string>('all');
+const [availableEpics, setAvailableEpics] = useState<string[]>([]);
+
+// KPI filtering state
+const [statusFilter, setStatusFilter] = useState<string>('all');
+const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
 const [search, setSearch] = useState('');
 const [sortKey, setSortKey] = useState<'name' | 'status' | 'occurred_at' | 'incident_number' | 'epic' | 'device' | 'environment'>('status');
@@ -166,13 +171,15 @@ const filtered = useMemo(() => {
     (channelFilter === 'all' || i.device === channelFilter) &&
     (environmentFilter === 'all' || i.environment === environmentFilter) &&
     (epicFilter === 'all' || i.epic === epicFilter) &&
+    (statusFilter === 'all' || i.status === statusFilter) &&
+    (categoryFilter === 'all' || i.category === categoryFilter) &&
     (term
       ? [i.id, `T${String(i.incident_number ?? 0).padStart(5, '0')}`, i.name, i.description, i.environment, i.device, i.status, i.category, i.additional_comments]
           .filter(Boolean)
           .some((v: any) => String(v).toLowerCase().includes(term))
       : true)
   );
-}, [incidents, channelFilter, environmentFilter, epicFilter, search]);
+}, [incidents, channelFilter, environmentFilter, epicFilter, statusFilter, categoryFilter, search]);
 
 const sorted = useMemo(() => {
   const arr = [...filtered];
@@ -223,6 +230,10 @@ const fetchIncidents = async () => {
     if (error) throw error;
     setIncidents(data || []);
     
+    // Extract unique epics from database
+    const epics = [...new Set(data?.map(i => i.epic).filter(Boolean))].sort();
+    setAvailableEpics(epics);
+    
     // Calculate KPIs (siempre con todos los datos, sin filtros de UI)
     const all = data || [];
 
@@ -256,7 +267,7 @@ const fetchIncidents = async () => {
 
 const resetForm = () => {
     setForm({
-      name: '', description: '', evidenceLink: '', environment: '', device: '', epic: '',
+      name: '', description: '', evidenceLink: '', environment: 'Desconocido', device: 'Desconocido', epic: '',
       occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', additionalComments: '',
     });
     setEvidenceFile(null);
@@ -448,12 +459,13 @@ const deviceValue = form.device || '';
             <div className="flex items-stretch gap-3 flex-wrap md:flex-nowrap">
               {/* Total como primer KPI */}
               {(() => {
-                const selected = false; // Remove status-based filtering
+                const selected = statusFilter === 'all' && categoryFilter === 'incident';
                 return (
                   <div
                     className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
-                      // No filtering logic needed for KPIs now
+                      setStatusFilter('all');
+                      setCategoryFilter('incident');
                       setCurrentPage(1);
                     }}
                     role="button"
@@ -467,13 +479,14 @@ const deviceValue = form.device || '';
 
               {/* Estados estándar en orden */}
               {statusOrder.map((key) => {
-                const selected = false; // Remove status-based KPI filtering
+                const selected = statusFilter === key && categoryFilter === 'incident';
                 return (
                   <div
                     key={key}
                     className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
-                      // No longer filter by status
+                      setStatusFilter(key);
+                      setCategoryFilter('incident');
                       setCurrentPage(1);
                     }}
                     role="button"
@@ -526,12 +539,13 @@ const deviceValue = form.device || '';
             <div className="flex items-stretch gap-3 flex-wrap md:flex-nowrap">
               {/* Total como primer KPI */}
               {(() => {
-                const selected = false; // Remove status-based filtering
+                const selected = statusFilter === 'all' && categoryFilter === 'improvement';
                 return (
                   <div
                     className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
-                      // No filtering logic needed
+                      setStatusFilter('all');
+                      setCategoryFilter('improvement');
                       setCurrentPage(1);
                     }}
                     role="button"
@@ -545,13 +559,14 @@ const deviceValue = form.device || '';
 
               {/* Estados estándar en orden */}
               {statusOrder.map((key) => {
-                const selected = false; // Remove status-based filtering
+                const selected = statusFilter === key && categoryFilter === 'improvement';
                 return (
                   <div
                     key={key}
                     className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
-                      // No filtering logic needed
+                      setStatusFilter(key);
+                      setCategoryFilter('improvement');
                       setCurrentPage(1);
                     }}
                     role="button"
@@ -667,7 +682,7 @@ const deviceValue = form.device || '';
               <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas</SelectItem>
-                {EPIC_OPTIONS.map((opt) => (
+                {availableEpics.map((opt) => (
                   <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                 ))}
               </SelectContent>
@@ -679,7 +694,7 @@ const deviceValue = form.device || '';
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Categoría</TableHead>
+              <TableHead></TableHead>
               <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('incident_number')}>
                 ID <ArrowUpDown className="inline h-4 w-4 ml-1" />
               </TableHead>
@@ -716,7 +731,7 @@ const deviceValue = form.device || '';
                 <TableCell>{new Date(i.occurred_at).toLocaleDateString('es-ES')}</TableCell>
                 <TableCell><StatusBadge status={i.status} /></TableCell>
                 <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="flex items-center justify-end gap-0">
                     <Button variant="ghost" size="icon" onClick={() => { setSelected(i); setDetailsOpen(true); }}>
                       <Eye className="h-4 w-4" />
                     </Button>
@@ -840,7 +855,7 @@ const deviceValue = form.device || '';
 <Select value={form.epic} onValueChange={(v) => setForm((f) => ({ ...f, epic: v }))}>
   <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
   <SelectContent>
-    {EPIC_OPTIONS.map((opt) => (
+    {availableEpics.map((opt) => (
       <SelectItem key={opt} value={opt}>{opt}</SelectItem>
     ))}
   </SelectContent>
