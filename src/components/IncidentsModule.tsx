@@ -27,10 +27,10 @@ type IncidentCategory = Database['public']['Enums']['incident_category'];
 
 const STATUS_OPTIONS = [
   { value: 'in_progress', label: 'En curso' },
-  { value: 'pending', label: 'Pendientes' },
+  { value: 'pending', label: 'Pendiente' },
   { value: 'in_qa', label: 'En pruebas' },
-  { value: 'resolved', label: 'Resueltas' },
-  { value: 'closed', label: 'Cerradas' },
+  { value: 'resolved', label: 'Resuelta' },
+  { value: 'closed', label: 'Cerrada' },
 ];
 
 const CATEGORY_OPTIONS = [
@@ -40,15 +40,16 @@ const CATEGORY_OPTIONS = [
 
 const ENV_OPTIONS = ['DEV','PRE','PRO','Otro'] as const;
 const DEVICE_OPTIONS = ['Web','APP','Otro'] as const;
+const EPIC_OPTIONS = ['Epic 1', 'Epic 2', 'Epic 3', 'Otro'] as const;
 
 // Status constants available module-wide to avoid TDZ issues
 const statusOrder = ['in_progress', 'pending', 'in_qa', 'resolved', 'closed'] as const;
 const STATUS_LABELS: Record<string, string> = {
   in_progress: 'En curso',
-  pending: 'Pendientes',
+  pending: 'Pendiente',
   in_qa: 'En pruebas',
-  resolved: 'Resueltas',
-  closed: 'Cerradas',
+  resolved: 'Resuelta',
+  closed: 'Cerrada',
 };
 const STATUS_BADGE_CLS: Record<string, string> = {
   in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
@@ -141,6 +142,7 @@ const [form, setForm] = useState({
   evidenceLink: '',
   environment: '',
   device: '',
+  epic: '',
   occurredAt: new Date().toISOString(),
   status: 'pending',
   category: 'incident',
@@ -253,9 +255,9 @@ const fetchIncidents = async () => {
 
   useEffect(() => { fetchIncidents(); }, [projectId]);
 
-  const resetForm = () => {
+const resetForm = () => {
     setForm({
-      name: '', description: '', evidenceLink: '', environment: '', device: '',
+      name: '', description: '', evidenceLink: '', environment: '', device: '', epic: '',
       occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', additionalComments: '',
     });
     setEvidenceFile(null);
@@ -289,6 +291,7 @@ const deviceValue = form.device || '';
           description: form.description,
           environment: environmentValue,
           device: deviceValue,
+          epic: form.epic,
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
           category: form.category,
@@ -310,6 +313,7 @@ const deviceValue = form.device || '';
           description: form.description,
           environment: environmentValue,
           device: deviceValue,
+          epic: form.epic,
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
           category: form.category,
@@ -342,6 +346,7 @@ const deviceValue = form.device || '';
       evidenceLink: incident.evidence && !incident.evidence.startsWith('incidents/') ? incident.evidence : '',
       environment: incident.environment || '',
       device: incident.device || '',
+      epic: incident.epic || '',
       occurredAt: incident.occurred_at ? new Date(incident.occurred_at).toISOString() : new Date().toISOString(),
       status: incident.status || 'pending',
       category: incident.category || 'incident',
@@ -378,10 +383,10 @@ const deviceValue = form.device || '';
       Description: i.description,
       Environment: i.environment,
       Device: i.device,
+      Epic: i.epic,
       OccurredAt: i.occurred_at,
       Status: i.status,
       Category: i.category,
-      Epic: i.epic,
       Evidence: i.evidence,
       AdditionalComments: i.additional_comments,
       Id: i.id,
@@ -404,10 +409,10 @@ const deviceValue = form.device || '';
         description: r.Description ?? r.Descripción ?? '',
         environment: r.Environment ?? r.Entorno ?? '',
         device: r.Device ?? r.Dispositivo ?? '',
+        epic: r.Epic ?? r['Épica'] ?? r.Epica ?? '',
         occurred_at: r.OccurredAt ?? r.Fecha ?? new Date().toISOString(),
         status: r.Status ?? 'pending',
         category: r.Category ?? 'incident',
-        epic: r.Epic ?? r['Épica'] ?? r.Epica ?? '',
         additional_comments: r.AdditionalComments ?? r['Comentarios adicionales'] ?? '',
         evidence: r.Evidence ?? null,
         project_id: projectId,
@@ -664,10 +669,14 @@ const deviceValue = form.device || '';
           </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
           <div>
             <Label>Buscar</Label>
             <Input placeholder="Buscar por texto o ID" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <div>
+            <Label>Canal</Label>
+            <Input placeholder="Buscar por canal" />
           </div>
           <div>
             <Label>Estado</Label>
@@ -717,43 +726,43 @@ const deviceValue = form.device || '';
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('category')}>
+                <ArrowUpDown className="inline h-4 w-4 ml-1" />
+              </TableHead>
               <TableHead>ID</TableHead>
               <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('name')}>
                 Nombre <ArrowUpDown className="inline h-4 w-4 ml-1" />
               </TableHead>
-              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('status')}>
-                Estado <ArrowUpDown className="inline h-4 w-4 ml-1" />
-              </TableHead>
-              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('category')}>
-                Categoría <ArrowUpDown className="inline h-4 w-4 ml-1" />
-              </TableHead>
+              <TableHead>Épica</TableHead>
+              <TableHead>Canal</TableHead>
+              <TableHead>Entorno</TableHead>
               <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('occurred_at')}>
                 Fecha <ArrowUpDown className="inline h-4 w-4 ml-1" />
               </TableHead>
-              <TableHead>Evidencia</TableHead>
+              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('status')}>
+                Estado <ArrowUpDown className="inline h-4 w-4 ml-1" />
+              </TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginatedIncidents.map((i) => (
               <TableRow key={i.id}>
+                <TableCell>
+                  {i.category === 'incident' ? (
+                    <span className="inline-grid place-items-center h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">i</span>
+                  ) : (
+                    <span className="inline-grid place-items-center h-5 w-5 rounded-sm bg-primary text-primary-foreground text-[10px] font-bold">M</span>
+                  )}
+                </TableCell>
                 <TableCell className="font-mono text-xs">{`T${String(i.incident_number ?? 0).padStart(5, '0')}`}</TableCell>
                 <TableCell className="font-medium">{i.name}</TableCell>
+                <TableCell>{i.epic || '—'}</TableCell>
+                <TableCell>{i.device || '—'}</TableCell>
+                <TableCell>{i.environment || '—'}</TableCell>
+                <TableCell>{new Date(i.occurred_at).toLocaleDateString()}</TableCell>
                 <TableCell>
                   <StatusBadge status={i.status} />
-                </TableCell>
-                <TableCell>
-                  <CategoryIcon category={i.category} />
-                </TableCell>
-                <TableCell>{new Date(i.occurred_at).toLocaleString()}</TableCell>
-                <TableCell>
-                  {i.evidence && i.evidence.startsWith('incidents/') ? (
-                    <a className="text-primary underline" target="_blank" rel="noreferrer" href="#" onClick={async (e) => { e.preventDefault(); const url = await getUrl(i.evidence); if (url) window.open(url, '_blank'); }}>
-                      Ver archivo
-                    </a>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
                 </TableCell>
                 <TableCell className="flex justify-end gap-2">
                   <Button variant="ghost" size="icon" onClick={async () => { setSelected(i); setDetailsOpen(true); }} aria-label="Ver más">
@@ -767,7 +776,7 @@ const deviceValue = form.device || '';
             ))}
             {paginatedIncidents.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">No hay incidencias</TableCell>
+                <TableCell colSpan={9} className="text-center text-muted-foreground">No hay incidencias</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -863,7 +872,7 @@ const deviceValue = form.device || '';
 </Select>
           </div>
           <div className="space-y-2">
-<Label>Dispositivo</Label>
+<Label>Canal</Label>
 <Select value={form.device} onValueChange={(v) => setForm((f) => ({ ...f, device: v }))}>
   <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
   <SelectContent>
@@ -874,8 +883,33 @@ const deviceValue = form.device || '';
 </Select>
           </div>
           <div className="space-y-2">
-            <Label>Fecha (ISO)</Label>
-            <Input type="datetime-local" value={new Date(form.occurredAt).toISOString().slice(0,16)} onChange={(e) => setForm((f) => ({ ...f, occurredAt: new Date(e.target.value).toISOString() }))} />
+<Label>Épica</Label>
+<Select value={form.epic} onValueChange={(v) => setForm((f) => ({ ...f, epic: v }))}>
+  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+  <SelectContent>
+    {EPIC_OPTIONS.map((opt) => (
+      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+    ))}
+  </SelectContent>
+</Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Fecha (España)</Label>
+            <Input 
+              type="datetime-local" 
+              value={(() => {
+                const date = new Date(form.occurredAt);
+                // Convert to Spain timezone
+                const spainDate = new Date(date.getTime() + (date.getTimezoneOffset() * 60000) + (2 * 3600000)); // UTC+2 for Spain
+                return spainDate.toISOString().slice(0,16);
+              })()} 
+              onChange={(e) => {
+                const localDate = new Date(e.target.value);
+                // Convert from Spain timezone to UTC
+                const utcDate = new Date(localDate.getTime() - (2 * 3600000)); // Convert from UTC+2 to UTC
+                setForm((f) => ({ ...f, occurredAt: utcDate.toISOString() }));
+              }} 
+            />
           </div>
           <div className="space-y-2">
             <Label>Estado</Label>

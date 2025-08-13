@@ -11,10 +11,10 @@ import { supabase } from '@/integrations/supabase/client';
 // Options same as IncidentsModule to keep UI identical
 const STATUS_OPTIONS = [
   { value: 'in_progress', label: 'En curso' },
-  { value: 'pending', label: 'Pendientes' },
+  { value: 'pending', label: 'Pendiente' },
   { value: 'in_qa', label: 'En pruebas' },
-  { value: 'resolved', label: 'Resueltas' },
-  { value: 'closed', label: 'Cerradas' },
+  { value: 'resolved', label: 'Resuelta' },
+  { value: 'closed', label: 'Cerrada' },
 ] as const;
 
 const CATEGORY_OPTIONS = [
@@ -50,6 +50,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
   const { getUrl } = useSignedUrl('project-files');
 
   const [selected, setSelected] = useState<any | null>(null);
+  const [createdByEmail, setCreatedByEmail] = useState<string>('');
   const [detailEvidenceFile, setDetailEvidenceFile] = useState<File | null>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState('');
@@ -79,6 +80,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
 
   const resetState = () => {
     setSelected(null);
+    setCreatedByEmail('');
     setComments([]);
     setCommentText('');
     setDetailEvidenceFile(null);
@@ -95,6 +97,15 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
       const { data } = await supabase.from('incidents').select('*').eq('id', incidentId).single();
       if (data) {
         setSelected(data);
+        
+        // Get creator email if available
+        if (data.created_by) {
+          const { data: userData } = await supabase.auth.admin.getUserById(data.created_by);
+          if (userData.user?.email) {
+            setCreatedByEmail(userData.user.email);
+          }
+        }
+        
         const pick = (raw: string, allowed: readonly string[]) =>
           (raw || '').split(',').map((s) => s.trim()).find((v) => (allowed as readonly string[]).includes(v)) || '';
         setDetailForm({
@@ -174,7 +185,15 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Detalle de incidencia</DialogTitle>
-          <DialogDescription>Ver información completa y comentarios</DialogDescription>
+          <DialogDescription>
+            Ver información completa y comentarios
+            {selected && (
+              <div className="mt-2 text-sm">
+                <span className="font-medium">Creada por:</span> {createdByEmail || 'Desconocido'} • 
+                <span className="font-medium ml-2">ID:</span> T{String(selected.incident_number ?? 0).padStart(5, '0')}
+              </div>
+            )}
+          </DialogDescription>
         </DialogHeader>
         {selected && (
           <div className="space-y-4">
@@ -222,7 +241,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
                 </Select>
               </div>
               <div>
-                <Label>Dispositivo</Label>
+                <Label>Canal</Label>
                 <Select value={detailForm.dev} onValueChange={(v) => setDetailForm((f) => ({ ...f, dev: v }))}>
                   <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>

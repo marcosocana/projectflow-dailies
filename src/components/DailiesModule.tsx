@@ -18,6 +18,9 @@ import { Trash2, Eye, Pencil, RefreshCcw, List } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 type TaskStatus = 'pending' | 'in_progress' | 'resolved';
 interface DailiesModuleProps {
   projectId: string;
@@ -48,13 +51,13 @@ export default function DailiesModule({
   const [editForm, setEditForm] = useState<{
     title: string;
     description: string;
-    personId: string;
+    personIds: string[];
     incidentId: string;
     status: TaskStatus;
   }>({
     title: '',
     description: '',
-    personId: '',
+    personIds: [],
     incidentId: '',
     status: 'pending'
   });
@@ -88,13 +91,13 @@ export default function DailiesModule({
   const [taskForm, setTaskForm] = useState<{
     title: string;
     description: string;
-    personId: string;
+    personIds: string[];
     incidentId: string;
     status: TaskStatus;
   }>({
     title: '',
     description: '',
-    personId: '',
+    personIds: [],
     incidentId: '',
     status: 'pending'
   });
@@ -196,7 +199,7 @@ export default function DailiesModule({
       description: taskForm.description || null,
       project_id: projectId,
       daily_id: dailyId,
-      person_id: taskForm.personId || null,
+      person_id: taskForm.personIds.length > 0 ? taskForm.personIds[0] : null, // For now, use first person
       incident_id: taskForm.incidentId || null,
       status: taskForm.status ?? 'pending'
     };
@@ -219,7 +222,7 @@ export default function DailiesModule({
     setTaskForm({
       title: '',
       description: '',
-      personId: '',
+      personIds: [],
       incidentId: '',
       status: 'pending'
     });
@@ -411,7 +414,7 @@ export default function DailiesModule({
     setEditForm({
       title: task.title || '',
       description: task.description || '',
-      personId: task.person_id || '',
+      personIds: task.person_id ? [task.person_id] : [],
       incidentId: task.incident_id || '',
       status: task.status as TaskStatus || 'pending'
     });
@@ -448,7 +451,7 @@ export default function DailiesModule({
       const update = {
         title: editForm.title,
         description: editForm.description || null,
-        person_id: editForm.personId || null,
+        person_id: editForm.personIds.length > 0 ? editForm.personIds[0] : null,
         incident_id: editForm.incidentId || null,
         status: editForm.status
       };
@@ -541,9 +544,20 @@ export default function DailiesModule({
                     const inc = incidents.find((i) => i.id === t.incident_id);
                     return (
                       <TableRow key={t.id}>
-                        <TableCell>
-                          {t.status === 'in_progress' ? 'En curso' : t.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
-                        </TableCell>
+                         <TableCell>
+                           <Badge 
+                             variant="outline"
+                             className={
+                               t.status === 'in_progress' 
+                                 ? 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent'
+                                 : t.status === 'resolved' 
+                                 ? 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent'
+                                 : 'bg-muted text-muted-foreground border-transparent'
+                             }
+                           >
+                             {t.status === 'in_progress' ? 'En curso' : t.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
+                           </Badge>
+                         </TableCell>
                         <TableCell>
                           <div className="font-medium">{t.title}</div>
                           {typeof t.description === 'string' && (
@@ -613,17 +627,56 @@ export default function DailiesModule({
             }))} required />
             </div>
             <div>
-              <Label>Persona</Label>
-              <Select value={taskForm.personId || 'none'} onValueChange={v => setTaskForm(f => ({
-              ...f,
-              personId: v === 'none' ? '' : v
-            }))}>
-                <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin asignar</SelectItem>
-                  {people.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label>Personas</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between"
+                  >
+                    {taskForm.personIds.length === 0 
+                      ? "Sin asignar" 
+                      : `${taskForm.personIds.length} persona${taskForm.personIds.length > 1 ? 's' : ''} seleccionada${taskForm.personIds.length > 1 ? 's' : ''}`
+                    }
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[200px] p-0">
+                  <Command>
+                    <CommandList>
+                      <CommandEmpty>No se encontraron personas.</CommandEmpty>
+                      <CommandGroup>
+                        {people.map((person) => (
+                          <CommandItem
+                            key={person.id}
+                            value={person.id}
+                            onSelect={() => {
+                              setTaskForm(f => ({
+                                ...f,
+                                personIds: f.personIds.includes(person.id)
+                                  ? f.personIds.filter(id => id !== person.id)
+                                  : [...f.personIds, person.id]
+                              }));
+                            }}
+                          >
+                            <div className="flex items-center gap-2 flex-1">
+                              <div 
+                                className="w-3 h-3 rounded-full" 
+                                style={{ backgroundColor: person.color }}
+                              />
+                              <span>{person.name}</span>
+                            </div>
+                            <Checkbox 
+                              checked={taskForm.personIds.includes(person.id)}
+                              className="ml-auto"
+                            />
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div>
               <Label>Estado</Label>
@@ -654,6 +707,7 @@ export default function DailiesModule({
             }))}>
                 <SelectTrigger><SelectValue placeholder="Ninguna" /></SelectTrigger>
                 <SelectContent>
+                  <CommandInput placeholder="Buscar incidencia..." />
                   <SelectItem value="none">Ninguna</SelectItem>
                   {incidents.map(i => <SelectItem key={i.id} value={i.id}>{formatIncidentLabel(i)}</SelectItem>)}
                 </SelectContent>
@@ -690,17 +744,56 @@ export default function DailiesModule({
               }))} required />
                 </div>
                 <div>
-                  <Label>Persona</Label>
-                  <Select value={editForm.personId || 'none'} onValueChange={v => setEditForm(f => ({
-                ...f,
-                personId: v === 'none' ? '' : v
-              }))}>
-                    <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sin asignar</SelectItem>
-                      {people.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Label>Personas</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className="w-full justify-between"
+                      >
+                        {editForm.personIds.length === 0 
+                          ? "Sin asignar" 
+                          : `${editForm.personIds.length} persona${editForm.personIds.length > 1 ? 's' : ''} seleccionada${editForm.personIds.length > 1 ? 's' : ''}`
+                        }
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[200px] p-0">
+                      <Command>
+                        <CommandList>
+                          <CommandEmpty>No se encontraron personas.</CommandEmpty>
+                          <CommandGroup>
+                            {people.map((person) => (
+                              <CommandItem
+                                key={person.id}
+                                value={person.id}
+                                onSelect={() => {
+                                  setEditForm(f => ({
+                                    ...f,
+                                    personIds: f.personIds.includes(person.id)
+                                      ? f.personIds.filter(id => id !== person.id)
+                                      : [...f.personIds, person.id]
+                                  }));
+                                }}
+                              >
+                                <div className="flex items-center gap-2 flex-1">
+                                  <div 
+                                    className="w-3 h-3 rounded-full" 
+                                    style={{ backgroundColor: person.color }}
+                                  />
+                                  <span>{person.name}</span>
+                                </div>
+                                <Checkbox 
+                                  checked={editForm.personIds.includes(person.id)}
+                                  className="ml-auto"
+                                />
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div>
                   <Label>Estado</Label>
@@ -731,6 +824,7 @@ export default function DailiesModule({
               }))}>
                     <SelectTrigger><SelectValue placeholder="Ninguna" /></SelectTrigger>
                     <SelectContent>
+                      <CommandInput placeholder="Buscar incidencia..." />
                       <SelectItem value="none">Ninguna</SelectItem>
                       {incidents.map(i => <SelectItem key={i.id} value={i.id}>{formatIncidentLabel(i)}</SelectItem>)}
                     </SelectContent>
@@ -784,9 +878,18 @@ export default function DailiesModule({
                         <div className="font-medium">{task.title}</div>
                         {task.description && <div className="text-sm text-muted-foreground mt-1">{task.description}</div>}
                         <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                          <span>
+                          <Badge 
+                            variant="outline"
+                            className={
+                              task.status === 'in_progress' 
+                                ? 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent'
+                                : task.status === 'resolved' 
+                                ? 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent'
+                                : 'bg-muted text-muted-foreground border-transparent'
+                            }
+                          >
                             {task.status === 'in_progress' ? 'En curso' : task.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
-                          </span>
+                          </Badge>
                           {person && <div className="flex items-center gap-1">
                               <span className="h-2 w-2 rounded" style={{
                           backgroundColor: person.color
@@ -860,7 +963,18 @@ export default function DailiesModule({
                   const person = people.find(p => p.id === task.person_id);
                   return <TableRow key={task.id}>
                         <TableCell>
-                          {task.status === 'in_progress' ? 'En curso' : task.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
+                          <Badge 
+                            variant="outline"
+                            className={
+                              task.status === 'in_progress' 
+                                ? 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent'
+                                : task.status === 'resolved' 
+                                ? 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent'
+                                : 'bg-muted text-muted-foreground border-transparent'
+                            }
+                          >
+                            {task.status === 'in_progress' ? 'En curso' : task.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <div className="font-medium">{task.title}</div>
