@@ -26,8 +26,8 @@ type IncidentStatus = Database['public']['Enums']['incident_status'];
 type IncidentCategory = Database['public']['Enums']['incident_category'];
 
 const STATUS_OPTIONS = [
-  { value: 'in_progress', label: 'En curso' },
   { value: 'pending', label: 'Pendiente' },
+  { value: 'in_progress', label: 'En curso' },
   { value: 'in_qa', label: 'En pruebas' },
   { value: 'resolved', label: 'Resuelta' },
   { value: 'closed', label: 'Cerrada' },
@@ -43,17 +43,17 @@ const DEVICE_OPTIONS = ['APP','Web','Otro','Desconocido'] as const;
 // Dynamic epic options will be calculated from database
 
 // Status constants available module-wide to avoid TDZ issues
-const statusOrder = ['in_progress', 'pending', 'in_qa', 'resolved', 'closed'] as const;
+const statusOrder = ['pending', 'in_progress', 'in_qa', 'resolved', 'closed'] as const;
 const STATUS_LABELS: Record<string, string> = {
-  in_progress: 'En curso',
   pending: 'Pendiente',
+  in_progress: 'En curso',
   in_qa: 'En pruebas',
   resolved: 'Resuelta',
   closed: 'Cerrada',
 };
 const STATUS_BADGE_CLS: Record<string, string> = {
-  in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
   pending: 'bg-muted text-muted-foreground',
+  in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
   in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]',
   resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
   closed: 'bg-destructive text-destructive-foreground',
@@ -840,8 +840,8 @@ const deviceValue = form.device || '';
     <Dialog open={createOpen} onOpenChange={setCreateOpen}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{editingId ? 'Editar incidencia' : 'Crear incidencia'}</DialogTitle>
-          <DialogDescription>Completa la información de la incidencia o mejora</DialogDescription>
+          <DialogTitle>{editingId ? 'Editar tarea' : 'Crear tarea'}</DialogTitle>
+          <DialogDescription>Completa la información de la tarea</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
@@ -899,15 +899,23 @@ const deviceValue = form.device || '';
               }} 
             />
           </div>
-          <div className="space-y-2">
-            <Label>Estado</Label>
-            <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-              <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          </div>
+           <div className="space-y-2">
+             <Label>Estado</Label>
+             <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
+               <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
+               <SelectContent>
+                 {STATUS_OPTIONS.map((s) => (
+                   <SelectItem key={s.value} value={s.value}>
+                     <div className="flex items-center gap-2">
+                       <Badge variant="outline" className={`${STATUS_BADGE_CLS[s.value] || 'bg-accent text-accent-foreground'} border-transparent text-[10px] px-1 py-0.5`}>
+                         {s.label}
+                       </Badge>
+                     </div>
+                   </SelectItem>
+                 ))}
+               </SelectContent>
+             </Select>
+           </div>
           <div className="space-y-2">
             <Label>Categoría</Label>
             <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
@@ -925,15 +933,11 @@ const deviceValue = form.device || '';
             <Label>Evidencia (archivo)</Label>
             <Input type="file" accept="image/*,application/pdf" onChange={(e) => setEvidenceFile(e.target.files?.[0] ?? null)} />
           </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label>Comentarios adicionales</Label>
-            <Textarea value={form.additionalComments} onChange={(e) => setForm((f) => ({ ...f, additionalComments: e.target.value }))} />
-          </div>
           <div className="md:col-span-2 flex gap-2 justify-end">
             {editingId && <Button type="button" variant="outline" onClick={() => { resetForm(); setCreateOpen(false); }}>Cancelar</Button>}
-            <Button type="submit" className="flex items-center gap-2">
-              <Plus className="h-4 w-4" /> {editingId ? 'Guardar cambios' : 'Crear incidencia'}
-            </Button>
+             <Button type="submit" className="flex items-center gap-2">
+               <Plus className="h-4 w-4" /> {editingId ? 'Guardar cambios' : 'Crear tarea'}
+             </Button>
           </div>
         </form>
       </DialogContent>
