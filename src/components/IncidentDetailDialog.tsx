@@ -100,9 +100,25 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         
         // Get creator email if available
         if (data.created_by) {
-          const { data: userData } = await supabase.auth.admin.getUserById(data.created_by);
-          if (userData.user?.email) {
-            setCreatedByEmail(userData.user.email);
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('user_id')
+            .eq('user_id', data.created_by)
+            .single();
+          
+          if (profile) {
+            const { data: userAuth } = await supabase.auth.getUser();
+            if (userAuth.user?.id === data.created_by) {
+              setCreatedByEmail(userAuth.user.email || 'Desconocido');
+            } else {
+              // For other users, we can't get email due to privacy, so show profile info
+              const { data: profileData } = await supabase
+                .from('profiles')
+                .select('full_name')
+                .eq('user_id', data.created_by)
+                .single();
+              setCreatedByEmail(profileData?.full_name || 'Usuario registrado');
+            }
           }
         }
         
@@ -184,13 +200,13 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Detalle de incidencia</DialogTitle>
+          <DialogTitle>
+            {selected ? `Detalle T${String(selected.incident_number ?? 0).padStart(5, '0')}` : 'Detalle de incidencia'}
+          </DialogTitle>
           <DialogDescription>
-            Ver información completa y comentarios
             {selected && (
               <div className="mt-2 text-sm">
-                <span className="font-medium">Creada por:</span> {createdByEmail || 'Desconocido'} • 
-                <span className="font-medium ml-2">ID:</span> T{String(selected.incident_number ?? 0).padStart(5, '0')}
+                <span className="font-medium">Creado por:</span> {createdByEmail || 'Desconocido'}
               </div>
             )}
           </DialogDescription>
@@ -229,7 +245,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
               </div>
               <div>
                 <Label>Fecha</Label>
-                <Input type="datetime-local" value={new Date(detailForm.occurredAt).toISOString().slice(0,16)} onChange={(e) => setDetailForm((f) => ({ ...f, occurredAt: new Date(e.target.value).toISOString() }))} />
+                <Input type="datetime-local" value={new Date(new Date(detailForm.occurredAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0,16)} onChange={(e) => setDetailForm((f) => ({ ...f, occurredAt: new Date(e.target.value).toISOString() }))} />
               </div>
               <div>
                 <Label>Entorno</Label>

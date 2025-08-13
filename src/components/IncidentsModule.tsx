@@ -127,8 +127,8 @@ const [statusFilter, setStatusFilter] = useState<string>('all');
 const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
 const [search, setSearch] = useState('');
-const [sortKey, setSortKey] = useState<'name' | 'status' | 'occurred_at' | 'incident_number' | 'epic' | 'device' | 'environment'>('status');
-const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+const [sortKey, setSortKey] = useState<'name' | 'status' | 'occurred_at' | 'incident_number' | 'epic' | 'device' | 'environment'>('occurred_at');
+const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
 const toggleSort = (key: 'name' | 'status' | 'occurred_at' | 'incident_number' | 'epic' | 'device' | 'environment') => {
   setSortDir((d) => (sortKey === key ? (d === 'asc' ? 'desc' : 'asc') : 'asc'));
@@ -464,8 +464,13 @@ const deviceValue = form.device || '';
                   <div
                     className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
-                      setStatusFilter('all');
-                      setCategoryFilter('incident');
+                      if (statusFilter === 'all' && categoryFilter === 'incident') {
+                        setStatusFilter('all');
+                        setCategoryFilter('all');
+                      } else {
+                        setStatusFilter('all');
+                        setCategoryFilter('incident');
+                      }
                       setCurrentPage(1);
                     }}
                     role="button"
@@ -485,8 +490,13 @@ const deviceValue = form.device || '';
                     key={key}
                     className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
-                      setStatusFilter(key);
-                      setCategoryFilter('incident');
+                      if (statusFilter === key && categoryFilter === 'incident') {
+                        setStatusFilter('all');
+                        setCategoryFilter('all');
+                      } else {
+                        setStatusFilter(key);
+                        setCategoryFilter('incident');
+                      }
                       setCurrentPage(1);
                     }}
                     role="button"
@@ -544,8 +554,13 @@ const deviceValue = form.device || '';
                   <div
                     className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
-                      setStatusFilter('all');
-                      setCategoryFilter('improvement');
+                      if (statusFilter === 'all' && categoryFilter === 'improvement') {
+                        setStatusFilter('all');
+                        setCategoryFilter('all');
+                      } else {
+                        setStatusFilter('all');
+                        setCategoryFilter('improvement');
+                      }
                       setCurrentPage(1);
                     }}
                     role="button"
@@ -565,8 +580,13 @@ const deviceValue = form.device || '';
                     key={key}
                     className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
-                      setStatusFilter(key);
-                      setCategoryFilter('improvement');
+                      if (statusFilter === key && categoryFilter === 'improvement') {
+                        setStatusFilter('all');
+                        setCategoryFilter('all');
+                      } else {
+                        setStatusFilter(key);
+                        setCategoryFilter('improvement');
+                      }
                       setCurrentPage(1);
                     }}
                     role="button"
