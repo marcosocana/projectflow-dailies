@@ -103,25 +103,22 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Vacaciones</h1>
-          <p className="text-muted-foreground">Gestión de vacaciones del equipo</p>
+          <h1 className="text-3xl font-bold">Gestión de ausencias</h1>
+          <p className="text-muted-foreground">Gestión de ausencias del equipo</p>
         </div>
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={() => setSelectedUser(user?.id || '')}>
               <Plus className="h-4 w-4 mr-2" />
-              Nueva vacación
+              Añadir ausencia
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {editingVacation ? 'Editar vacación' : 'Nueva vacación'}
+                {editingVacation ? 'Editar ausencia' : 'Registrar ausencia'}
               </DialogTitle>
-              <DialogDescription>
-                Registra un periodo de vacaciones
-              </DialogDescription>
             </DialogHeader>
             
             <form onSubmit={handleSubmit} className="space-y-4">

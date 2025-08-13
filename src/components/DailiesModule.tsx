@@ -560,10 +560,10 @@ export default function DailiesModule({
                          </TableCell>
                         <TableCell>
                           <div className="font-medium">{t.title}</div>
-                          {typeof t.description === 'string' && (
-                            <div className="text-xs text-muted-foreground">
-                              {t.description.length > 150 ? `${t.description.slice(0, 150)}...` : t.description}
-                            </div>
+                           {typeof t.description === 'string' && (
+                             <div className="text-xs text-muted-foreground">
+                               {t.description.length > 70 ? `${t.description.slice(0, 70)}...` : t.description}
+                             </div>
                           )}
                         </TableCell>
                         <TableCell>
@@ -576,15 +576,15 @@ export default function DailiesModule({
                             <span className="text-muted-foreground">—</span>
                           )}
                         </TableCell>
-                        <TableCell>
-                          {inc ? (
-                            <Button variant="link" className="px-0" onClick={() => openIncidentDetails(inc.id)}>
-                              {formatIncidentLabel(inc)}
-                            </Button>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
+                         <TableCell>
+                           {inc ? (
+                             <Button variant="link" className="px-0" onClick={() => openIncidentDetails(inc.id)}>
+                               {getTicketCode(inc)}
+                             </Button>
+                           ) : (
+                             <span className="text-muted-foreground">—</span>
+                           )}
+                         </TableCell>
                         <TableCell className="flex gap-1">
                           <Button variant="ghost" size="icon" onClick={() => openDetails(t)} aria-label="Ver">
                             <Eye className="h-4 w-4" />

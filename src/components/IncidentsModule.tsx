@@ -38,8 +38,8 @@ const CATEGORY_OPTIONS = [
   { value: 'improvement', label: 'Mejora' },
 ];
 
-const ENV_OPTIONS = ['DEV','PRE','PRO','Otro'] as const;
-const DEVICE_OPTIONS = ['Web','APP','Otro'] as const;
+const ENV_OPTIONS = ['DEV','PRE','PRO','Otro','Desconocido'] as const;
+const DEVICE_OPTIONS = ['APP','Web','Otro','Desconocido'] as const;
 const EPIC_OPTIONS = ['Epic 1', 'Epic 2', 'Epic 3', 'Otro'] as const;
 
 // Status constants available module-wide to avoid TDZ issues
@@ -75,17 +75,11 @@ function StatusBadge({ status }: { status: IncidentStatus }) {
 function CategoryIcon({ category }: { category: IncidentCategory }) {
   if (category === 'incident') {
     return (
-      <div className="flex items-center gap-2">
-        <span className="inline-grid place-items-center h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">i</span>
-        <span className="text-sm text-muted-foreground">Incidencia</span>
-      </div>
+      <span className="inline-grid place-items-center h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">i</span>
     );
   }
   return (
-    <div className="flex items-center gap-2">
-      <span className="inline-grid place-items-center h-5 w-5 rounded-sm bg-primary text-primary-foreground text-[10px] font-bold">M</span>
-      <span className="text-sm text-muted-foreground">Mejora</span>
-    </div>
+    <span className="inline-grid place-items-center h-5 w-5 rounded-sm bg-primary text-primary-foreground text-[10px] font-bold">M</span>
   );
 }
 
@@ -123,14 +117,15 @@ export default function IncidentsModule({ projectId }: IncidentsModuleProps) {
 
 const [incidents, setIncidents] = useState<any[]>([]);
 const [loading, setLoading] = useState(false);
-const [statusFilters, setStatusFilters] = useState<IncidentStatus[]>([]);
-const [categoryFilter, setCategoryFilter] = useState<IncidentCategory | null>(null);
+const [channelFilter, setChannelFilter] = useState<string>('all');
+const [environmentFilter, setEnvironmentFilter] = useState<string>('all');
+const [epicFilter, setEpicFilter] = useState<string>('all');
 
 const [search, setSearch] = useState('');
-const [sortKey, setSortKey] = useState<'name' | 'status' | 'category' | 'occurred_at'>('status');
+const [sortKey, setSortKey] = useState<'name' | 'status' | 'occurred_at' | 'incident_number' | 'epic' | 'device' | 'environment'>('status');
 const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-const toggleSort = (key: 'name' | 'status' | 'category' | 'occurred_at') => {
+const toggleSort = (key: 'name' | 'status' | 'occurred_at' | 'incident_number' | 'epic' | 'device' | 'environment') => {
   setSortDir((d) => (sortKey === key ? (d === 'asc' ? 'desc' : 'asc') : 'asc'));
   setSortKey(key);
 };
@@ -168,15 +163,16 @@ const [pageSize, setPageSize] = useState(25);
 const filtered = useMemo(() => {
   const term = search.trim().toLowerCase();
   return incidents.filter((i) =>
-    (statusFilters.length ? statusFilters.includes(i.status) : true) &&
-    (categoryFilter ? i.category === categoryFilter : true) &&
+    (channelFilter === 'all' || i.device === channelFilter) &&
+    (environmentFilter === 'all' || i.environment === environmentFilter) &&
+    (epicFilter === 'all' || i.epic === epicFilter) &&
     (term
       ? [i.id, `T${String(i.incident_number ?? 0).padStart(5, '0')}`, i.name, i.description, i.environment, i.device, i.status, i.category, i.additional_comments]
           .filter(Boolean)
           .some((v: any) => String(v).toLowerCase().includes(term))
       : true)
   );
-}, [incidents, statusFilters, categoryFilter, search]);
+}, [incidents, channelFilter, environmentFilter, epicFilter, search]);
 
 const sorted = useMemo(() => {
   const arr = [...filtered];
@@ -195,6 +191,9 @@ const sorted = useMemo(() => {
       };
       av = idx(a.status);
       bv = idx(b.status);
+    } else if (key === 'incident_number') {
+      av = a.incident_number || 0;
+      bv = b.incident_number || 0;
     }
 
     if (av < bv) return sortDir === 'asc' ? -1 : 1;
@@ -449,18 +448,12 @@ const deviceValue = form.device || '';
             <div className="flex items-stretch gap-3 flex-wrap md:flex-nowrap">
               {/* Total como primer KPI */}
               {(() => {
-                const selected = categoryFilter === 'incident' && statusFilters.length === 0;
+                const selected = false; // Remove status-based filtering
                 return (
                   <div
                     className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
-                      if (selected) {
-                        setCategoryFilter(null);
-                        setStatusFilters([]);
-                      } else {
-                        setCategoryFilter('incident' as any);
-                        setStatusFilters([]);
-                      }
+                      // No filtering logic needed for KPIs now
                       setCurrentPage(1);
                     }}
                     role="button"
@@ -474,19 +467,13 @@ const deviceValue = form.device || '';
 
               {/* Estados estándar en orden */}
               {statusOrder.map((key) => {
-                const selected = categoryFilter === 'incident' && statusFilters.length === 1 && statusFilters[0] === (key as any);
+                const selected = false; // Remove status-based KPI filtering
                 return (
                   <div
                     key={key}
                     className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
-                      if (selected) {
-                        setCategoryFilter(null);
-                        setStatusFilters([]);
-                      } else {
-                        setCategoryFilter('incident' as any);
-                        setStatusFilters([key as any]);
-                      }
+                      // No longer filter by status
                       setCurrentPage(1);
                     }}
                     role="button"
@@ -504,19 +491,13 @@ const deviceValue = form.device || '';
               {Object.keys(statusCounts)
                 .filter((k) => !(statusOrder as readonly string[]).includes(k))
                 .map((k) => {
-                  const selected = categoryFilter === 'incident' && statusFilters.length === 1 && statusFilters[0] === (k as any);
+                  const selected = false; // Remove status-based filtering
                   return (
                     <div
                       key={k}
                       className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                       onClick={() => {
-                        if (selected) {
-                          setCategoryFilter(null);
-                          setStatusFilters([]);
-                        } else {
-                          setCategoryFilter('incident' as any);
-                          setStatusFilters([k as any]);
-                        }
+                        // No filtering logic needed
                         setCurrentPage(1);
                       }}
                     >
@@ -545,18 +526,12 @@ const deviceValue = form.device || '';
             <div className="flex items-stretch gap-3 flex-wrap md:flex-nowrap">
               {/* Total como primer KPI */}
               {(() => {
-                const selected = categoryFilter === 'improvement' && statusFilters.length === 0;
+                const selected = false; // Remove status-based filtering
                 return (
                   <div
                     className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
-                      if (selected) {
-                        setCategoryFilter(null);
-                        setStatusFilters([]);
-                      } else {
-                        setCategoryFilter('improvement' as any);
-                        setStatusFilters([]);
-                      }
+                      // No filtering logic needed
                       setCurrentPage(1);
                     }}
                     role="button"
@@ -570,19 +545,13 @@ const deviceValue = form.device || '';
 
               {/* Estados estándar en orden */}
               {statusOrder.map((key) => {
-                const selected = categoryFilter === 'improvement' && statusFilters.length === 1 && statusFilters[0] === (key as any);
+                const selected = false; // Remove status-based filtering
                 return (
                   <div
                     key={key}
                     className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                     onClick={() => {
-                      if (selected) {
-                        setCategoryFilter(null);
-                        setStatusFilters([]);
-                      } else {
-                        setCategoryFilter('improvement' as any);
-                        setStatusFilters([key as any]);
-                      }
+                      // No filtering logic needed
                       setCurrentPage(1);
                     }}
                     role="button"
@@ -600,19 +569,13 @@ const deviceValue = form.device || '';
               {Object.keys(improvementStatusCounts)
                 .filter((k) => !(statusOrder as readonly string[]).includes(k))
                 .map((k) => {
-                  const selected = categoryFilter === 'improvement' && statusFilters.length === 1 && statusFilters[0] === (k as any);
+                  const selected = false; // Remove status-based filtering
                   return (
                     <div
                       key={k}
                       className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
                       onClick={() => {
-                        if (selected) {
-                          setCategoryFilter(null);
-                          setStatusFilters([]);
-                        } else {
-                          setCategoryFilter('improvement' as any);
-                          setStatusFilters([k as any]);
-                        }
+                        // No filtering logic needed
                         setCurrentPage(1);
                       }}
                     >
@@ -676,47 +639,37 @@ const deviceValue = form.device || '';
           </div>
           <div>
             <Label>Canal</Label>
-            <Input placeholder="Buscar por canal" />
-          </div>
-          <div>
-            <Label>Estado</Label>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="w-full justify-between">
-                  {statusFilters.length ? `${statusFilters.length} seleccionados` : 'Todos'}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="start">
-                <DropdownMenuCheckboxItem
-                  checked={statusFilters.length === 0}
-                  onCheckedChange={() => setStatusFilters([])}
-                >
-                  Todos
-                </DropdownMenuCheckboxItem>
-                {STATUS_OPTIONS.map((s) => (
-                  <DropdownMenuCheckboxItem
-                    key={s.value}
-                    checked={statusFilters.includes(s.value as IncidentStatus)}
-                    onCheckedChange={(checked) => {
-                      setStatusFilters((prev) => {
-                        if (checked) return [...prev, s.value as IncidentStatus];
-                        return prev.filter((v) => v !== (s.value as IncidentStatus));
-                      });
-                    }}
-                  >
-                    {s.label}
-                  </DropdownMenuCheckboxItem>
+            <Select value={channelFilter} onValueChange={setChannelFilter}>
+              <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {DEVICE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                 ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </SelectContent>
+            </Select>
           </div>
           <div>
-            <Label>Categoría</Label>
-            <Select value={categoryFilter ?? 'all'} onValueChange={(v) => setCategoryFilter(v === 'all' ? null : (v as IncidentCategory))}>
+            <Label>Entorno</Label>
+            <Select value={environmentFilter} onValueChange={setEnvironmentFilter}>
+              <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {ENV_OPTIONS.map((opt) => (
+                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Épica</Label>
+            <Select value={epicFilter} onValueChange={setEpicFilter}>
               <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas</SelectItem>
-                {CATEGORY_OPTIONS.map((c) => (<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
+                {EPIC_OPTIONS.map((opt) => (
+                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -726,16 +679,22 @@ const deviceValue = form.device || '';
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('category')}>
-                <ArrowUpDown className="inline h-4 w-4 ml-1" />
+              <TableHead>Categoría</TableHead>
+              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('incident_number')}>
+                ID <ArrowUpDown className="inline h-4 w-4 ml-1" />
               </TableHead>
-              <TableHead>ID</TableHead>
               <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('name')}>
                 Nombre <ArrowUpDown className="inline h-4 w-4 ml-1" />
               </TableHead>
-              <TableHead>Épica</TableHead>
-              <TableHead>Canal</TableHead>
-              <TableHead>Entorno</TableHead>
+              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('epic')}>
+                Épica <ArrowUpDown className="inline h-4 w-4 ml-1" />
+              </TableHead>
+              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('device')}>
+                Canal <ArrowUpDown className="inline h-4 w-4 ml-1" />
+              </TableHead>
+              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('environment')}>
+                Entorno <ArrowUpDown className="inline h-4 w-4 ml-1" />
+              </TableHead>
               <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('occurred_at')}>
                 Fecha <ArrowUpDown className="inline h-4 w-4 ml-1" />
               </TableHead>
@@ -748,29 +707,23 @@ const deviceValue = form.device || '';
           <TableBody>
             {paginatedIncidents.map((i) => (
               <TableRow key={i.id}>
-                <TableCell>
-                  {i.category === 'incident' ? (
-                    <span className="inline-grid place-items-center h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">i</span>
-                  ) : (
-                    <span className="inline-grid place-items-center h-5 w-5 rounded-sm bg-primary text-primary-foreground text-[10px] font-bold">M</span>
-                  )}
-                </TableCell>
-                <TableCell className="font-mono text-xs">{`T${String(i.incident_number ?? 0).padStart(5, '0')}`}</TableCell>
+                <TableCell><CategoryIcon category={i.category} /></TableCell>
+                <TableCell className="font-mono text-sm">{`T${String(i.incident_number ?? 0).padStart(5, '0')}`}</TableCell>
                 <TableCell className="font-medium">{i.name}</TableCell>
                 <TableCell>{i.epic || '—'}</TableCell>
                 <TableCell>{i.device || '—'}</TableCell>
                 <TableCell>{i.environment || '—'}</TableCell>
-                <TableCell>{new Date(i.occurred_at).toLocaleDateString()}</TableCell>
-                <TableCell>
-                  <StatusBadge status={i.status} />
-                </TableCell>
-                <TableCell className="flex justify-end gap-2">
-                  <Button variant="ghost" size="icon" onClick={async () => { setSelected(i); setDetailsOpen(true); }} aria-label="Ver más">
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => onDelete(i.id)} aria-label="Eliminar" className="text-foreground">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                <TableCell>{new Date(i.occurred_at).toLocaleDateString('es-ES')}</TableCell>
+                <TableCell><StatusBadge status={i.status} /></TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => { setSelected(i); setDetailsOpen(true); }}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => onDelete(i.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
