@@ -701,17 +701,49 @@ export default function DailiesModule({
             </div>
             <div className="md:col-span-2">
               <Label>Vincular a incidencia</Label>
-              <Select value={taskForm.incidentId || 'none'} onValueChange={v => setTaskForm(f => ({
-              ...f,
-              incidentId: v === 'none' ? '' : v
-            }))}>
-                <SelectTrigger><SelectValue placeholder="Ninguna" /></SelectTrigger>
-                <SelectContent>
-                  <CommandInput placeholder="Buscar incidencia..." />
-                  <SelectItem value="none">Ninguna</SelectItem>
-                  {incidents.map(i => <SelectItem key={i.id} value={i.id}>{formatIncidentLabel(i)}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between"
+                  >
+                    {taskForm.incidentId ? 
+                      formatIncidentLabel(incidents.find(i => i.id === taskForm.incidentId)!) : 
+                      "Ninguna"
+                    }
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0">
+                  <Command>
+                    <CommandInput placeholder="Buscar incidencia..." />
+                    <CommandList>
+                      <CommandEmpty>No se encontraron incidencias.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="none"
+                          onSelect={() => {
+                            setTaskForm(f => ({ ...f, incidentId: '' }));
+                          }}
+                        >
+                          Ninguna
+                        </CommandItem>
+                        {incidents.map(i => (
+                          <CommandItem
+                            key={i.id}
+                            value={i.id}
+                            onSelect={() => {
+                              setTaskForm(f => ({ ...f, incidentId: i.id }));
+                            }}
+                          >
+                            {formatIncidentLabel(i)}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="md:col-span-2">
               <Button type="submit" disabled={!dailyId}>Crear</Button>
@@ -818,17 +850,49 @@ export default function DailiesModule({
                 </div>
                 <div className="md:col-span-2">
                   <Label>Vincular a incidencia</Label>
-                  <Select value={editForm.incidentId || 'none'} onValueChange={v => setEditForm(f => ({
-                ...f,
-                incidentId: v === 'none' ? '' : v
-              }))}>
-                    <SelectTrigger><SelectValue placeholder="Ninguna" /></SelectTrigger>
-                    <SelectContent>
-                      <CommandInput placeholder="Buscar incidencia..." />
-                      <SelectItem value="none">Ninguna</SelectItem>
-                      {incidents.map(i => <SelectItem key={i.id} value={i.id}>{formatIncidentLabel(i)}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className="w-full justify-between"
+                      >
+                        {editForm.incidentId ? 
+                          formatIncidentLabel(incidents.find(i => i.id === editForm.incidentId)!) : 
+                          "Ninguna"
+                        }
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0">
+                      <Command>
+                        <CommandInput placeholder="Buscar incidencia..." />
+                        <CommandList>
+                          <CommandEmpty>No se encontraron incidencias.</CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem
+                              value="none"
+                              onSelect={() => {
+                                setEditForm(f => ({ ...f, incidentId: '' }));
+                              }}
+                            >
+                              Ninguna
+                            </CommandItem>
+                            {incidents.map(i => (
+                              <CommandItem
+                                key={i.id}
+                                value={i.id}
+                                onSelect={() => {
+                                  setEditForm(f => ({ ...f, incidentId: i.id }));
+                                }}
+                              >
+                                {formatIncidentLabel(i)}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
 
