@@ -294,26 +294,39 @@ export default function DailiesModule({
     try {
       if (!date) return;
       const todayId = await ensureDaily(date);
-      const rows = selectedTasksForPersist.map(taskId => ({
-        daily_id: todayId,
-        task_id: taskId
-      }));
+
+      // Avoid duplicates: fetch existing links for selected tasks
+      const { data: existingLinks, error: existingErr } = await supabase
+        .from('daily_tasks')
+        .select('task_id')
+        .eq('daily_id', todayId)
+        .in('task_id', selectedTasksForPersist);
+
+      if (existingErr) throw existingErr;
+
+      const existingIds = (existingLinks || []).map((r: any) => r.task_id);
+      const rows = selectedTasksForPersist
+        .filter((taskId) => !existingIds.includes(taskId))
+        .map((taskId) => ({ daily_id: todayId, task_id: taskId }));
+
       if (rows.length) {
-        await supabase.from('daily_tasks').upsert(rows as any, {
-          onConflict: 'daily_id,task_id'
-        } as any);
+        const { error: insertErr } = await supabase.from('daily_tasks').insert(rows as any);
+        if (insertErr) throw insertErr;
       }
+
       await loadTasks(date);
       setPersistModalOpen(false);
       toast({
         title: 'Tareas persistidas',
-        description: `Se persistieron ${selectedTasksForPersist.length} tareas.`
+        description: rows.length
+          ? `Se persistieron ${rows.length} tareas.`
+          : 'No había tareas nuevas para persistir.',
       });
     } catch (e) {
       toast({
         title: 'Error',
         description: 'No se pudieron persistir las tareas',
-        variant: 'destructive'
+        variant: 'destructive',
       });
     }
   };
