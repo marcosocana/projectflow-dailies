@@ -108,7 +108,7 @@ export default function DailiesModule({
       data: incs
     }] = await Promise.all([supabase.from('people').select('*').eq('project_id', projectId).order('created_at', {
       ascending: true
-    }), supabase.from('incidents').select('id,name,incident_number,status,category').eq('project_id', projectId).order('created_at', {
+    }), supabase.from('incidents').select('id,name,incident_number,status,category').eq('project_id', projectId).order('incident_number', {
       ascending: false
     })]);
     setPeople(ppl || []);
@@ -728,17 +728,17 @@ export default function DailiesModule({
                         >
                           Ninguna
                         </CommandItem>
-                        {incidents.map(i => (
-                          <CommandItem
-                            key={i.id}
-                            value={i.id}
-                            onSelect={() => {
-                              setTaskForm(f => ({ ...f, incidentId: i.id }));
-                            }}
-                          >
-                            {formatIncidentLabel(i)}
-                          </CommandItem>
-                        ))}
+                         {incidents.map(i => (
+                           <CommandItem
+                             key={i.id}
+                             value={formatIncidentLabel(i)}
+                             onSelect={() => {
+                               setTaskForm(f => ({ ...f, incidentId: i.id }));
+                             }}
+                           >
+                             {formatIncidentLabel(i)}
+                           </CommandItem>
+                         ))}
                       </CommandGroup>
                     </CommandList>
                   </Command>
@@ -877,17 +877,17 @@ export default function DailiesModule({
                             >
                               Ninguna
                             </CommandItem>
-                            {incidents.map(i => (
-                              <CommandItem
-                                key={i.id}
-                                value={i.id}
-                                onSelect={() => {
-                                  setEditForm(f => ({ ...f, incidentId: i.id }));
-                                }}
-                              >
-                                {formatIncidentLabel(i)}
-                              </CommandItem>
-                            ))}
+                             {incidents.map(i => (
+                               <CommandItem
+                                 key={i.id}
+                                 value={formatIncidentLabel(i)}
+                                 onSelect={() => {
+                                   setEditForm(f => ({ ...f, incidentId: i.id }));
+                                 }}
+                               >
+                                 {formatIncidentLabel(i)}
+                               </CommandItem>
+                             ))}
                           </CommandGroup>
                         </CommandList>
                       </Command>
