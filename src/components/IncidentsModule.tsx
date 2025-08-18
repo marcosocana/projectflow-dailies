@@ -775,14 +775,14 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                 <TableCell><StatusBadge status={i.status} /></TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-0">
-                    <Button variant="ghost" size="icon" onClick={() => { setSelected(i); setDetailsOpen(true); }}>
-                      <Eye className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" onClick={() => onDelete(i.id)}>
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" onClick={() => copyToClipboard(i)}>
                       <Copy className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => onDelete(i.id)}>
-                      <Trash2 className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" onClick={() => { setSelected(i); setDetailsOpen(true); }}>
+                      <Eye className="h-4 w-4" />
                     </Button>
                   </div>
                 </TableCell>
