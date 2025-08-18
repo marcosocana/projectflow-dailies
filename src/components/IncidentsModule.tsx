@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, MoreVertical, RefreshCcw, AlertTriangle, ListChecks, CheckCircle2 } from 'lucide-react';
+import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, MoreVertical, RefreshCcw, AlertTriangle, ListChecks, CheckCircle2, Copy } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/hooks/useAuth';
 import type { Database } from '@/integrations/supabase/types';
@@ -364,6 +364,29 @@ const deviceValue = form.device || '';
     });
     setEvidenceFile(null);
 
+  };
+
+  const copyToClipboard = async (incident: any) => {
+    const basicInfo = `ID: T${String(incident.incident_number ?? 0).padStart(5, '0')}
+Nombre: ${incident.name}
+Descripción: ${incident.description || 'Sin descripción'}
+Épica: ${incident.epic || 'No asignada'}
+Canal: ${incident.device || 'No especificado'}
+Entorno: ${incident.environment || 'No especificado'}
+Fecha: ${new Date(incident.occurred_at).toLocaleDateString('es-ES')}
+Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
+
+    try {
+      await navigator.clipboard.writeText(basicInfo);
+      toast({
+        description: "Información copiada al portapapeles",
+      });
+    } catch (err) {
+      toast({
+        description: "Error al copiar la información",
+        variant: "destructive",
+      });
+    }
   };
 
   const onDelete = async (id: string) => {
@@ -754,6 +777,9 @@ const deviceValue = form.device || '';
                   <div className="flex items-center justify-end gap-0">
                     <Button variant="ghost" size="icon" onClick={() => { setSelected(i); setDetailsOpen(true); }}>
                       <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => copyToClipboard(i)}>
+                      <Copy className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" onClick={() => onDelete(i.id)}>
                       <Trash2 className="h-4 w-4" />
