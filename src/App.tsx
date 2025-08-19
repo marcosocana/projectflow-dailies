@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import AdminProjects from "./pages/AdminProjects";
+import ExternalIncident from "./pages/ExternalIncident";
 
 const queryClient = new QueryClient();
 
@@ -19,6 +20,7 @@ const App = () => (
         <Routes>
           <Route path="/*" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/external-incident/:projectId" element={<ExternalIncident />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="/admin" element={<AdminProjects />} />
         </Routes>

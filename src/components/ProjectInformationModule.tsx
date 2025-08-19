@@ -102,6 +102,31 @@ export default function ProjectInformationModule({ projectId }: ProjectInformati
             </div>
           </section>
 
+          <section className="space-y-2">
+            <h3 className="text-lg font-semibold">URL externa para reportar incidencias</h3>
+            <div className="p-4 border rounded bg-muted/50">
+              <p className="text-sm text-muted-foreground mb-2">
+                Comparte este enlace para que usuarios externos puedan reportar incidencias sin necesidad de estar registrados:
+              </p>
+              <div className="flex items-center gap-2">
+                <Input 
+                  value={`${window.location.origin}/external-incident/${projectId}`}
+                  readOnly
+                  className="bg-background"
+                />
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/external-incident/${projectId}`);
+                    toast({ title: 'URL copiada', description: 'El enlace ha sido copiado al portapapeles' });
+                  }}
+                >
+                  Copiar
+                </Button>
+              </div>
+            </div>
+          </section>
+
           <section className="space-y-3">
             <h3 className="text-lg font-semibold">Acciones</h3>
             <Button variant="destructive" onClick={() => setResetOpen(true)}>
