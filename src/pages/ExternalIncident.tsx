@@ -152,6 +152,21 @@ export default function ExternalIncident() {
     }
   };
 
+  if (!projectId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-destructive">Error: No se especificó el ID del proyecto en la URL</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              La URL debe incluir el parámetro del proyecto: ?project=ID_DEL_PROYECTO
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!project) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
