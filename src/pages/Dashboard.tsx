@@ -93,12 +93,12 @@ const Dashboard = () => {
             ) : (
               <img
                 src={vecturaLogo}
-                alt="Vectura"
+                alt="Vectorea"
                 className="h-8 md:h-10 w-auto object-contain"
               />
             )}
             <h1 className="text-lg md:text-2xl font-bold">
-              {currentProject ? currentProject.name : 'Vectura'}
+              {currentProject ? currentProject.name : 'Vectorea'}
             </h1>
           </div>
 
@@ -159,7 +159,7 @@ const Dashboard = () => {
             <Card>
               <CardHeader className="text-center space-y-4">
                 <div className="flex justify-center">
-                  <img src={vecturaLogo} alt="Vectura" className="h-16 w-auto object-contain" />
+                  <img src={vecturaLogo} alt="Vectorea" className="h-16 w-auto object-contain" />
                 </div>
                 <div>
                   <CardTitle>Acceso a Proyectos</CardTitle>

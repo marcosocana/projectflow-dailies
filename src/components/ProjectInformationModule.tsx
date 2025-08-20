@@ -110,14 +110,14 @@ export default function ProjectInformationModule({ projectId }: ProjectInformati
               </p>
               <div className="flex items-center gap-2">
                 <Input 
-                  value={`${window.location.origin}/external-incident/${projectId}`}
+                  value={`https://vectorea.space/newincidence?project=${projectId}`}
                   readOnly
                   className="bg-background"
                 />
                 <Button 
                   variant="outline" 
                   onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/external-incident/${projectId}`);
+                    navigator.clipboard.writeText(`https://vectorea.space/newincidence?project=${projectId}`);
                     toast({ title: 'URL copiada', description: 'El enlace ha sido copiado al portapapeles' });
                   }}
                 >

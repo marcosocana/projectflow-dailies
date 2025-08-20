@@ -20,7 +20,7 @@ const App = () => (
         <Routes>
           <Route path="/*" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
-          <Route path="/external-incident/:projectId" element={<ExternalIncident />} />
+          <Route path="/newincidence" element={<ExternalIncident />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="/admin" element={<AdminProjects />} />
         </Routes>

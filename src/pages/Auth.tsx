@@ -72,12 +72,12 @@ const Auth = () => {
           <div className="flex justify-center">
             <img 
               src={vecturaLogo} 
-              alt="Vectura" 
+              alt="Vectorea" 
               className="h-16 w-auto object-contain"
             />
           </div>
           <div>
-            <CardTitle className="text-2xl">Vectura</CardTitle>
+            <CardTitle className="text-2xl">Vectorea</CardTitle>
             <CardDescription>
               Gestión de proyectos e incidencias colaborativa
             </CardDescription>

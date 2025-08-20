@@ -34,7 +34,7 @@ const STATUS_BADGE_CLS = {
 } as const;
 
 export default function ExternalIncident() {
-  const { projectId } = useParams<{ projectId: string }>();
+  const projectId = new URLSearchParams(window.location.search).get('project');
   const navigate = useNavigate();
   const { toast } = useToast();
   
@@ -140,7 +140,7 @@ export default function ExternalIncident() {
       });
 
       // Redirect to incidents list
-      navigate(`/project/${projectId}/incidents`);
+      navigate(`/?project=${projectId}&view=incidents`);
     } catch (error: any) {
       toast({
         title: 'Error',
