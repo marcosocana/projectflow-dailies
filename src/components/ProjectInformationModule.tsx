@@ -102,7 +102,7 @@ export default function ProjectInformationModule({ projectId }: ProjectInformati
             </div>
           </section>
 
-          <section className="space-y-2">
+          {/* <section className="space-y-2">
             <h3 className="text-lg font-semibold">URL externa para reportar incidencias</h3>
             <div className="p-4 border rounded bg-muted/50">
               <p className="text-sm text-muted-foreground mb-2">
@@ -125,7 +125,7 @@ export default function ProjectInformationModule({ projectId }: ProjectInformati
                 </Button>
               </div>
             </div>
-          </section>
+          </section> */}
 
           <section className="space-y-3">
             <h3 className="text-lg font-semibold">Acciones</h3>
