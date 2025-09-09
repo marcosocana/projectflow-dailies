@@ -176,10 +176,7 @@ const SortableIncidentCard = ({
           {incident.description}
         </p>}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Clock className="h-3 w-3" />
-          {new Date(incident.occurred_at).toLocaleDateString()}
-        </div>
+        
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onCopy(incident)}>
             <Copy className="h-3 w-3" />
