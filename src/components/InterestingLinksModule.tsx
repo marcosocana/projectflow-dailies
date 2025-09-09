@@ -187,25 +187,23 @@ export default function InterestingLinksModule({ projectId }: InterestingLinksMo
               <p className="text-sm text-muted-foreground mt-1">Crea el primer enlace para empezar</p>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {links.map((link) => (
                 <Card key={link.id} className="hover:shadow-md transition-shadow">
                   <CardHeader className="pb-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          {link.name}
-                          <a
-                            href={link.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary hover:text-primary/80 transition-colors"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        </CardTitle>
-                      </div>
-                      <div className="flex gap-1">
+                    <div className="flex justify-between items-center">
+                      <CardTitle className="text-lg truncate mr-2">
+                        {link.name}
+                      </CardTitle>
+                      <div className="flex gap-1 ml-auto">
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center h-8 w-8 text-primary hover:text-primary/80 transition-colors"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -225,11 +223,11 @@ export default function InterestingLinksModule({ projectId }: InterestingLinksMo
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    <p className="text-sm text-muted-foreground break-all">
+                    <p className="text-sm text-muted-foreground truncate">
                       {link.url}
                     </p>
                     {link.description && (
-                      <p className="text-sm text-muted-foreground mt-3">
+                      <p className="text-sm text-muted-foreground line-clamp-3">
                         {link.description}
                       </p>
                     )}

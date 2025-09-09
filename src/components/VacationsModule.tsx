@@ -220,7 +220,7 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid gap-6 lg:grid-cols-3">
             {/* Calendar */}
             <div>
               <h3 className="text-lg font-semibold mb-4">Calendario</h3>
@@ -265,9 +265,9 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
                               )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
                             <Button variant="ghost" size="sm" onClick={() => openEdit(vacation)}>
-                              Editar
+                              <Pencil className="h-4 w-4" />
                             </Button>
                             <Button
                               variant="ghost"
@@ -282,7 +282,7 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
                                 }
                               }}
                             >
-                              Eliminar
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </div>
