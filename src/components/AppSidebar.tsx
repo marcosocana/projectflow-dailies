@@ -16,7 +16,9 @@ import {
   Home,
   Settings,
   Rocket,
-  Link
+  Link,
+  Users,
+  Archive
 } from 'lucide-react';
 
 interface AppSidebarProps {
@@ -25,16 +27,10 @@ interface AppSidebarProps {
 
 const menuItems = [
   { 
-    title: "Incidencias", 
+    title: "Home", 
     url: "tasks", 
     icon: Home,
     description: "Gestión de incidencias y mejoras" 
-  },
-  { 
-    title: "Vacaciones", 
-    url: "vacations", 
-    icon: Calendar,
-    description: "Gestión de vacaciones del equipo" 
   },
   { 
     title: "Releases", 
@@ -43,16 +39,34 @@ const menuItems = [
     description: "Registro de versiones Web y App" 
   },
   { 
+    title: "Ausencias", 
+    url: "vacations", 
+    icon: Calendar,
+    description: "Calendario de ausencias del equipo" 
+  },
+  { 
+    title: "Repositorio", 
+    url: "repository", 
+    icon: Archive,
+    description: "Archivos protegidos del proyecto" 
+  },
+  { 
+    title: "Wiki", 
+    url: "notes", 
+    icon: FileText,
+    description: "Notas compartidas del proyecto" 
+  },
+  { 
+    title: "Contactos", 
+    url: "contacts", 
+    icon: Users,
+    description: "Contactos destacados del proyecto" 
+  },
+  { 
     title: "Enlaces", 
     url: "links", 
     icon: Link,
     description: "Enlaces de interés del proyecto" 
-  },
-  { 
-    title: "Notas", 
-    url: "notes", 
-    icon: FileText,
-    description: "Notas compartidas del proyecto" 
   },
   { 
     title: "Configuración interna", 

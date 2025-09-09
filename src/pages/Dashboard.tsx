@@ -16,6 +16,8 @@ import InterestingLinksModule from '@/components/InterestingLinksModule';
 import VacationsModule from '@/components/VacationsModule';
 import NotesModule from '@/components/NotesModule';
 import ProjectInformationModule from '@/components/ProjectInformationModule';
+import ContactsModule from '@/components/ContactsModule';
+import RepositoryModule from '@/components/RepositoryModule';
 // import HomeModule from '@/components/HomeModule';
 import InternalConfigModule from '@/components/InternalConfigModule';
 import { AppSidebar } from '@/components/AppSidebar';
@@ -119,19 +121,25 @@ const Dashboard = () => {
                 </SheetHeader>
                 <nav className="mt-4 grid gap-2">
                   <Button asChild variant="ghost" className="justify-start">
-                    <a href="/tasks">Gestión de tareas</a>
-                  </Button>
-                  <Button asChild variant="ghost" className="justify-start">
-                    <a href="/vacations">Gestión de vacaciones</a>
+                    <a href="/tasks">Home</a>
                   </Button>
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/releases">Releases</a>
                   </Button>
                   <Button asChild variant="ghost" className="justify-start">
-                    <a href="/links">Enlaces de interés</a>
+                    <a href="/vacations">Ausencias</a>
                   </Button>
                   <Button asChild variant="ghost" className="justify-start">
-                    <a href="/notes">Notas</a>
+                    <a href="/repository">Repositorio</a>
+                  </Button>
+                  <Button asChild variant="ghost" className="justify-start">
+                    <a href="/notes">Wiki</a>
+                  </Button>
+                  <Button asChild variant="ghost" className="justify-start">
+                    <a href="/contacts">Contactos</a>
+                  </Button>
+                  <Button asChild variant="ghost" className="justify-start">
+                    <a href="/links">Enlaces de interés</a>
                   </Button>
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/config">Configuración interna</a>
@@ -215,12 +223,14 @@ const Dashboard = () => {
               <Routes>
                 <Route path="/" element={<Navigate to="tasks" replace />} />
                 <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
-                <Route path="vacations" element={<VacationsModule projectId={currentProject.id} />} />
                 <Route path="releases" element={<ReleasesModule projectId={currentProject.id} />} />
-                <Route path="links" element={<InterestingLinksModule projectId={currentProject.id} />} />
+                <Route path="vacations" element={<VacationsModule projectId={currentProject.id} />} />
+                <Route path="repository" element={<RepositoryModule projectId={currentProject.id} />} />
                 <Route path="notes" element={<NotesModule projectId={currentProject.id} />} />
                 <Route path="notes/new" element={<NoteCreate projectId={currentProject.id} />} />
                 <Route path="notes/:noteId" element={<NoteDetail projectId={currentProject.id} />} />
+                <Route path="contacts" element={<ContactsModule projectId={currentProject.id} />} />
+                <Route path="links" element={<InterestingLinksModule projectId={currentProject.id} />} />
                 <Route path="config" element={<InternalConfigModule projectId={currentProject.id} dailiesPassword={(currentProject as any).dailies_password || 'default'} />} />
                 <Route path="info" element={<ProjectInformationModule projectId={currentProject.id} />} />
               </Routes>

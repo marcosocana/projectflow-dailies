@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      contacts: {
+        Row: {
+          created_at: string
+          description: string | null
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+          project_id: string
+          role: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+          project_id: string
+          role?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+          project_id?: string
+          role?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       dailies: {
         Row: {
           content: Json | null
@@ -407,6 +443,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      repository_files: {
+        Row: {
+          content_type: string | null
+          created_at: string
+          description: string | null
+          file_path: string
+          file_size: number | null
+          id: string
+          name: string
+          password_hash: string | null
+          password_required: boolean
+          project_id: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          content_type?: string | null
+          created_at?: string
+          description?: string | null
+          file_path: string
+          file_size?: number | null
+          id?: string
+          name: string
+          password_hash?: string | null
+          password_required?: boolean
+          project_id: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          content_type?: string | null
+          created_at?: string
+          description?: string | null
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          name?: string
+          password_hash?: string | null
+          password_required?: boolean
+          project_id?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: []
       }
       shared_notes: {
         Row: {
