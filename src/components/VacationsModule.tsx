@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useVacations } from '@/hooks/useVacations';
 import { useAuth } from '@/hooks/useAuth';
@@ -48,14 +49,16 @@ export default function VacationsModule({
     personId: '',
     startDate: new Date(),
     endDate: new Date(),
-    description: ''
+    description: '',
+    type: 'vacaciones' as 'vacaciones' | 'baja'
   });
   const [editingVacation, setEditingVacation] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({
     personId: '',
     startDate: new Date(),
     endDate: new Date(),
-    description: ''
+    description: '',
+    type: 'vacaciones' as 'vacaciones' | 'baja'
   });
 
   // Fetch people from dailies (members)
@@ -122,7 +125,8 @@ export default function VacationsModule({
       personId: vacation.person_id || '',
       startDate: parseISO(vacation.start_date),
       endDate: parseISO(vacation.end_date),
-      description: vacation.description || ''
+      description: vacation.description || '',
+      type: vacation.type === 'baja' ? 'baja' : 'vacaciones'
     });
   };
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -133,12 +137,13 @@ export default function VacationsModule({
         person_id: editForm.personId || null,
         start_date: format(editForm.startDate, 'yyyy-MM-dd'),
         end_date: format(editForm.endDate, 'yyyy-MM-dd'),
-        description: editForm.description || null
+        description: editForm.description || null,
+        type: editForm.type
       });
       setEditingVacation(null);
       toast({
         title: 'Éxito',
-        description: 'Vacación actualizada'
+        description: 'Ausencia actualizada'
       });
     } catch (error) {
       console.error('Error updating vacation:', error);
@@ -161,25 +166,27 @@ export default function VacationsModule({
         person_id: form.personId,
         start_date: format(form.startDate, 'yyyy-MM-dd'),
         end_date: format(form.endDate, 'yyyy-MM-dd'),
-        description: form.description || null
+        description: form.description || null,
+        type: form.type
       });
       setCreateOpen(false);
       setForm({
         personId: '',
         startDate: new Date(),
         endDate: new Date(),
-        description: ''
+        description: '',
+        type: 'vacaciones'
       });
       toast({
         title: "Éxito",
-        description: "Vacaciones registradas correctamente"
+        description: "Ausencia registrada correctamente"
       });
     } catch (error) {
       console.error('Error creating vacation:', error);
     }
   };
   const handleDeleteAllVacations = async () => {
-    const confirmed = confirm('¿Eliminar todas las vacaciones de este proyecto? Esta acción no se puede deshacer.');
+    const confirmed = confirm('¿Eliminar todas las ausencias de este proyecto? Esta acción no se puede deshacer.');
     if (!confirmed) return;
     try {
       const {
@@ -187,14 +194,14 @@ export default function VacationsModule({
       } = await supabase.from('vacations').delete().eq('project_id', projectId);
       if (error) throw error;
       await refetch();
-      toast({
+        toast({
         title: 'Éxito',
-        description: 'Todas las vacaciones han sido eliminadas.'
+        description: 'Todas las ausencias han sido eliminadas.'
       });
     } catch (error: any) {
-      toast({
+        toast({
         title: 'Error',
-        description: error.message || 'No se pudieron eliminar las vacaciones',
+        description: error.message || 'No se pudieron eliminar las ausencias',
         variant: 'destructive'
       });
     }
@@ -212,7 +219,7 @@ export default function VacationsModule({
               </Button>
               <Button onClick={() => setCreateOpen(true)} className="flex items-center gap-2">
                 <Plus className="h-4 w-4" />
-                Añadir vacaciones
+                Añadir ausencia
               </Button>
             </div>
           </div>
@@ -235,7 +242,7 @@ export default function VacationsModule({
               })}
               </h3>
               
-              {dayVacations.length === 0 ? <p className="text-muted-foreground">No hay vacaciones en esta fecha</p> : <div className="space-y-3">
+              {dayVacations.length === 0 ? <p className="text-muted-foreground">No hay ausencias en esta fecha</p> : <div className="space-y-3">
                   {dayVacations.map(vacation => {
                 const person = getPersonById(vacation.person_id || '');
                 return <Card key={vacation.id} className="p-4">
@@ -245,15 +252,15 @@ export default function VacationsModule({
                         backgroundColor: person?.color || 'hsl(var(--primary))'
                       }} />
                             <div>
-                              <p className="font-medium">{person?.name || 'Usuario en vacaciones'}</p>
+                              <p className="font-medium">{person?.name || 'Usuario en ausencia'}</p>
                               <p className="text-sm text-muted-foreground">{person?.role || ''}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {format(parseISO(vacation.start_date), 'd MMM', {
+                               <p className="text-xs text-muted-foreground">
+                                 {format(parseISO(vacation.start_date), 'd MMM', {
                             locale: es
-                          })} - {format(parseISO(vacation.end_date), 'd MMM', {
+                           })} - {format(parseISO(vacation.end_date), 'd MMM', {
                             locale: es
-                          })}
-                              </p>
+                           })} • {vacation.type === 'baja' ? 'Baja' : 'Vacaciones'}
+                               </p>
                               {vacation.description && <p className="text-sm mt-1">{vacation.description}</p>}
                             </div>
                           </div>
@@ -278,9 +285,9 @@ export default function VacationsModule({
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Registrar Vacaciones</DialogTitle>
+            <DialogTitle>Registrar Ausencia</DialogTitle>
             <DialogDescription>
-              Registra las vacaciones de un miembro del equipo
+              Registra las ausencias de un miembro del equipo
             </DialogDescription>
           </DialogHeader>
           
@@ -307,6 +314,19 @@ export default function VacationsModule({
               </Select>
             </div>
 
+            <div className="space-y-2">
+              <Label>Tipo de ausencia</Label>
+              <div className="flex items-center gap-3">
+                <Label htmlFor="type-switch" className="text-sm">Vacaciones</Label>
+                <Switch
+                  id="type-switch"
+                  checked={form.type === 'baja'}
+                  onCheckedChange={(checked) => setForm({...form, type: checked ? 'baja' : 'vacaciones'})}
+                />
+                <Label htmlFor="type-switch" className="text-sm">Baja</Label>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="startDate">Fecha de Inicio</Label>
@@ -324,20 +344,25 @@ export default function VacationsModule({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Descripción (opcional)</Label>
-              <Textarea id="description" value={form.description} onChange={e => setForm({
-              ...form,
-              description: e.target.value
-            })} placeholder="Descripción de las vacaciones" />
-            </div>
+            {form.type === 'baja' && (
+              <div className="space-y-2">
+                <Label htmlFor="description">Descripción</Label>
+                <Textarea 
+                  id="description" 
+                  value={form.description} 
+                  onChange={e => setForm({...form, description: e.target.value})} 
+                  placeholder="Descripción de la baja" 
+                  required
+                />
+              </div>
+            )}
 
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
                 Cancelar
               </Button>
               <Button type="submit">
-                Registrar Vacaciones
+                Registrar Ausencia
               </Button>
             </div>
           </form>
@@ -374,6 +399,19 @@ export default function VacationsModule({
               </Select>
             </div>
 
+            <div className="space-y-2">
+              <Label>Tipo de ausencia</Label>
+              <div className="flex items-center gap-3">
+                <Label htmlFor="edit-type-switch" className="text-sm">Vacaciones</Label>
+                <Switch
+                  id="edit-type-switch"
+                  checked={editForm.type === 'baja'}
+                  onCheckedChange={(checked) => setEditForm({...editForm, type: checked ? 'baja' : 'vacaciones'})}
+                />
+                <Label htmlFor="edit-type-switch" className="text-sm">Baja</Label>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-start">Fecha de Inicio</Label>
@@ -391,13 +429,17 @@ export default function VacationsModule({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="edit-description">Descripción (opcional)</Label>
-              <Textarea id="edit-description" value={editForm.description} onChange={e => setEditForm({
-              ...editForm,
-              description: e.target.value
-            })} placeholder="Descripción de las vacaciones" />
-            </div>
+            {editForm.type === 'baja' && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Descripción</Label>
+                <Textarea 
+                  id="edit-description" 
+                  value={editForm.description} 
+                  onChange={e => setEditForm({...editForm, description: e.target.value})} 
+                  placeholder="Descripción de la baja" 
+                />
+              </div>
+            )}
 
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setEditingVacation(null)}>

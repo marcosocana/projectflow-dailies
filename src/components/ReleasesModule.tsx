@@ -317,28 +317,7 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
       <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {selectedRelease?.platform === 'web' ? (
-                  <Globe className="h-5 w-5 text-blue-500" />
-                ) : (
-                  <Smartphone className="h-5 w-5 text-green-500" />
-                )}
-                Release v{selectedRelease?.version}
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => selectedRelease && handleDeleteRelease(selectedRelease.id)}
-                className="text-destructive hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </DialogTitle>
-            <DialogDescription>
-              {selectedRelease?.platform === 'web' ? 'Web' : 'App'} • {' '}
-              {selectedRelease && new Date(selectedRelease.created_at).toLocaleDateString()}
-            </DialogDescription>
+            <DialogTitle>Detalle del Release</DialogTitle>
           </DialogHeader>
           
           {selectedRelease && (
@@ -391,6 +370,17 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
                     minute: '2-digit'
                   })}
                 </p>
+              </div>
+              
+              <div className="flex justify-end pt-4 border-t">
+                <Button
+                  variant="destructive"
+                  onClick={() => selectedRelease && handleDeleteRelease(selectedRelease.id)}
+                  className="flex items-center gap-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Eliminar
+                </Button>
               </div>
             </div>
           )}

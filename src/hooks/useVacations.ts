@@ -54,7 +54,7 @@ export function useVacations(projectId?: string) {
       await fetchVacations();
       toast({
         title: "Éxito",
-        description: "Vacaciones registradas correctamente",
+        description: "Ausencia registrada correctamente",
       });
     } catch (error: any) {
       toast({
@@ -77,7 +77,7 @@ export function useVacations(projectId?: string) {
       await fetchVacations();
       toast({
         title: "Éxito",
-        description: "Vacaciones actualizadas correctamente",
+        description: "Ausencia actualizada correctamente",
       });
     } catch (error: any) {
       toast({
@@ -100,7 +100,7 @@ export function useVacations(projectId?: string) {
       await fetchVacations();
       toast({
         title: "Éxito",
-        description: "Vacaciones eliminadas correctamente",
+        description: "Ausencia eliminada correctamente",
       });
     } catch (error: any) {
       toast({

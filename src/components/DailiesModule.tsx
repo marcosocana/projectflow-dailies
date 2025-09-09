@@ -1092,9 +1092,7 @@ export default function DailiesModule({
                           {new Date(task.created_at).toLocaleDateString()}
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="icon" onClick={() => openDetails(task)} aria-label="Ver detalles">
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                          {/* Buttons removed from Pipeline view */}
                         </TableCell>
                       </TableRow>;
                 })}
