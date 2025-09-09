@@ -177,13 +177,20 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
                       No hay releases de Web
                     </div>
                   ) : (
-                    webReleases.map((release) => (
+                    webReleases.map((release, index) => (
                       <Card key={release.id} className="border-2">
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between mb-2">
-                            <Badge variant="outline" className="font-mono">
-                              v{release.version}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="font-mono">
+                                v{release.version}
+                              </Badge>
+                              {index === 0 && (
+                                <Badge variant="default" className="text-xs">
+                                  Versión actual
+                                </Badge>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2">
                               <Button
                                 variant="ghost"
@@ -218,13 +225,20 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
                       No hay releases de App
                     </div>
                   ) : (
-                    appReleases.map((release) => (
+                    appReleases.map((release, index) => (
                       <Card key={release.id} className="border-2">
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between mb-2">
-                            <Badge variant="outline" className="font-mono">
-                              v{release.version}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="font-mono">
+                                v{release.version}
+                              </Badge>
+                              {index === 0 && (
+                                <Badge variant="default" className="text-xs">
+                                  Versión actual
+                                </Badge>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2">
                               <Button
                                 variant="ghost"

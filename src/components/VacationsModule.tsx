@@ -229,53 +229,66 @@ export default function VacationsModule({
             {/* Calendar */}
             <div>
               <h3 className="text-lg font-semibold mb-4">Calendario</h3>
-              <Calendar mode="single" selected={selectedDate} onSelect={date => date && setSelectedDate(date)} locale={es} className="rounded-md border p-3 pointer-events-auto w-full mx-auto px-[50px]" components={{
-              DayContent: DayContent as any
-            }} />
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && setSelectedDate(date)}
+                locale={es}
+                className="rounded-md border p-3 pointer-events-auto w-full mx-auto px-[50px]"
+                components={{ DayContent: DayContent as any }}
+              />
             </div>
 
             {/* Selected date info */}
             <div>
               <h3 className="text-lg font-semibold mb-4">
-                {format(selectedDate, 'EEEE, d MMMM yyyy', {
-                locale: es
-              })}
+                {format(selectedDate, 'EEEE, d MMMM yyyy', { locale: es })}
               </h3>
               
-              {dayVacations.length === 0 ? <p className="text-muted-foreground">No hay ausencias en esta fecha</p> : <div className="space-y-3">
-                  {dayVacations.map(vacation => {
-                const person = getPersonById(vacation.person_id || '');
-                return <Card key={vacation.id} className="p-4">
+              {dayVacations.length === 0 ? (
+                <p className="text-muted-foreground">No hay ausencias en esta fecha</p>
+              ) : (
+                <div className="space-y-3">
+                  {dayVacations.map((vacation) => {
+                    const person = getPersonById(vacation.person_id || '');
+                    return (
+                      <Card key={vacation.id} className="p-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="w-4 h-4 rounded-full" style={{
-                        backgroundColor: person?.color || 'hsl(var(--primary))'
-                      }} />
+                            <div 
+                              className="w-4 h-4 rounded-full" 
+                              style={{ backgroundColor: person?.color || 'hsl(var(--primary))' }}
+                            />
                             <div>
                               <p className="font-medium">{person?.name || 'Usuario en ausencia'}</p>
                               <p className="text-sm text-muted-foreground">{person?.role || ''}</p>
-                               <p className="text-xs text-muted-foreground">
-                                 {format(parseISO(vacation.start_date), 'd MMM', {
-                            locale: es
-                           })} - {format(parseISO(vacation.end_date), 'd MMM', {
-                            locale: es
-                           })} • {vacation.type === 'baja' ? 'Baja' : 'Vacaciones'}
-                               </p>
-                              {vacation.description && <p className="text-sm mt-1">{vacation.description}</p>}
+                              <p className="text-xs text-muted-foreground">
+                                {format(parseISO(vacation.start_date), 'd MMM', { locale: es })} - {format(parseISO(vacation.end_date), 'd MMM', { locale: es })} • {vacation.type === 'baja' ? 'Baja' : 'Vacaciones'}
+                              </p>
+                              {vacation.description && (
+                                <p className="text-sm mt-1">{vacation.description}</p>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <Button variant="ghost" size="sm" onClick={() => openEdit(vacation)}>
                               Editar
                             </Button>
-                            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => deleteVacation(vacation.id)}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => deleteVacation(vacation.id)}
+                            >
                               Eliminar
                             </Button>
                           </div>
                         </div>
-                      </Card>;
-              })}
-                </div>}
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
