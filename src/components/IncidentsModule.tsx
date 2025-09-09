@@ -238,6 +238,15 @@ const [environmentFilter, setEnvironmentFilter] = useState<string>('all');
 const [epicFilter, setEpicFilter] = useState<string>('all');
 const [availableEpics, setAvailableEpics] = useState<string[]>([]);
 
+// Confirmation modal states
+const [confirmOpen, setConfirmOpen] = useState(false);
+const [pendingMove, setPendingMove] = useState<{
+  incidentId: string;
+  incidentNumber: number;
+  fromStatus: IncidentStatus;
+  toStatus: IncidentStatus;
+} | null>(null);
+
 // KPI filtering state
 const [statusFilter, setStatusFilter] = useState<string>('all');
 const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -568,10 +577,25 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
     const activeIncident = incidents.find(inc => inc.id === activeId);
     if (!activeIncident || activeIncident.status === newStatus) return;
 
+    // Show confirmation modal
+    setPendingMove({
+      incidentId: activeId,
+      incidentNumber: activeIncident.incident_number,
+      fromStatus: activeIncident.status as IncidentStatus,
+      toStatus: newStatus
+    });
+    setConfirmOpen(true);
+  };
+
+  const confirmMove = async () => {
+    if (!pendingMove) return;
+
+    const { incidentId, toStatus } = pendingMove;
+
     // Update locally first for immediate feedback
     setIncidents(prev => 
       prev.map(inc => 
-        inc.id === activeId ? { ...inc, status: newStatus } : inc
+        inc.id === incidentId ? { ...inc, status: toStatus } : inc
       )
     );
 
@@ -579,8 +603,8 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
     try {
       const { error } = await supabase
         .from('incidents')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', activeId);
+        .update({ status: toStatus, updated_at: new Date().toISOString() })
+        .eq('id', incidentId);
 
       if (error) throw error;
       
@@ -591,10 +615,18 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
       // Revert the change
       setIncidents(prev => 
         prev.map(inc => 
-          inc.id === activeId ? { ...inc, status: activeIncident.status } : inc
+          inc.id === incidentId ? { ...inc, status: pendingMove.fromStatus } : inc
         )
       );
+    } finally {
+      setConfirmOpen(false);
+      setPendingMove(null);
     }
+  };
+
+  const cancelMove = () => {
+    setConfirmOpen(false);
+    setPendingMove(null);
   };
 
   const incidentsByStatus = useMemo(() => {
@@ -839,18 +871,18 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                   size="sm"
                   onClick={() => setViewMode('list')}
                   className="flex items-center gap-2"
+                  title="Lista"
                 >
                   <List className="h-4 w-4" />
-                  Lista
                 </Button>
                 <Button
                   variant={viewMode === 'pipeline' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setViewMode('pipeline')}
                   className="flex items-center gap-2"
+                  title="Pipeline"
                 >
                   <Columns3 className="h-4 w-4" />
-                  Pipeline
                 </Button>
               </div>
             </div>
@@ -1075,50 +1107,52 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
             </div>
           </>
         ) : (
-          <DndContext 
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {(['pending', 'in_progress', 'resolved'] as IncidentStatus[]).map((status) => (
-                <div 
-                  key={status}
-                  id={`column-${status}`}
-                  className="bg-muted/50 rounded-lg p-4 min-h-[400px]"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold">{STATUS_LABELS[status]}</h3>
-                    <Badge variant="secondary" className="ml-2">
-                      {incidentsByStatus[status]?.length || 0}
-                    </Badge>
-                  </div>
-                  <SortableContext 
-                    items={incidentsByStatus[status]?.map(inc => inc.id) || []}
-                    strategy={verticalListSortingStrategy}
+          <div className="overflow-x-auto">
+            <DndContext 
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <div className="flex gap-6 min-w-max pb-4">
+                {(['pending', 'in_progress', 'resolved'] as IncidentStatus[]).map((status) => (
+                  <div 
+                    key={status}
+                    id={`column-${status}`}
+                    className="bg-muted/50 rounded-lg p-4 min-h-[400px] w-80 flex-shrink-0"
                   >
-                    <div className="space-y-3">
-                      {(incidentsByStatus[status] || []).map((incident) => (
-                        <SortableIncidentCard 
-                          key={incident.id} 
-                          incident={incident}
-                          onEdit={(i) => { onEdit(i); setCreateOpen(true); }}
-                          onDelete={onDelete}
-                          onViewDetails={(i) => { setSelected(i); setDetailsOpen(true); }}
-                          onCopy={copyToClipboard}
-                        />
-                      ))}
-                      {(!incidentsByStatus[status] || incidentsByStatus[status].length === 0) && (
-                        <div className="text-center py-8 text-muted-foreground text-sm">
-                          No hay incidencias en este estado
-                        </div>
-                      )}
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-semibold">{STATUS_LABELS[status]}</h3>
+                      <Badge variant="secondary" className="ml-2">
+                        {incidentsByStatus[status]?.length || 0}
+                      </Badge>
                     </div>
-                  </SortableContext>
-                </div>
-              ))}
-            </div>
-          </DndContext>
+                    <SortableContext 
+                      items={incidentsByStatus[status]?.map(inc => inc.id) || []}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="space-y-3">
+                        {(incidentsByStatus[status] || []).map((incident) => (
+                          <SortableIncidentCard 
+                            key={incident.id} 
+                            incident={incident}
+                            onEdit={(i) => { onEdit(i); setCreateOpen(true); }}
+                            onDelete={onDelete}
+                            onViewDetails={(i) => { setSelected(i); setDetailsOpen(true); }}
+                            onCopy={copyToClipboard}
+                          />
+                        ))}
+                        {(!incidentsByStatus[status] || incidentsByStatus[status].length === 0) && (
+                          <div className="text-center py-8 text-muted-foreground text-sm">
+                            No hay incidencias en este estado
+                          </div>
+                        )}
+                      </div>
+                    </SortableContext>
+                  </div>
+                ))}
+              </div>
+            </DndContext>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -1240,6 +1274,30 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
         setSelected((prev: any) => (prev && prev.id === id ? { ...prev, ...payload } : prev));
       }}
     />
+
+    {/* Confirmation Modal for Status Change */}
+    <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Confirmar cambio de estado</DialogTitle>
+          <DialogDescription>
+            {pendingMove && (
+              <>
+                ¿Estás seguro de que quieres cambiar la tarea nº {pendingMove.incidentNumber} del estado "{STATUS_LABELS[pendingMove.fromStatus]}" al estado "{STATUS_LABELS[pendingMove.toStatus]}"?
+              </>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex justify-end gap-2 mt-4">
+          <Button variant="outline" onClick={cancelMove}>
+            Cancelar
+          </Button>
+          <Button onClick={confirmMove}>
+            Confirmar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
     </div>
   );
 }
