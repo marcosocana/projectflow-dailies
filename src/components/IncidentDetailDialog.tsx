@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { Trash2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 // Options same as IncidentsModule to keep UI identical
 const STATUS_OPTIONS = [
@@ -43,11 +45,13 @@ interface IncidentDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   incidentId: string | null;
   onPatched?: (id: string, payload: any) => void;
+  onDeleted?: (id: string) => void;
 }
 
-export default function IncidentDetailDialog({ open, onOpenChange, incidentId, onPatched }: IncidentDetailDialogProps) {
+export default function IncidentDetailDialog({ open, onOpenChange, incidentId, onPatched, onDeleted }: IncidentDetailDialogProps) {
   const { user } = useAuth();
   const { getUrl } = useSignedUrl('project-files');
+  const { toast } = useToast();
 
   const [selected, setSelected] = useState<any | null>(null);
   const [createdByEmail, setCreatedByEmail] = useState<string>('');
@@ -196,20 +200,54 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     }
   };
 
+  const handleDelete = async () => {
+    if (!selected || !selected.id) return;
+    
+    if (!confirm(`¿Estás seguro de que quieres eliminar la tarea T${String(selected.incident_number ?? 0).padStart(5, '0')}?`)) {
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('incidents')
+        .delete()
+        .eq('id', selected.id);
+      
+      if (error) throw error;
+      
+      toast({ title: 'Tarea eliminada', description: 'La tarea ha sido eliminada correctamente' });
+      onDeleted?.(selected.id);
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Error deleting incident:', error);
+      toast({ title: 'Error', description: 'No se pudo eliminar la tarea', variant: 'destructive' });
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>
-            {selected ? `Detalle T${String(selected.incident_number ?? 0).padStart(5, '0')}` : 'Detalle de incidencia'}
-          </DialogTitle>
-          <DialogDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle>
+                {selected ? `Detalle T${String(selected.incident_number ?? 0).padStart(5, '0')}` : 'Detalle de incidencia'}
+              </DialogTitle>
+              <DialogDescription>
+                {selected && (
+                  <div className="mt-2 text-sm">
+                    <span className="font-medium">Creado por:</span> {createdByEmail || 'Desconocido'}
+                  </div>
+                )}
+              </DialogDescription>
+            </div>
             {selected && (
-              <div className="mt-2 text-sm">
-                <span className="font-medium">Creado por:</span> {createdByEmail || 'Desconocido'}
-              </div>
+              <Button variant="outline" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive">
+                <Trash2 className="h-4 w-4 mr-1" />
+                Eliminar
+              </Button>
             )}
-          </DialogDescription>
+          </div>
         </DialogHeader>
         {selected && (
           <div className="space-y-4">

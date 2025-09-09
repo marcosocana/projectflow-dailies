@@ -185,27 +185,14 @@ const SortableIncidentCard = ({ incident, onEdit, onDelete, onViewDetails, onCop
           <Clock className="h-3 w-3" />
           {new Date(incident.occurred_at).toLocaleDateString()}
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-              <MoreVertical className="h-3 w-3" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onViewDetails(incident)}>
-              <Eye className="mr-2 h-4 w-4" />Ver detalles
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onEdit(incident)}>
-              <Pencil className="mr-2 h-4 w-4" />Editar
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onCopy(incident)}>
-              <Copy className="mr-2 h-4 w-4" />Copiar info
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onDelete(incident.id)} className="text-destructive">
-              <Trash2 className="mr-2 h-4 w-4" />Eliminar
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onViewDetails(incident)}>
+            <Eye className="h-3 w-3" />
+          </Button>
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onCopy(incident)}>
+            <Copy className="h-3 w-3" />
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -1001,29 +988,11 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                     <TableCell><StatusBadge status={i.status} /></TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => { setSelected(i); setDetailsOpen(true); }}>
-                              <Eye className="mr-2 h-4 w-4" />Ver detalles
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { onEdit(i); setCreateOpen(true); }}>
-                              <Pencil className="mr-2 h-4 w-4" />Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => copyToClipboard(i)}>
-                              <Copy className="mr-2 h-4 w-4" />Copiar info
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onDelete(i.id)} className="text-destructive">
-                              <Trash2 className="mr-2 h-4 w-4" />Eliminar
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
                         <Button variant="ghost" size="icon" onClick={() => { setSelected(i); setDetailsOpen(true); }}>
                           <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => copyToClipboard(i)}>
+                          <Copy className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -1270,6 +1239,11 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
       onPatched={(id, payload) => {
         setIncidents((prev) => prev.map((i) => (i.id === id ? { ...i, ...payload } : i)));
         setSelected((prev: any) => (prev && prev.id === id ? { ...prev, ...payload } : prev));
+      }}
+      onDeleted={(id) => {
+        setIncidents(prev => prev.filter(i => i.id !== id));
+        setSelected(null);
+        fetchIncidents();
       }}
     />
 
