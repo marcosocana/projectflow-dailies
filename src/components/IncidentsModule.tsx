@@ -175,16 +175,11 @@ const SortableIncidentCard = ({
       {incident.description && <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
           {incident.description}
         </p>}
-      <div className="flex items-center justify-between">
-        
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onDelete(incident.id)}>
-            <Trash2 className="h-3 w-3" />
-          </Button>
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onViewDetails(incident)}>
-            
-          </Button>
-        </div>
+      <div className="flex items-center justify-end">
+        <span className="text-xs text-muted-foreground">
+          <Clock className="h-3 w-3 inline mr-1" />
+          {new Date(incident.created_at || incident.occurred_at).toLocaleDateString('es-ES')}
+        </span>
       </div>
     </div>;
 };
