@@ -66,11 +66,15 @@ export function useVacations(projectId?: string) {
   };
 
   const updateVacation = async (id: string, updates: Partial<Vacation>) => {
+    console.log('updateVacation called with:', { id, updates });
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('vacations')
         .update(updates)
-        .eq('id', id);
+        .eq('id', id)
+        .select();
+
+      console.log('Update response:', { data, error });
 
       if (error) throw error;
       
@@ -80,6 +84,7 @@ export function useVacations(projectId?: string) {
         description: "Ausencia actualizada correctamente",
       });
     } catch (error: any) {
+      console.error('Update vacation error:', error);
       toast({
         title: "Error",
         description: error.message,
@@ -89,11 +94,15 @@ export function useVacations(projectId?: string) {
   };
 
   const deleteVacation = async (id: string) => {
+    console.log('deleteVacation called with id:', id);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('vacations')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .select();
+
+      console.log('Delete response:', { data, error });
 
       if (error) throw error;
       
@@ -103,6 +112,7 @@ export function useVacations(projectId?: string) {
         description: "Ausencia eliminada correctamente",
       });
     } catch (error: any) {
+      console.error('Delete vacation error:', error);
       toast({
         title: "Error",
         description: error.message,

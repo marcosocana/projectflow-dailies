@@ -128,6 +128,10 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingVacation) return;
+    
+    console.log('Editing vacation:', editingVacation.id);
+    console.log('Edit form data:', editForm);
+    
     try {
       await updateVacation(editingVacation.id, {
         person_id: editForm.personId || null,
@@ -136,7 +140,6 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
         description: editForm.description || null,
       });
       setEditingVacation(null);
-      toast({ title: 'Éxito', description: 'Ausencia actualizada' });
     } catch (error) {
       console.error('Error updating vacation:', error);
     }
@@ -270,7 +273,14 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
                               variant="ghost"
                               size="sm"
                               className="text-destructive hover:text-destructive"
-                              onClick={() => deleteVacation(vacation.id)}
+                              onClick={async () => {
+                                console.log('Deleting vacation:', vacation.id);
+                                try {
+                                  await deleteVacation(vacation.id);
+                                } catch (error) {
+                                  console.error('Delete error:', error);
+                                }
+                              }}
                             >
                               Eliminar
                             </Button>
