@@ -71,7 +71,7 @@ const ContactsModule = ({ projectId }: ContactsModuleProps) => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center min-h-48">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
@@ -79,153 +79,157 @@ const ContactsModule = ({ projectId }: ContactsModuleProps) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Contactos</h1>
-          <p className="text-muted-foreground">Gestión de contactos destacados del proyecto</p>
-        </div>
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Contactos</CardTitle>
+            <Button onClick={() => setCreateDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Nuevo contacto
             </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Crear nuevo contacto</DialogTitle>
-              <DialogDescription>Añade un nuevo contacto destacado del proyecto</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreateSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="create-name">Nombre *</Label>
-                <Input
-                  id="create-name"
-                  value={createForm.name}
-                  onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                  required
-                  placeholder="Nombre completo"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="create-email">Email</Label>
-                <Input
-                  id="create-email"
-                  type="email"
-                  value={createForm.email}
-                  onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                  placeholder="email@ejemplo.com"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="create-phone">Teléfono</Label>
-                <Input
-                  id="create-phone"
-                  value={createForm.phone}
-                  onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
-                  placeholder="+34 123 456 789"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="create-role">Rol</Label>
-                <Input
-                  id="create-role"
-                  value={createForm.role}
-                  onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
-                  placeholder="Cargo o responsabilidad"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="create-description">Descripción</Label>
-                <Textarea
-                  id="create-description"
-                  value={createForm.description}
-                  onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-                  placeholder="Información adicional sobre el contacto"
-                  rows={3}
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit">
-                  Crear contacto
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {contacts.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <User className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">No hay contactos registrados aún</p>
-            <p className="text-sm text-muted-foreground mt-1">Crea el primer contacto para empezar</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {contacts.map((contact) => (
-            <Card key={contact.id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-lg">{contact.name}</CardTitle>
-                    {contact.role && (
-                      <CardDescription className="font-medium text-primary">
-                        {contact.role}
-                      </CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {contacts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <User className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium mb-2">No hay contactos aún</h3>
+              <p className="text-muted-foreground mb-4">Crea tu primer contacto</p>
+              <Button onClick={() => setCreateDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Crear primer contacto
+              </Button>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {contacts.map((contact) => (
+                <Card key={contact.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle className="text-lg">{contact.name}</CardTitle>
+                        {contact.role && (
+                          <CardDescription className="font-medium text-primary">
+                            {contact.role}
+                          </CardDescription>
+                        )}
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditDialog(contact)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => deleteContact(contact.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {contact.email && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        <a href={`mailto:${contact.email}`} className="text-primary hover:underline">
+                          {contact.email}
+                        </a>
+                      </div>
                     )}
-                  </div>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEditDialog(contact)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => deleteContact(contact.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {contact.email && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <a href={`mailto:${contact.email}`} className="text-primary hover:underline">
-                      {contact.email}
-                    </a>
-                  </div>
-                )}
-                {contact.phone && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <a href={`tel:${contact.phone}`} className="text-primary hover:underline">
-                      {contact.phone}
-                    </a>
-                  </div>
-                )}
-                {contact.description && (
-                  <p className="text-sm text-muted-foreground mt-3">
-                    {contact.description}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                    {contact.phone && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        <a href={`tel:${contact.phone}`} className="text-primary hover:underline">
+                          {contact.phone}
+                        </a>
+                      </div>
+                    )}
+                    {contact.description && (
+                      <p className="text-sm text-muted-foreground mt-3">
+                        {contact.description}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Create Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Crear nuevo contacto</DialogTitle>
+            <DialogDescription>Añade un nuevo contacto destacado del proyecto</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="create-name">Nombre *</Label>
+              <Input
+                id="create-name"
+                value={createForm.name}
+                onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                required
+                placeholder="Nombre completo"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-email">Email</Label>
+              <Input
+                id="create-email"
+                type="email"
+                value={createForm.email}
+                onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                placeholder="email@ejemplo.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-phone">Teléfono</Label>
+              <Input
+                id="create-phone"
+                value={createForm.phone}
+                onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                placeholder="+34 123 456 789"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-role">Rol</Label>
+              <Input
+                id="create-role"
+                value={createForm.role}
+                onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
+                placeholder="Cargo o responsabilidad"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-description">Descripción</Label>
+              <Textarea
+                id="create-description"
+                value={createForm.description}
+                onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+                placeholder="Información adicional sobre el contacto"
+                rows={3}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">
+                Crear contacto
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={!!editingContact} onOpenChange={() => setEditingContact(null)}>

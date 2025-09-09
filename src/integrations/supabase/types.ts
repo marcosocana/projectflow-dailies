@@ -527,6 +527,30 @@ export type Database = {
           },
         ]
       }
+      shared_notes_history: {
+        Row: {
+          content: string
+          created_at: string
+          edited_by: string | null
+          id: string
+          note_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          edited_by?: string | null
+          id?: string
+          note_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          edited_by?: string | null
+          id?: string
+          note_id?: string
+        }
+        Relationships: []
+      }
       task_comments: {
         Row: {
           content: string
