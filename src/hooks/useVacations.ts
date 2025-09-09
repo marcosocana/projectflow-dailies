@@ -10,6 +10,7 @@ export interface Vacation {
   start_date: string;
   end_date: string;
   description?: string | null;
+  type?: string;
   created_at: string;
   updated_at: string;
 }

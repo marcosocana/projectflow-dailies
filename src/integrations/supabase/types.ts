@@ -192,6 +192,44 @@ export type Database = {
           },
         ]
       }
+      interesting_links: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          project_id: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          project_id: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          project_id?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interesting_links_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       people: {
         Row: {
           color: string
@@ -332,6 +370,44 @@ export type Database = {
         }
         Relationships: []
       }
+      releases: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          platform: string
+          project_id: string
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          platform: string
+          project_id: string
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          platform?: string
+          project_id?: string
+          updated_at?: string
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "releases_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shared_notes: {
         Row: {
           content: string
@@ -439,6 +515,7 @@ export type Database = {
       }
       tasks: {
         Row: {
+          assigned_to: string | null
           created_at: string
           daily_id: string | null
           description: string | null
@@ -452,6 +529,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assigned_to?: string | null
           created_at?: string
           daily_id?: string | null
           description?: string | null
@@ -465,6 +543,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assigned_to?: string | null
           created_at?: string
           daily_id?: string | null
           description?: string | null
@@ -478,6 +557,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tasks_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tasks_daily_id_fkey"
             columns: ["daily_id"]
@@ -565,6 +651,7 @@ export type Database = {
           person_id: string | null
           project_id: string
           start_date: string
+          type: string
           updated_at: string
           user_id: string
         }
@@ -576,6 +663,7 @@ export type Database = {
           person_id?: string | null
           project_id: string
           start_date: string
+          type?: string
           updated_at?: string
           user_id: string
         }
@@ -587,6 +675,7 @@ export type Database = {
           person_id?: string | null
           project_id?: string
           start_date?: string
+          type?: string
           updated_at?: string
           user_id?: string
         }

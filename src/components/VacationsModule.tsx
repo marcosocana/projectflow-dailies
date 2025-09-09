@@ -32,6 +32,7 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
   const [description, setDescription] = useState('');
+  const [absenceType, setAbsenceType] = useState<'baja' | 'vacaciones'>('vacaciones');
   const [filterUser, setFilterUser] = useState<string>('all');
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,7 +44,8 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
       project_id: projectId,
       start_date: startDate.toISOString().split('T')[0],
       end_date: endDate.toISOString().split('T')[0],
-      description: description.trim() || undefined,
+      description: absenceType === 'baja' ? description.trim() || undefined : undefined,
+      type: absenceType,
     };
 
     if (editingVacation) {
@@ -62,6 +64,7 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
     setStartDate(undefined);
     setEndDate(undefined);
     setDescription('');
+    setAbsenceType('vacaciones');
   };
 
   const handleEdit = (vacation: Vacation) => {
@@ -122,6 +125,19 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
             </DialogHeader>
             
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="type">Tipo de ausencia</Label>
+                <Select value={absenceType} onValueChange={(value: 'baja' | 'vacaciones') => setAbsenceType(value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona el tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vacaciones">Vacaciones</SelectItem>
+                    <SelectItem value="baja">Baja</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
               <div className="space-y-2">
                 <Label htmlFor="user">Usuario</Label>
                 <Select value={selectedUser} onValueChange={setSelectedUser} required>
@@ -201,15 +217,17 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="description">Descripción (opcional)</Label>
-                <Textarea
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Motivo o detalles de las vacaciones"
-                />
-              </div>
+              {absenceType === 'baja' && (
+                <div className="space-y-2">
+                  <Label htmlFor="description">Descripción</Label>
+                  <Textarea
+                    id="description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Describe el motivo de la baja..."
+                  />
+                </div>
+              )}
 
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={handleCloseDialog}>
@@ -287,7 +305,7 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
                     
                     <div className="flex items-center gap-2">
                       <Badge variant="secondary">
-                        {days} {days === 1 ? 'día' : 'días'}
+                        {days} {days === 1 ? 'día' : 'días'} • {vacation.type === 'baja' ? 'Baja' : 'Vacaciones'}
                       </Badge>
                       
                       <Button

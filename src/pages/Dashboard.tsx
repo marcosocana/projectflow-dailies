@@ -11,7 +11,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
 import CreateProjectForm from '@/components/CreateProjectForm';
 import IncidentsModule from '@/components/IncidentsModule';
-import VacationsCalendarModule from '@/components/VacationsCalendarModule';
+import ReleasesModule from '@/components/ReleasesModule';
+import InterestingLinksModule from '@/components/InterestingLinksModule';
+import VacationsModule from '@/components/VacationsModule';
 import NotesModule from '@/components/NotesModule';
 import ProjectInformationModule from '@/components/ProjectInformationModule';
 // import HomeModule from '@/components/HomeModule';
@@ -120,7 +122,13 @@ const Dashboard = () => {
                     <a href="/tasks">Gestión de tareas</a>
                   </Button>
                   <Button asChild variant="ghost" className="justify-start">
-                    <a href="/vacations">Vacaciones</a>
+                    <a href="/vacations">Gestión de ausencias</a>
+                  </Button>
+                  <Button asChild variant="ghost" className="justify-start">
+                    <a href="/releases">Releases</a>
+                  </Button>
+                  <Button asChild variant="ghost" className="justify-start">
+                    <a href="/links">Enlaces de interés</a>
                   </Button>
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/notes">Notas</a>
@@ -207,7 +215,9 @@ const Dashboard = () => {
               <Routes>
                 <Route path="/" element={<Navigate to="tasks" replace />} />
                 <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
-                <Route path="vacations" element={<VacationsCalendarModule projectId={currentProject.id} />} />
+                <Route path="vacations" element={<VacationsModule projectId={currentProject.id} />} />
+                <Route path="releases" element={<ReleasesModule projectId={currentProject.id} />} />
+                <Route path="links" element={<InterestingLinksModule projectId={currentProject.id} />} />
                 <Route path="notes" element={<NotesModule projectId={currentProject.id} />} />
                 <Route path="notes/new" element={<NoteCreate projectId={currentProject.id} />} />
                 <Route path="notes/:noteId" element={<NoteDetail projectId={currentProject.id} />} />

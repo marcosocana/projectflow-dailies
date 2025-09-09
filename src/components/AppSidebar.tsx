@@ -14,7 +14,9 @@ import {
   FileText,
   Info,
   Home,
-  Settings
+  Settings,
+  Rocket,
+  Link
 } from 'lucide-react';
 
 interface AppSidebarProps {
@@ -29,10 +31,22 @@ const menuItems = [
     description: "Gestión de incidencias y mejoras" 
   },
   { 
-    title: "Vacaciones", 
+    title: "Ausencias", 
     url: "vacations", 
     icon: Calendar,
-    description: "Gestión de vacaciones del equipo" 
+    description: "Gestión de ausencias del equipo" 
+  },
+  { 
+    title: "Releases", 
+    url: "releases", 
+    icon: Rocket,
+    description: "Registro de versiones Web y App" 
+  },
+  { 
+    title: "Enlaces", 
+    url: "links", 
+    icon: Link,
+    description: "Enlaces de interés del proyecto" 
   },
   { 
     title: "Notas", 

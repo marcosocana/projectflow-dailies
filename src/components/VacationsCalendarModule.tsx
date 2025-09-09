@@ -206,7 +206,7 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Gestión de Vacaciones</CardTitle>
+            <CardTitle>Gestión de ausencias</CardTitle>
             <div className="flex items-center gap-2">
               <Button variant="secondary" onClick={handleDeleteAllVacations}>
                 <Trash2 className="h-4 w-4 mr-2" />

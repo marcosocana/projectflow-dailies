@@ -54,12 +54,14 @@ export default function DailiesModule({
     personIds: string[];
     incidentId: string;
     status: TaskStatus;
+    assignedTo: string;
   }>({
     title: '',
     description: '',
     personIds: [],
     incidentId: '',
-    status: 'pending'
+    status: 'pending',
+    assignedTo: ''
   });
 
   // New states for persist modal and view all tasks
@@ -94,12 +96,14 @@ export default function DailiesModule({
     personIds: string[];
     incidentId: string;
     status: TaskStatus;
+    assignedTo: string;
   }>({
     title: '',
     description: '',
     personIds: [],
     incidentId: '',
-    status: 'pending'
+    status: 'pending',
+    assignedTo: ''
   });
   const loadBaseData = async () => {
     const [{
@@ -201,7 +205,8 @@ export default function DailiesModule({
       daily_id: dailyId,
       person_id: taskForm.personIds.length > 0 ? taskForm.personIds[0] : null, // For now, use first person
       incident_id: taskForm.incidentId || null,
-      status: taskForm.status ?? 'pending'
+      status: taskForm.status ?? 'pending',
+      assigned_to: taskForm.assignedTo || null
     };
     const {
       data: created,
@@ -224,7 +229,8 @@ export default function DailiesModule({
       description: '',
       personIds: [],
       incidentId: '',
-      status: 'pending'
+      status: 'pending',
+      assignedTo: ''
     });
     setCreateTaskOpen(false);
     loadTasks(date);
@@ -416,7 +422,8 @@ export default function DailiesModule({
       description: task.description || '',
       personIds: task.person_id ? [task.person_id] : [],
       incidentId: task.incident_id || '',
-      status: task.status as TaskStatus || 'pending'
+      status: task.status as TaskStatus || 'pending',
+      assignedTo: task.assigned_to || ''
     });
     setEditing(false);
     setDetailsOpen(true);
@@ -453,7 +460,8 @@ export default function DailiesModule({
         description: editForm.description || null,
         person_id: editForm.personIds.length > 0 ? editForm.personIds[0] : null,
         incident_id: editForm.incidentId || null,
-        status: editForm.status
+        status: editForm.status,
+        assigned_to: editForm.assignedTo || null
       };
       const {
         error
@@ -828,6 +836,15 @@ export default function DailiesModule({
                   </Popover>
                 </div>
                 <div>
+                  <Label>Creado por</Label>
+                  <div className="text-sm text-muted-foreground">
+                    {selectedTask.created_by ? 
+                      people.find(p => p.id === selectedTask.created_by)?.name || 'Desconocido' :
+                      'No especificado'
+                    }
+                  </div>
+                </div>
+                <div>
                   <Label>Estado</Label>
                   <Select value={editForm.status} onValueChange={v => setEditForm(f => ({
                 ...f,
@@ -847,6 +864,25 @@ export default function DailiesModule({
                 ...f,
                 description: e.target.value
               }))} />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Asignado a</Label>
+                  <Select value={editForm.assignedTo} onValueChange={(value) => setEditForm(f => ({ ...f, assignedTo: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona un miembro del equipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Sin asignar</SelectItem>
+                      {people.map((person) => (
+                        <SelectItem key={person.id} value={person.id}>
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded" style={{ backgroundColor: person.color }} />
+                            {person.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="md:col-span-2">
                   <Label>Vincular a incidencia</Label>
