@@ -527,38 +527,6 @@ export type Database = {
           },
         ]
       }
-      shared_notes_history: {
-        Row: {
-          content: string
-          created_at: string
-          edited_by: string | null
-          id: string
-          note_id: string
-        }
-        Insert: {
-          content: string
-          created_at?: string
-          edited_by?: string | null
-          id?: string
-          note_id: string
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          edited_by?: string | null
-          id?: string
-          note_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "shared_notes_history_note_id_fkey"
-            columns: ["note_id"]
-            isOneToOne: false
-            referencedRelation: "shared_notes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       task_comments: {
         Row: {
           content: string
@@ -785,6 +753,10 @@ export type Database = {
       current_user_is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      delete_shared_note: {
+        Args: { note_id: string }
+        Returns: undefined
       }
       has_role: {
         Args: {
