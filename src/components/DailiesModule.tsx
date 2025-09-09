@@ -416,8 +416,6 @@ export default function DailiesModule({
 
 
   const openDetails = async (task: any) => {
-    console.log('openDetails called with task:', task);
-    console.log('Setting detailsOpen to true');
     setSelectedTask(task);
     setEditForm({
       title: task.title || '',
@@ -425,11 +423,10 @@ export default function DailiesModule({
       personIds: task.person_id ? [task.person_id] : [],
       incidentId: task.incident_id || '',
       status: task.status as TaskStatus || 'pending',
-      assignedTo: task.assigned_to || ''
+      assignedTo: task.assigned_to || 'unassigned'
     });
     setEditing(false);
     setDetailsOpen(true);
-    console.log('detailsOpen should now be true');
     await loadTaskComments(task.id);
   };
   const addTaskComment = async (e: React.FormEvent) => {
@@ -464,7 +461,7 @@ export default function DailiesModule({
         person_id: editForm.personIds.length > 0 ? editForm.personIds[0] : null,
         incident_id: editForm.incidentId || null,
         status: editForm.status,
-        assigned_to: editForm.assignedTo || null
+        assigned_to: editForm.assignedTo === 'unassigned' ? null : editForm.assignedTo || null
       };
       const {
         error
@@ -600,10 +597,7 @@ export default function DailiesModule({
                            <Button 
                              variant="ghost" 
                              size="icon" 
-                             onClick={() => {
-                               console.log('Eye button clicked for task:', t);
-                               openDetails(t);
-                             }} 
+                             onClick={() => openDetails(t)} 
                              aria-label="Ver"
                            >
                              <Eye className="h-4 w-4" />
@@ -773,8 +767,6 @@ export default function DailiesModule({
 
       {/* Modal Detalle de Tarea */}
       <Dialog open={detailsOpen} onOpenChange={o => {
-      console.log('Dialog onOpenChange called with:', o);
-      console.log('Current detailsOpen state:', detailsOpen);
       setDetailsOpen(o);
       if (!o) {
         setSelectedTask(null);
@@ -848,15 +840,15 @@ export default function DailiesModule({
                     </PopoverContent>
                   </Popover>
                 </div>
-                <div>
-                  <Label>Creado por</Label>
-                  <div className="text-sm text-muted-foreground">
-                    {selectedTask.assigned_to ? 
-                      people.find(p => p.id === selectedTask.assigned_to)?.name || 'Desconocido' :
-                      'No especificado'
-                    }
-                  </div>
-                </div>
+                 <div>
+                   <Label>Creado por</Label>
+                   <div className="text-sm text-muted-foreground">
+                     {selectedTask.assigned_to && selectedTask.assigned_to !== 'unassigned' ? 
+                       people.find(p => p.id === selectedTask.assigned_to)?.name || 'Desconocido' :
+                       'No especificado'
+                     }
+                   </div>
+                 </div>
                 <div>
                   <Label>Estado</Label>
                   <Select value={editForm.status} onValueChange={v => setEditForm(f => ({
@@ -885,7 +877,7 @@ export default function DailiesModule({
                       <SelectValue placeholder="Selecciona un miembro del equipo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Sin asignar</SelectItem>
+                      <SelectItem value="unassigned">Sin asignar</SelectItem>
                       {people.map((person) => (
                         <SelectItem key={person.id} value={person.id}>
                           <div className="flex items-center gap-2">
