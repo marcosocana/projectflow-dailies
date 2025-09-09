@@ -35,7 +35,7 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
   }, [visibleNotes, searchQuery]);
 
   useEffect(() => {
-    document.title = 'Notas Compartidas';
+    document.title = 'Wikis colaborativas';
   }, []);
 
   const openCreate = () => navigate('/notes/new');
@@ -57,61 +57,65 @@ export default function NotesModule({ projectId }: NotesModuleProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Notas Compartidas</h1>
-        <Button onClick={openCreate} aria-label="Crear nueva nota">
-          <Plus className="h-4 w-4 mr-2" />
-          Nueva Nota
-        </Button>
-      </div>
-
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar notas..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-          aria-label="Buscar notas"
-        />
-      </div>
-
-      {filteredNotes.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">No hay notas aún</h3>
-            <p className="text-muted-foreground mb-4">Crea tu primera nota compartida</p>
-            <Button onClick={openCreate}>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Wikis colaborativas</CardTitle>
+            <Button onClick={openCreate} aria-label="Crear nueva nota">
               <Plus className="h-4 w-4 mr-2" />
-              Crear primera nota
+              Nueva Nota
             </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredNotes.map((note: any) => {
-            const previewText = note.content.replace(/<[^>]*>/g, ' ').trim();
-            const preview = previewText.substring(0, 150) + (previewText.length > 150 ? '...' : '');
-            return (
-              <Card key={note.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => openDetail(note)}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg line-clamp-2">
-                    {note.title || 'Sin título'}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground line-clamp-4 mb-3">{preview}</p>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{authorLabel(note)}</span>
-                    <span>{dateLabel(note.created_at)}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar notas..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+              aria-label="Buscar notas"
+            />
+          </div>
+
+          {filteredNotes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium mb-2">No hay notas aún</h3>
+              <p className="text-muted-foreground mb-4">Crea tu primera nota compartida</p>
+              <Button onClick={openCreate}>
+                <Plus className="h-4 w-4 mr-2" />
+                Crear primera nota
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredNotes.map((note: any) => {
+                const previewText = note.content.replace(/<[^>]*>/g, ' ').trim();
+                const preview = previewText.substring(0, 150) + (previewText.length > 150 ? '...' : '');
+                return (
+                  <Card key={note.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => openDetail(note)}>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg line-clamp-2">
+                        {note.title || 'Sin título'}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground line-clamp-4 mb-3">{preview}</p>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{authorLabel(note)}</span>
+                        <span>{dateLabel(note.created_at)}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

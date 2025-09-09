@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, ExternalLink, Trash2 } from 'lucide-react';
+import { Plus, ExternalLink, Trash2, Edit } from 'lucide-react';
 
 interface InterestingLinksModuleProps {
   projectId: string;
@@ -25,6 +25,7 @@ export default function InterestingLinksModule({ projectId }: InterestingLinksMo
   const [links, setLinks] = useState<InterestingLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingLink, setEditingLink] = useState<InterestingLink | null>(null);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [description, setDescription] = useState('');
@@ -80,27 +81,44 @@ export default function InterestingLinksModule({ projectId }: InterestingLinksMo
     }
 
     try {
-      const { error } = await supabase
-        .from('interesting_links')
-        .insert({
-          project_id: projectId,
-          name: name.trim(),
-          url: url.trim(),
-          description: description.trim() || null,
-        });
+      if (editingLink) {
+        const { error } = await supabase
+          .from('interesting_links')
+          .update({
+            name: name.trim(),
+            url: url.trim(),
+            description: description.trim() || null,
+          })
+          .eq('id', editingLink.id);
 
-      if (error) throw error;
+        if (error) throw error;
+        toast({
+          title: "Éxito",
+          description: "Enlace actualizado correctamente",
+        });
+      } else {
+        const { error } = await supabase
+          .from('interesting_links')
+          .insert({
+            project_id: projectId,
+            name: name.trim(),
+            url: url.trim(),
+            description: description.trim() || null,
+          });
+
+        if (error) throw error;
+        toast({
+          title: "Éxito",
+          description: "Enlace añadido correctamente",
+        });
+      }
 
       await loadLinks();
       setIsDialogOpen(false);
+      setEditingLink(null);
       setName('');
       setUrl('');
       setDescription('');
-      
-      toast({
-        title: "Éxito",
-        description: "Enlace añadido correctamente",
-      });
     } catch (error: any) {
       toast({
         title: "Error",
@@ -108,6 +126,14 @@ export default function InterestingLinksModule({ projectId }: InterestingLinksMo
         variant: "destructive",
       });
     }
+  };
+
+  const openEditDialog = (link: InterestingLink) => {
+    setEditingLink(link);
+    setName(link.name);
+    setUrl(link.url);
+    setDescription(link.description || '');
+    setIsDialogOpen(true);
   };
 
   const handleDelete = async (id: string) => {
@@ -142,13 +168,8 @@ export default function InterestingLinksModule({ projectId }: InterestingLinksMo
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Enlaces de interés</CardTitle>
-              <CardDescription>
-                Enlaces importantes del proyecto
-              </CardDescription>
-            </div>
-            <Button onClick={() => setIsDialogOpen(true)}>
+            <CardTitle>Enlaces de interés</CardTitle>
+            <Button onClick={() => { setEditingLink(null); setName(''); setUrl(''); setDescription(''); setIsDialogOpen(true); }}>
               <Plus className="h-4 w-4 mr-2" />
               Nuevo enlace
             </Button>
@@ -156,22 +177,24 @@ export default function InterestingLinksModule({ projectId }: InterestingLinksMo
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="text-muted-foreground">Cargando enlaces...</div>
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
           ) : links.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No hay enlaces registrados
+              <ExternalLink className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <p>No hay enlaces registrados aún</p>
+              <p className="text-sm text-muted-foreground mt-1">Crea el primer enlace para empezar</p>
             </div>
           ) : (
-            <div className="grid gap-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {links.map((link) => (
-                <Card key={link.id} className="border-l-4 border-l-primary">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-semibold">{link.name}</h3>
+                <Card key={link.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          {link.name}
                           <a
                             href={link.url}
                             target="_blank"
@@ -180,28 +203,36 @@ export default function InterestingLinksModule({ projectId }: InterestingLinksMo
                           >
                             <ExternalLink className="h-4 w-4" />
                           </a>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-2 break-all">
-                          {link.url}
-                        </p>
-                        {link.description && (
-                          <p className="text-sm">
-                            {link.description}
-                          </p>
-                        )}
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Creado el {new Date(link.created_at).toLocaleDateString()}
-                        </p>
+                        </CardTitle>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(link.id)}
-                        className="text-destructive hover:text-destructive/80"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditDialog(link)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => handleDelete(link.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <p className="text-sm text-muted-foreground break-all">
+                      {link.url}
+                    </p>
+                    {link.description && (
+                      <p className="text-sm text-muted-foreground mt-3">
+                        {link.description}
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               ))}
@@ -210,13 +241,13 @@ export default function InterestingLinksModule({ projectId }: InterestingLinksMo
         </CardContent>
       </Card>
 
-      {/* Add Link Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      {/* Add/Edit Link Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) setEditingLink(null); }}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Nuevo enlace</DialogTitle>
+            <DialogTitle>{editingLink ? 'Editar enlace' : 'Nuevo enlace'}</DialogTitle>
             <DialogDescription>
-              Añade un enlace de interés para el proyecto
+              {editingLink ? 'Modifica la información del enlace' : 'Añade un enlace de interés para el proyecto'}
             </DialogDescription>
           </DialogHeader>
           
@@ -256,7 +287,7 @@ export default function InterestingLinksModule({ projectId }: InterestingLinksMo
             </div>
             
             <Button type="submit" className="w-full">
-              Añadir enlace
+              {editingLink ? 'Guardar cambios' : 'Añadir enlace'}
             </Button>
           </form>
         </DialogContent>

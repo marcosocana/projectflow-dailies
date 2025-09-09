@@ -1002,7 +1002,9 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                       <CategoryIcon category={i.category} />
                     </TableCell>
                     <TableCell className="font-mono">T{String(i.incident_number ?? 0).padStart(5, '0')}</TableCell>
-                    <TableCell className="font-medium">{i.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {i.name.length > 32 ? `${i.name.substring(0, 32)}...` : i.name}
+                    </TableCell>
                     <TableCell>{i.epic || '-'}</TableCell>
                     <TableCell>{i.device || '-'}</TableCell>
                     <TableCell>{i.environment || '-'}</TableCell>

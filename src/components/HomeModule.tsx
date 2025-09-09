@@ -413,55 +413,61 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
 
   return (
     <main className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Resumen del proyecto</h1>
-        <div className="flex items-center gap-2">
-          <Button
-            variant={viewMode === 'list' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('list')}
-            className="flex items-center gap-2"
-          >
-            <List className="h-4 w-4" />
-            Lista
-          </Button>
-          <Button
-            variant={viewMode === 'pipeline' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('pipeline')}
-            className="flex items-center gap-2"
-          >
-            <Columns3 className="h-4 w-4" />
-            Pipeline
-          </Button>
-        </div>
-      </div>
-      
-      {/* Próxima vacación - indicador simple */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" /> Próxima vacación
-          </CardTitle>
-          <CardDescription>Siguiente persona en salir de vacaciones</CardDescription>
+          <CardTitle>Resumen del proyecto</CardTitle>
         </CardHeader>
-        <CardContent>
-          {nextVacation ? (
-            <div className="flex items-center gap-4">
-              <div className="flex flex-col">
-                <span className="font-medium">{nextVacation.person}</span>
-                <span className="text-sm text-muted-foreground">{nextVacation.date}</span>
-              </div>
-              <Clock className="h-4 w-4 text-muted-foreground" />
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                className="flex items-center gap-2"
+              >
+                <List className="h-4 w-4" />
+                Lista
+              </Button>
+              <Button
+                variant={viewMode === 'pipeline' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('pipeline')}
+                className="flex items-center gap-2"
+              >
+                <Columns3 className="h-4 w-4" />
+                Pipeline
+              </Button>
             </div>
-          ) : (
-            <p className="text-muted-foreground">No hay vacaciones próximas</p>
-          )}
+          </div>
+          
+          {/* Próxima vacación - indicador simple */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" /> Próxima vacación
+              </CardTitle>
+              <CardDescription>Siguiente persona en salir de vacaciones</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {nextVacation ? (
+                <div className="flex items-center gap-4">
+                  <div className="flex flex-col">
+                    <span className="font-medium">{nextVacation.person}</span>
+                    <span className="text-sm text-muted-foreground">{nextVacation.date}</span>
+                  </div>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </div>
+              ) : (
+                <p className="text-muted-foreground">No hay vacaciones próximas</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Incidencias - Vista Lista o Pipeline */}
+          {viewMode === 'list' ? renderListView() : renderPipelineView()}
         </CardContent>
       </Card>
-
-      {/* Incidencias - Vista Lista o Pipeline */}
-      {viewMode === 'list' ? renderListView() : renderPipelineView()}
     </main>
   );
 }
