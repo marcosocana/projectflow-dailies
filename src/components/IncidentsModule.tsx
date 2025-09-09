@@ -186,11 +186,11 @@ const SortableIncidentCard = ({ incident, onEdit, onDelete, onViewDetails, onCop
           {new Date(incident.occurred_at).toLocaleDateString()}
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onViewDetails(incident)}>
-            <Eye className="h-3 w-3" />
-          </Button>
           <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onCopy(incident)}>
             <Copy className="h-3 w-3" />
+          </Button>
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onViewDetails(incident)}>
+            <Eye className="h-3 w-3" />
           </Button>
         </div>
       </div>
@@ -988,11 +988,11 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                     <TableCell><StatusBadge status={i.status} /></TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => { setSelected(i); setDetailsOpen(true); }}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
                         <Button variant="ghost" size="icon" onClick={() => copyToClipboard(i)}>
                           <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => { setSelected(i); setDetailsOpen(true); }}>
+                          <Eye className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
