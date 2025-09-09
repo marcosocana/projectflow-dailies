@@ -416,6 +416,8 @@ export default function DailiesModule({
 
 
   const openDetails = async (task: any) => {
+    console.log('openDetails called with task:', task);
+    console.log('Setting detailsOpen to true');
     setSelectedTask(task);
     setEditForm({
       title: task.title || '',
@@ -427,6 +429,7 @@ export default function DailiesModule({
     });
     setEditing(false);
     setDetailsOpen(true);
+    console.log('detailsOpen should now be true');
     await loadTaskComments(task.id);
   };
   const addTaskComment = async (e: React.FormEvent) => {
@@ -593,14 +596,22 @@ export default function DailiesModule({
                              <span className="text-muted-foreground">—</span>
                            )}
                          </TableCell>
-                        <TableCell className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => openDetails(t)} aria-label="Ver">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => deleteTask(t.id)} aria-label="Eliminar">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
+                         <TableCell className="flex gap-1">
+                           <Button 
+                             variant="ghost" 
+                             size="icon" 
+                             onClick={() => {
+                               console.log('Eye button clicked for task:', t);
+                               openDetails(t);
+                             }} 
+                             aria-label="Ver"
+                           >
+                             <Eye className="h-4 w-4" />
+                           </Button>
+                           <Button variant="ghost" size="icon" onClick={() => deleteTask(t.id)} aria-label="Eliminar">
+                             <Trash2 className="h-4 w-4" />
+                           </Button>
+                         </TableCell>
                       </TableRow>
                     );
                   })}
@@ -762,6 +773,8 @@ export default function DailiesModule({
 
       {/* Modal Detalle de Tarea */}
       <Dialog open={detailsOpen} onOpenChange={o => {
+      console.log('Dialog onOpenChange called with:', o);
+      console.log('Current detailsOpen state:', detailsOpen);
       setDetailsOpen(o);
       if (!o) {
         setSelectedTask(null);
