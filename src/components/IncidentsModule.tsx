@@ -10,7 +10,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, MoreVertical, RefreshCcw, AlertTriangle, ListChecks, CheckCircle2, Copy } from 'lucide-react';
+import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, MoreVertical, RefreshCcw, AlertTriangle, ListChecks, CheckCircle2, Copy, List, Columns3, Clock } from 'lucide-react';
+import { 
+  DndContext, 
+  closestCenter, 
+  KeyboardSensor, 
+  PointerSensor, 
+  useSensor, 
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import {
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/hooks/useAuth';
 import type { Database } from '@/integrations/supabase/types';
@@ -20,6 +39,16 @@ import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 
 interface IncidentsModuleProps {
   projectId: string;
+}
+
+type ViewMode = 'list' | 'pipeline';
+
+interface SortableIncidentCardProps {
+  incident: any;
+  onEdit: (incident: any) => void;
+  onDelete: (id: string) => void;
+  onViewDetails: (incident: any) => void;
+  onCopy: (incident: any) => void;
 }
 
 type IncidentStatus = Database['public']['Enums']['incident_status'];
@@ -110,13 +139,100 @@ function useSignedUrl(bucket: string) {
   return { getUrl };
 }
 
+const SortableIncidentCard = ({ incident, onEdit, onDelete, onViewDetails, onCopy }: SortableIncidentCardProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: incident.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const getStatusColor = (status: IncidentStatus) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'in_progress': return 'bg-blue-100 text-blue-800 border-blue-300';
+      case 'in_qa': return 'bg-purple-100 text-purple-800 border-purple-300';
+      case 'resolved': return 'bg-green-100 text-green-800 border-green-300';
+      case 'closed': return 'bg-gray-100 text-gray-800 border-gray-300';
+      default: return 'bg-gray-100 text-gray-800 border-gray-300';
+    }
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="bg-white p-4 rounded-lg border shadow-sm hover:shadow-md transition-shadow cursor-move"
+    >
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <CategoryIcon category={incident.category} />
+          <span className="font-medium text-sm">#{incident.incident_number}</span>
+        </div>
+        <Badge className={`text-xs ${getStatusColor(incident.status)}`}>
+          {STATUS_LABELS[incident.status]}
+        </Badge>
+      </div>
+      <h4 className="font-semibold text-sm mb-2 line-clamp-2">{incident.name}</h4>
+      {incident.description && (
+        <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+          {incident.description}
+        </p>
+      )}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Clock className="h-3 w-3" />
+          {new Date(incident.occurred_at).toLocaleDateString()}
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+              <MoreVertical className="h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onViewDetails(incident)}>
+              <Eye className="mr-2 h-4 w-4" />Ver detalles
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onEdit(incident)}>
+              <Pencil className="mr-2 h-4 w-4" />Editar
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onCopy(incident)}>
+              <Copy className="mr-2 h-4 w-4" />Copiar info
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onDelete(incident.id)} className="text-destructive">
+              <Trash2 className="mr-2 h-4 w-4" />Eliminar
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+};
+
 export default function IncidentsModule({ projectId }: IncidentsModuleProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const { getUrl } = useSignedUrl('project-files');
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
 const [incidents, setIncidents] = useState<any[]>([]);
 const [loading, setLoading] = useState(false);
+const [viewMode, setViewMode] = useState<ViewMode>('list');
 const [channelFilter, setChannelFilter] = useState<string>('all');
 const [environmentFilter, setEnvironmentFilter] = useState<string>('all');
 const [epicFilter, setEpicFilter] = useState<string>('all');
@@ -430,6 +546,65 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
     XLSX.writeFile(wb, 'incidents_export.xlsx');
   };
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over) return;
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    // If dropping on a column, extract the status
+    let newStatus: IncidentStatus;
+    if (overId.startsWith('column-')) {
+      newStatus = overId.replace('column-', '') as IncidentStatus;
+    } else {
+      // If dropping on another card, find its status
+      const overIncident = incidents.find(inc => inc.id === overId);
+      if (!overIncident) return;
+      newStatus = overIncident.status;
+    }
+
+    const activeIncident = incidents.find(inc => inc.id === activeId);
+    if (!activeIncident || activeIncident.status === newStatus) return;
+
+    // Update locally first for immediate feedback
+    setIncidents(prev => 
+      prev.map(inc => 
+        inc.id === activeId ? { ...inc, status: newStatus } : inc
+      )
+    );
+
+    // Update in database
+    try {
+      const { error } = await supabase
+        .from('incidents')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', activeId);
+
+      if (error) throw error;
+      
+      toast({ title: 'Estado actualizado', description: 'El estado se ha actualizado correctamente' });
+    } catch (error) {
+      console.error('Error updating incident:', error);
+      toast({ title: 'Error', description: 'No se pudo actualizar el estado', variant: 'destructive' });
+      // Revert the change
+      setIncidents(prev => 
+        prev.map(inc => 
+          inc.id === activeId ? { ...inc, status: activeIncident.status } : inc
+        )
+      );
+    }
+  };
+
+  const incidentsByStatus = useMemo(() => {
+    return {
+      pending: filtered.filter(inc => inc.status === 'pending'),
+      in_progress: filtered.filter(inc => inc.status === 'in_progress'),
+      resolved: filtered.filter(inc => inc.status === 'resolved'),
+    };
+  }, [filtered]);
+
   const importFromExcel = async (file: File) => {
     try {
       const data = await file.arrayBuffer();
@@ -656,8 +831,28 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
     <Card>
       <CardHeader>
           <div className="flex items-start justify-between gap-4">
-            <div>
+            <div className="flex items-center gap-4">
               <CardTitle>Gestión de tareas</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={viewMode === 'list' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('list')}
+                  className="flex items-center gap-2"
+                >
+                  <List className="h-4 w-4" />
+                  Lista
+                </Button>
+                <Button
+                  variant={viewMode === 'pipeline' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('pipeline')}
+                  className="flex items-center gap-2"
+                >
+                  <Columns3 className="h-4 w-4" />
+                  Pipeline
+                </Button>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button onClick={() => { resetForm(); setCreateOpen(true); }}>
@@ -734,131 +929,197 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
         </div>
 
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead></TableHead>
-              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('incident_number')}>
-                ID <ArrowUpDown className="inline h-4 w-4 ml-1" />
-              </TableHead>
-              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('name')}>
-                Nombre <ArrowUpDown className="inline h-4 w-4 ml-1" />
-              </TableHead>
-              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('epic')}>
-                Épica <ArrowUpDown className="inline h-4 w-4 ml-1" />
-              </TableHead>
-              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('device')}>
-                Canal <ArrowUpDown className="inline h-4 w-4 ml-1" />
-              </TableHead>
-              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('environment')}>
-                Entorno <ArrowUpDown className="inline h-4 w-4 ml-1" />
-              </TableHead>
-              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('occurred_at')}>
-                Fecha <ArrowUpDown className="inline h-4 w-4 ml-1" />
-              </TableHead>
-              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('status')}>
-                Estado <ArrowUpDown className="inline h-4 w-4 ml-1" />
-              </TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {paginatedIncidents.map((i) => (
-              <TableRow key={i.id}>
-                <TableCell><CategoryIcon category={i.category} /></TableCell>
-                <TableCell className="font-mono text-sm">{`T${String(i.incident_number ?? 0).padStart(5, '0')}`}</TableCell>
-                <TableCell className="font-medium">{i.name}</TableCell>
-                <TableCell>{i.epic || '—'}</TableCell>
-                <TableCell>{i.device || '—'}</TableCell>
-                <TableCell>{i.environment || '—'}</TableCell>
-                <TableCell>{new Date(i.occurred_at).toLocaleDateString('es-ES')}</TableCell>
-                <TableCell><StatusBadge status={i.status} /></TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-0">
-                    <Button variant="ghost" size="icon" onClick={() => onDelete(i.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => copyToClipboard(i)}>
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => { setSelected(i); setDetailsOpen(true); }}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-            {paginatedIncidents.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground">No hay incidencias</TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+        {viewMode === 'list' ? (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead></TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('incident_number')}>
+                    ID <ArrowUpDown className="inline h-4 w-4 ml-1" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('name')}>
+                    Nombre <ArrowUpDown className="inline h-4 w-4 ml-1" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('epic')}>
+                    Épica <ArrowUpDown className="inline h-4 w-4 ml-1" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('device')}>
+                    Canal <ArrowUpDown className="inline h-4 w-4 ml-1" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('environment')}>
+                    Entorno <ArrowUpDown className="inline h-4 w-4 ml-1" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('occurred_at')}>
+                    Fecha <ArrowUpDown className="inline h-4 w-4 ml-1" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('status')}>
+                    Estado <ArrowUpDown className="inline h-4 w-4 ml-1" />
+                  </TableHead>
+                  <TableHead>Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedIncidents.map((i: any) => (
+                  <TableRow key={i.id}>
+                    <TableCell>
+                      <CategoryIcon category={i.category} />
+                    </TableCell>
+                    <TableCell className="font-mono">T{String(i.incident_number ?? 0).padStart(5, '0')}</TableCell>
+                    <TableCell className="font-medium">{i.name}</TableCell>
+                    <TableCell>{i.epic || '-'}</TableCell>
+                    <TableCell>{i.device || '-'}</TableCell>
+                    <TableCell>{i.environment || '-'}</TableCell>
+                    <TableCell>{new Date(i.occurred_at).toLocaleDateString('es-ES')}</TableCell>
+                    <TableCell><StatusBadge status={i.status} /></TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => { setSelected(i); setDetailsOpen(true); }}>
+                              <Eye className="mr-2 h-4 w-4" />Ver detalles
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { onEdit(i); setCreateOpen(true); }}>
+                              <Pencil className="mr-2 h-4 w-4" />Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => copyToClipboard(i)}>
+                              <Copy className="mr-2 h-4 w-4" />Copiar info
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onDelete(i.id)} className="text-destructive">
+                              <Trash2 className="mr-2 h-4 w-4" />Eliminar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <Button variant="ghost" size="icon" onClick={() => { setSelected(i); setDetailsOpen(true); }}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {paginatedIncidents.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center text-muted-foreground">No hay incidencias</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
 
-        {/* Controles de paginación abajo */}
-        <div className="flex items-center justify-between gap-4 mt-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Mostrar:</span>
-            <Select value={pageSize.toString()} onValueChange={(value) => {
-              setPageSize(Number(value));
-              setCurrentPage(1);
-            }}>
-              <SelectTrigger className="w-20">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="10">10</SelectItem>
-                <SelectItem value="25">25</SelectItem>
-                <SelectItem value="50">50</SelectItem>
-              </SelectContent>
-            </Select>
-            <span className="text-sm text-muted-foreground">resultados por página</span>
-          </div>
-
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 ml-auto">
-              <Button
-                variant="outline"
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-              >
-                Anterior
-              </Button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum;
-                  if (totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (currentPage <= 3) {
-                    pageNum = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    pageNum = totalPages - 4 + i;
-                  } else {
-                    pageNum = currentPage - 2 + i;
-                  }
-                  return (
-                    <Button
-                      key={pageNum}
-                      variant={pageNum === currentPage ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setCurrentPage(pageNum)}
-                    >
-                      {pageNum}
-                    </Button>
-                  );
-                })}
+            {/* Controles de paginación abajo */}
+            <div className="flex items-center justify-between gap-4 mt-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Mostrar:</span>
+                <Select value={pageSize.toString()} onValueChange={(value) => {
+                  setPageSize(Number(value));
+                  setCurrentPage(1);
+                }}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-muted-foreground">resultados por página</span>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Siguiente
-              </Button>
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 ml-auto">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Anterior
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={pageNum === currentPage ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(pageNum)}
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </>
+        ) : (
+          <DndContext 
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {(['pending', 'in_progress', 'resolved'] as IncidentStatus[]).map((status) => (
+                <div 
+                  key={status}
+                  id={`column-${status}`}
+                  className="bg-muted/50 rounded-lg p-4 min-h-[400px]"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold">{STATUS_LABELS[status]}</h3>
+                    <Badge variant="secondary" className="ml-2">
+                      {incidentsByStatus[status]?.length || 0}
+                    </Badge>
+                  </div>
+                  <SortableContext 
+                    items={incidentsByStatus[status]?.map(inc => inc.id) || []}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-3">
+                      {(incidentsByStatus[status] || []).map((incident) => (
+                        <SortableIncidentCard 
+                          key={incident.id} 
+                          incident={incident}
+                          onEdit={(i) => { onEdit(i); setCreateOpen(true); }}
+                          onDelete={onDelete}
+                          onViewDetails={(i) => { setSelected(i); setDetailsOpen(true); }}
+                          onCopy={copyToClipboard}
+                        />
+                      ))}
+                      {(!incidentsByStatus[status] || incidentsByStatus[status].length === 0) && (
+                        <div className="text-center py-8 text-muted-foreground text-sm">
+                          No hay incidencias en este estado
+                        </div>
+                      )}
+                    </div>
+                  </SortableContext>
+                </div>
+              ))}
+            </div>
+          </DndContext>
+        )}
       </CardContent>
     </Card>
 
