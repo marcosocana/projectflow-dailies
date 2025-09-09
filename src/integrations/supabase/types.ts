@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "13.0.4"
@@ -120,6 +120,7 @@ export type Database = {
       incidents: {
         Row: {
           additional_comments: string | null
+          assigned_to: string | null
           category: Database["public"]["Enums"]["incident_category"]
           created_at: string
           created_by: string | null
@@ -138,6 +139,7 @@ export type Database = {
         }
         Insert: {
           additional_comments?: string | null
+          assigned_to?: string | null
           category?: Database["public"]["Enums"]["incident_category"]
           created_at?: string
           created_by?: string | null
@@ -156,6 +158,7 @@ export type Database = {
         }
         Update: {
           additional_comments?: string | null
+          assigned_to?: string | null
           category?: Database["public"]["Enums"]["incident_category"]
           created_at?: string
           created_by?: string | null
@@ -173,6 +176,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "incidents_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "incidents_project_id_fkey"
             columns: ["project_id"]
@@ -608,8 +618,8 @@ export type Database = {
       }
       has_role: {
         Args: {
-          _user_id: string
           _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
         }
         Returns: boolean
       }
