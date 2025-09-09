@@ -154,14 +154,7 @@ const SortableIncidentCard = ({ incident, onEdit, onDelete, onViewDetails, onCop
   };
 
   const getStatusColor = (status: IncidentStatus) => {
-    switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'in_progress': return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'in_qa': return 'bg-purple-100 text-purple-800 border-purple-300';
-      case 'resolved': return 'bg-green-100 text-green-800 border-green-300';
-      case 'closed': return 'bg-gray-100 text-gray-800 border-gray-300';
-      default: return 'bg-gray-100 text-gray-800 border-gray-300';
-    }
+    return STATUS_BADGE_CLS[status] || 'bg-muted text-muted-foreground';
   };
 
   return (
@@ -177,7 +170,7 @@ const SortableIncidentCard = ({ incident, onEdit, onDelete, onViewDetails, onCop
           <CategoryIcon category={incident.category} />
           <span className="font-medium text-sm">#{incident.incident_number}</span>
         </div>
-        <Badge className={`text-xs ${getStatusColor(incident.status)}`}>
+        <Badge variant="outline" className={`text-xs ${getStatusColor(incident.status)} border-transparent`}>
           {STATUS_LABELS[incident.status]}
         </Badge>
       </div>
@@ -633,7 +626,9 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
     return {
       pending: filtered.filter(inc => inc.status === 'pending'),
       in_progress: filtered.filter(inc => inc.status === 'in_progress'),
+      in_qa: filtered.filter(inc => inc.status === 'in_qa'),
       resolved: filtered.filter(inc => inc.status === 'resolved'),
+      closed: filtered.filter(inc => inc.status === 'closed'),
     };
   }, [filtered]);
 
@@ -865,21 +860,21 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               <CardTitle>Gestión de tareas</CardTitle>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-0 bg-muted rounded-lg p-1">
                 <Button
-                  variant={viewMode === 'list' ? 'default' : 'outline'}
+                  variant={viewMode === 'list' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('list')}
-                  className="flex items-center gap-2"
+                  className="rounded-md"
                   title="Lista"
                 >
                   <List className="h-4 w-4" />
                 </Button>
                 <Button
-                  variant={viewMode === 'pipeline' ? 'default' : 'outline'}
+                  variant={viewMode === 'pipeline' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('pipeline')}
-                  className="flex items-center gap-2"
+                  className="rounded-md"
                   title="Pipeline"
                 >
                   <Columns3 className="h-4 w-4" />
@@ -1114,7 +1109,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
               onDragEnd={handleDragEnd}
             >
               <div className="flex gap-6 min-w-max pb-4">
-                {(['pending', 'in_progress', 'resolved'] as IncidentStatus[]).map((status) => (
+                {statusOrder.map((status) => (
                   <div 
                     key={status}
                     id={`column-${status}`}
@@ -1123,15 +1118,18 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-semibold">{STATUS_LABELS[status]}</h3>
                       <Badge variant="secondary" className="ml-2">
-                        {incidentsByStatus[status]?.length || 0}
+                        {incidentsByStatus[status as keyof typeof incidentsByStatus]?.length || 0}
                       </Badge>
                     </div>
                     <SortableContext 
-                      items={incidentsByStatus[status]?.map(inc => inc.id) || []}
+                      items={incidentsByStatus[status as keyof typeof incidentsByStatus]?.map(inc => inc.id) || []}
                       strategy={verticalListSortingStrategy}
                     >
-                      <div className="space-y-3">
-                        {(incidentsByStatus[status] || []).map((incident) => (
+                      <div 
+                        className="space-y-3 min-h-[300px]"
+                        id={`column-${status}`}
+                      >
+                        {(incidentsByStatus[status as keyof typeof incidentsByStatus] || []).map((incident) => (
                           <SortableIncidentCard 
                             key={incident.id} 
                             incident={incident}
@@ -1141,7 +1139,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                             onCopy={copyToClipboard}
                           />
                         ))}
-                        {(!incidentsByStatus[status] || incidentsByStatus[status].length === 0) && (
+                        {(!incidentsByStatus[status as keyof typeof incidentsByStatus] || incidentsByStatus[status as keyof typeof incidentsByStatus].length === 0) && (
                           <div className="text-center py-8 text-muted-foreground text-sm">
                             No hay incidencias en este estado
                           </div>
