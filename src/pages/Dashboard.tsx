@@ -122,7 +122,7 @@ const Dashboard = () => {
                     <a href="/tasks">Gestión de tareas</a>
                   </Button>
                   <Button asChild variant="ghost" className="justify-start">
-                    <a href="/vacations">Gestión de ausencias</a>
+                    <a href="/vacations">Gestión de vacaciones</a>
                   </Button>
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/releases">Releases</a>

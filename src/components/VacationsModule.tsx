@@ -1,346 +1,443 @@
-import { useState } from 'react';
-import { Calendar as CalendarIcon, Plus, Edit2, Trash2, User } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useEffect, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { useVacations, type Vacation } from '@/hooks/useVacations';
-import { useProfiles } from '@/hooks/useProfiles';
+import { useToast } from '@/hooks/use-toast';
+import { useVacations } from '@/hooks/useVacations';
 import { useAuth } from '@/hooks/useAuth';
-import { format } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { format, isWithinInterval, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
 
 interface VacationsModuleProps {
   projectId: string;
 }
 
+interface Person {
+  id: string;
+  name: string;
+  role: string;
+  color: string;
+}
+
 export default function VacationsModule({ projectId }: VacationsModuleProps) {
-  const { vacations, loading, createVacation, updateVacation, deleteVacation } = useVacations(projectId);
-  const { profiles } = useProfiles();
+  const { toast } = useToast();
   const { user } = useAuth();
+  const { vacations, loading, createVacation, updateVacation, deleteVacation, refetch } = useVacations(projectId);
   
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingVacation, setEditingVacation] = useState<Vacation | null>(null);
-  const [selectedUser, setSelectedUser] = useState<string>('');
-  const [startDate, setStartDate] = useState<Date>();
-  const [endDate, setEndDate] = useState<Date>();
-  const [description, setDescription] = useState('');
-  const [absenceType, setAbsenceType] = useState<'baja' | 'vacaciones'>('vacaciones');
-  const [filterUser, setFilterUser] = useState<string>('all');
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [people, setPeople] = useState<Person[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [form, setForm] = useState({
+    personId: '',
+    startDate: new Date(),
+    endDate: new Date(),
+    description: ''
+  });
+  const [editingVacation, setEditingVacation] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({
+    personId: '',
+    startDate: new Date(),
+    endDate: new Date(),
+    description: ''
+  });
+
+  // Fetch people from dailies (members)
+  useEffect(() => {
+    const fetchPeople = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('people')
+          .select('*')
+          .eq('project_id', projectId)
+          .order('name');
+
+        if (error) throw error;
+        setPeople(data || []);
+      } catch (error: any) {
+        console.error('Error fetching people:', error);
+      }
+    };
+
+    fetchPeople();
+  }, [projectId]);
+
+  // Get vacations for selected date
+  const getVacationsForDate = (date: Date) => {
+    return vacations.filter(vacation => {
+      const startDate = parseISO(vacation.start_date);
+      const endDate = parseISO(vacation.end_date);
+      return isWithinInterval(date, { start: startDate, end: endDate });
+    });
+  };
+
+  // Get person info
+  const getPersonById = (personId: string) => {
+    return people.find(p => p.id === personId);
+  };
+
+  // Colors for a date based on vacations' person colors
+  const getColorsForDate = (date: Date) => {
+    const dayVacs = getVacationsForDate(date);
+    const colors = dayVacs
+      .map(v => getPersonById(v.person_id || '')?.color)
+      .filter(Boolean) as string[];
+    const unique = Array.from(new Set(colors));
+    return unique.slice(0, 3);
+  };
+
+  // Custom day content with colored dots
+  const DayContent = (props: any) => {
+    const { date } = props;
+    const day = format(date, 'd');
+    const colors = getColorsForDate(date);
+    return (
+      <div className="flex flex-col items-center justify-center">
+        <span>{day}</span>
+        {colors.length > 0 && (
+          <div className="mt-0.5 flex gap-1">
+            {colors.map((c, idx) => (
+              <span
+                key={idx}
+                className="inline-block w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const openEdit = (vacation: any) => {
+    setEditingVacation(vacation);
+    setEditForm({
+      personId: vacation.person_id || '',
+      startDate: parseISO(vacation.start_date),
+      endDate: parseISO(vacation.end_date),
+      description: vacation.description || ''
+    });
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingVacation) return;
+    try {
+      await updateVacation(editingVacation.id, {
+        person_id: editForm.personId || null,
+        start_date: format(editForm.startDate, 'yyyy-MM-dd'),
+        end_date: format(editForm.endDate, 'yyyy-MM-dd'),
+        description: editForm.description || null,
+      });
+      setEditingVacation(null);
+      toast({ title: 'Éxito', description: 'Vacación actualizada' });
+    } catch (error) {
+      console.error('Error updating vacation:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!startDate || !endDate || !selectedUser) return;
-
-    const vacationData = {
-      user_id: selectedUser,
-      project_id: projectId,
-      start_date: startDate.toISOString().split('T')[0],
-      end_date: endDate.toISOString().split('T')[0],
-      description: absenceType === 'baja' ? description.trim() || undefined : undefined,
-      type: absenceType,
-    };
-
-    if (editingVacation) {
-      await updateVacation(editingVacation.id, vacationData);
-    } else {
-      await createVacation(vacationData);
+    
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "Debes estar autenticado para crear vacaciones",
+        variant: "destructive",
+      });
+      return;
     }
 
-    handleCloseDialog();
-  };
+    try {
+      await createVacation({
+        user_id: user.id,
+        project_id: projectId,
+        person_id: form.personId,
+        start_date: format(form.startDate, 'yyyy-MM-dd'),
+        end_date: format(form.endDate, 'yyyy-MM-dd'),
+        description: form.description || null,
+      });
 
-  const handleCloseDialog = () => {
-    setIsDialogOpen(false);
-    setEditingVacation(null);
-    setSelectedUser('');
-    setStartDate(undefined);
-    setEndDate(undefined);
-    setDescription('');
-    setAbsenceType('vacaciones');
-  };
+      setCreateOpen(false);
+      setForm({
+        personId: '',
+        startDate: new Date(),
+        endDate: new Date(),
+        description: ''
+      });
 
-  const handleEdit = (vacation: Vacation) => {
-    setEditingVacation(vacation);
-    setSelectedUser(vacation.user_id);
-    setStartDate(new Date(vacation.start_date));
-    setEndDate(new Date(vacation.end_date));
-    setDescription(vacation.description || '');
-    setIsDialogOpen(true);
-  };
-
-  const handleDelete = async (id: string) => {
-    if (confirm('¿Estás seguro de que quieres eliminar estas vacaciones?')) {
-      await deleteVacation(id);
+      toast({
+        title: "Éxito",
+        description: "Vacaciones registradas correctamente",
+      });
+    } catch (error) {
+      console.error('Error creating vacation:', error);
     }
   };
 
-  const getUserProfile = (userId: string) => {
-    return profiles.find(p => p.user_id === userId);
+  const handleDeleteAllVacations = async () => {
+    const confirmed = confirm('¿Eliminar todas las vacaciones de este proyecto? Esta acción no se puede deshacer.');
+    if (!confirmed) return;
+    try {
+      const { error } = await supabase
+        .from('vacations')
+        .delete()
+        .eq('project_id', projectId);
+      if (error) throw error;
+      await refetch();
+      toast({ title: 'Éxito', description: 'Todas las vacaciones han sido eliminadas.' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'No se pudieron eliminar las vacaciones', variant: 'destructive' });
+    }
   };
 
-  const filteredVacations = filterUser === 'all' 
-    ? vacations 
-    : vacations.filter(v => v.user_id === filterUser);
-
-  const getDaysInRange = (start: string, end: string) => {
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-    const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    return diffDays;
-  };
-
-  if (loading) {
-    return <div className="p-6 text-center">Cargando vacaciones...</div>;
-  }
+  const dayVacations = getVacationsForDate(selectedDate);
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Gestión de ausencias</h1>
-          <p className="text-muted-foreground">Gestión de ausencias del equipo</p>
-        </div>
-        
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setSelectedUser(user?.id || '')}>
-              <Plus className="h-4 w-4 mr-2" />
-              Añadir ausencia
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {editingVacation ? 'Editar ausencia' : 'Registrar ausencia'}
-              </DialogTitle>
-            </DialogHeader>
-            
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="type">Tipo de ausencia</Label>
-                <Select value={absenceType} onValueChange={(value: 'baja' | 'vacaciones') => setAbsenceType(value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona el tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="vacaciones">Vacaciones</SelectItem>
-                    <SelectItem value="baja">Baja</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Gestión de vacaciones</CardTitle>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" onClick={handleDeleteAllVacations}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Eliminar todas
+              </Button>
+              <Button onClick={() => setCreateOpen(true)} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Añadir vacaciones
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-6 md:grid-cols-3">
+            {/* Calendar */}
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Calendario</h3>
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && setSelectedDate(date)}
+                locale={es}
+                className="rounded-md border p-3 pointer-events-auto w-full mx-auto px-[50px]"
+                components={{ DayContent: DayContent as any }}
+              />
+            </div>
+
+            {/* Selected date info */}
+            <div>
+              <h3 className="text-lg font-semibold mb-4">
+                {format(selectedDate, 'EEEE, d MMMM yyyy', { locale: es })}
+              </h3>
               
-              <div className="space-y-2">
-                <Label htmlFor="user">Usuario</Label>
-                <Select value={selectedUser} onValueChange={setSelectedUser} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona un usuario" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {profiles.map((profile) => (
-                      <SelectItem key={profile.user_id} value={profile.user_id}>
-                        <div className="flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: profile.color }}
-                          />
-                          {profile.full_name}
+              {dayVacations.length === 0 ? (
+                <p className="text-muted-foreground">No hay vacaciones en esta fecha</p>
+              ) : (
+                <div className="space-y-3">
+                  {dayVacations.map((vacation) => {
+                    const person = getPersonById(vacation.person_id || '');
+                    return (
+                      <Card key={vacation.id} className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div 
+                              className="w-4 h-4 rounded-full" 
+                              style={{ backgroundColor: person?.color || 'hsl(var(--primary))' }}
+                            />
+                            <div>
+                              <p className="font-medium">{person?.name || 'Usuario en vacaciones'}</p>
+                              <p className="text-sm text-muted-foreground">{person?.role || ''}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {format(parseISO(vacation.start_date), 'd MMM', { locale: es })} - {format(parseISO(vacation.end_date), 'd MMM', { locale: es })}
+                              </p>
+                              {vacation.description && (
+                                <p className="text-sm mt-1">{vacation.description}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => openEdit(vacation)}>
+                              Editar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => deleteVacation(vacation.id)}
+                            >
+                              Eliminar
+                            </Button>
+                          </div>
                         </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Fecha de inicio</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !startDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {startDate ? format(startDate, "PPP", { locale: es }) : "Seleccionar fecha"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={startDate}
-                        onSelect={setStartDate}
-                        initialFocus
-                        className="pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Fecha de fin</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !endDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {endDate ? format(endDate, "PPP", { locale: es }) : "Seleccionar fecha"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={endDate}
-                        onSelect={setEndDate}
-                        initialFocus
-                        className="pointer-events-auto"
-                        disabled={(date) => startDate ? date < startDate : false}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
-
-              {absenceType === 'baja' && (
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descripción</Label>
-                  <Textarea
-                    id="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe el motivo de la baja..."
-                  />
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={handleCloseDialog}>
-                  Cancelar
-                </Button>
-                <Button type="submit">
-                  {editingVacation ? 'Actualizar' : 'Crear'}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <Label htmlFor="filter-user">Filtrar por usuario:</Label>
-        <Select value={filterUser} onValueChange={setFilterUser}>
-          <SelectTrigger className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los usuarios</SelectItem>
-            {profiles.map((profile) => (
-              <SelectItem key={profile.user_id} value={profile.user_id}>
-                <div className="flex items-center gap-2">
-                  <div 
-                    className="w-3 h-3 rounded-full" 
-                    style={{ backgroundColor: profile.color }}
-                  />
-                  {profile.full_name}
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="grid gap-4">
-        {filteredVacations.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-10">
-              <CalendarIcon className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No hay vacaciones registradas</h3>
-              <p className="text-muted-foreground text-center">
-                {filterUser === 'all' 
-                  ? 'Aún no se han registrado vacaciones para este proyecto.'
-                  : 'Este usuario no tiene vacaciones registradas.'}
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          filteredVacations.map((vacation) => {
-            const profile = getUserProfile(vacation.user_id);
-            const days = getDaysInRange(vacation.start_date, vacation.end_date);
-            
-            return (
-              <Card key={vacation.id}>
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div className="flex items-center gap-3">
-                      <div 
-                        className="w-4 h-4 rounded-full" 
-                        style={{ backgroundColor: profile?.color || '#3B82F6' }}
-                      />
-                      <div>
-                        <CardTitle className="text-lg">
-                          {profile?.full_name || 'Usuario desconocido'}
-                        </CardTitle>
-                        <CardDescription>
-                          {format(new Date(vacation.start_date), "d MMM yyyy", { locale: es })} - {" "}
-                          {format(new Date(vacation.end_date), "d MMM yyyy", { locale: es })}
-                        </CardDescription>
+      {/* Create vacation dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Registrar Vacaciones</DialogTitle>
+            <DialogDescription>
+              Registra las vacaciones de un miembro del equipo
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="person">Miembro del Equipo</Label>
+              <Select
+                value={form.personId}
+                onValueChange={(value) => setForm({ ...form, personId: value })}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un miembro" />
+                </SelectTrigger>
+                <SelectContent>
+                  {people.map((person) => (
+                    <SelectItem key={person.id} value={person.id}>
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: person.color }}
+                        />
+                        {person.name} - {person.role}
                       </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary">
-                        {days} {days === 1 ? 'día' : 'días'} • {vacation.type === 'baja' ? 'Baja' : 'Vacaciones'}
-                      </Badge>
-                      
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(vacation)}
-                        disabled={vacation.user_id !== user?.id}
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(vacation.id)}
-                        disabled={vacation.user_id !== user?.id}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                
-                {vacation.description && (
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground">
-                      {vacation.description}
-                    </p>
-                  </CardContent>
-                )}
-              </Card>
-            );
-          })
-        )}
-      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="startDate">Fecha de Inicio</Label>
+                <Input
+                  type="date"
+                  value={format(form.startDate, 'yyyy-MM-dd')}
+                  onChange={(e) => setForm({ ...form, startDate: new Date(e.target.value) })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="endDate">Fecha de Fin</Label>
+                <Input
+                  type="date"
+                  value={format(form.endDate, 'yyyy-MM-dd')}
+                  onChange={(e) => setForm({ ...form, endDate: new Date(e.target.value) })}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Descripción (opcional)</Label>
+              <Textarea
+                id="description"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="Descripción de las vacaciones"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">
+                Registrar Vacaciones
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit vacation dialog */}
+      <Dialog open={!!editingVacation} onOpenChange={(open) => !open && setEditingVacation(null)}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Editar Vacación</DialogTitle>
+            <DialogDescription>Actualiza los datos de la vacación</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-person">Miembro del Equipo</Label>
+              <Select
+                value={editForm.personId}
+                onValueChange={(value) => setEditForm({ ...editForm, personId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un miembro" />
+                </SelectTrigger>
+                <SelectContent>
+                  {people.map((person) => (
+                    <SelectItem key={person.id} value={person.id}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: person.color }} />
+                        {person.name} - {person.role}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-start">Fecha de Inicio</Label>
+                <Input
+                  type="date"
+                  value={format(editForm.startDate, 'yyyy-MM-dd')}
+                  onChange={(e) => setEditForm({ ...editForm, startDate: new Date(e.target.value) })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-end">Fecha de Fin</Label>
+                <Input
+                  type="date"
+                  value={format(editForm.endDate, 'yyyy-MM-dd')}
+                  onChange={(e) => setEditForm({ ...editForm, endDate: new Date(e.target.value) })}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-description">Descripción (opcional)</Label>
+              <Textarea
+                id="edit-description"
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                placeholder="Descripción de las vacaciones"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setEditingVacation(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit">Guardar cambios</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

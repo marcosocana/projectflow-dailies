@@ -31,10 +31,10 @@ const menuItems = [
     description: "Gestión de incidencias y mejoras" 
   },
   { 
-    title: "Ausencias", 
+    title: "Vacaciones", 
     url: "vacations", 
     icon: Calendar,
-    description: "Gestión de ausencias del equipo" 
+    description: "Gestión de vacaciones del equipo" 
   },
   { 
     title: "Releases", 

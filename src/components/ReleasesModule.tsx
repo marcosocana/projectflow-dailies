@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Smartphone, Globe } from 'lucide-react';
+import { Plus, Smartphone, Globe, Eye, Trash2 } from 'lucide-react';
 
 interface ReleasesModuleProps {
   projectId: string;
@@ -27,6 +27,8 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
   const [releases, setReleases] = useState<Release[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [platform, setPlatform] = useState<'web' | 'app'>('web');
   const [version, setVersion] = useState('');
   const [description, setDescription] = useState('');
@@ -100,6 +102,41 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
     }
   };
 
+  const handleViewDetail = (release: Release) => {
+    setSelectedRelease(release);
+    setIsDetailDialogOpen(true);
+  };
+
+  const handleDeleteRelease = async (releaseId: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este release?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('releases')
+        .delete()
+        .eq('id', releaseId);
+
+      if (error) throw error;
+
+      await loadReleases();
+      setIsDetailDialogOpen(false);
+      setSelectedRelease(null);
+      
+      toast({
+        title: "Éxito",
+        description: "Release eliminado correctamente",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const webReleases = releases.filter(r => r.platform === 'web');
   const appReleases = releases.filter(r => r.platform === 'app');
 
@@ -147,15 +184,20 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
                             <Badge variant="outline" className="font-mono">
                               v{release.version}
                             </Badge>
-                            <span className="text-sm text-muted-foreground">
-                              {new Date(release.created_at).toLocaleDateString()}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleViewDetail(release)}
+                                aria-label="Ver detalle"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <span className="text-sm text-muted-foreground">
+                                {new Date(release.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
                           </div>
-                          {release.description && (
-                            <p className="text-sm text-muted-foreground">
-                              {release.description}
-                            </p>
-                          )}
                         </CardContent>
                       </Card>
                     ))
@@ -183,15 +225,20 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
                             <Badge variant="outline" className="font-mono">
                               v{release.version}
                             </Badge>
-                            <span className="text-sm text-muted-foreground">
-                              {new Date(release.created_at).toLocaleDateString()}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleViewDetail(release)}
+                                aria-label="Ver detalle"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <span className="text-sm text-muted-foreground">
+                                {new Date(release.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
                           </div>
-                          {release.description && (
-                            <p className="text-sm text-muted-foreground">
-                              {release.description}
-                            </p>
-                          )}
                         </CardContent>
                       </Card>
                     ))
@@ -263,6 +310,90 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
               Añadir release
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Release Detail Dialog */}
+      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {selectedRelease?.platform === 'web' ? (
+                  <Globe className="h-5 w-5 text-blue-500" />
+                ) : (
+                  <Smartphone className="h-5 w-5 text-green-500" />
+                )}
+                Release v{selectedRelease?.version}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => selectedRelease && handleDeleteRelease(selectedRelease.id)}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </DialogTitle>
+            <DialogDescription>
+              {selectedRelease?.platform === 'web' ? 'Web' : 'App'} • {' '}
+              {selectedRelease && new Date(selectedRelease.created_at).toLocaleDateString()}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedRelease && (
+            <div className="space-y-4">
+              <div>
+                <Label>Plataforma</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  {selectedRelease.platform === 'web' ? (
+                    <>
+                      <Globe className="h-4 w-4 text-blue-500" />
+                      <span>Web</span>
+                    </>
+                  ) : (
+                    <>
+                      <Smartphone className="h-4 w-4 text-green-500" />
+                      <span>App</span>
+                    </>
+                  )}
+                </div>
+              </div>
+              
+              <div>
+                <Label>Versión</Label>
+                <div className="mt-1">
+                  <Badge variant="outline" className="font-mono">
+                    v{selectedRelease.version}
+                  </Badge>
+                </div>
+              </div>
+              
+              {selectedRelease.description && (
+                <div>
+                  <Label>Qué incluye</Label>
+                  <div className="mt-1 p-3 bg-muted rounded-md">
+                    <p className="text-sm whitespace-pre-wrap">
+                      {selectedRelease.description}
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              <div>
+                <Label>Fecha de creación</Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {new Date(selectedRelease.created_at).toLocaleDateString('es-ES', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </p>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

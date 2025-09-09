@@ -838,8 +838,8 @@ export default function DailiesModule({
                 <div>
                   <Label>Creado por</Label>
                   <div className="text-sm text-muted-foreground">
-                    {selectedTask.created_by ? 
-                      people.find(p => p.id === selectedTask.created_by)?.name || 'Desconocido' :
+                    {selectedTask.assigned_to ? 
+                      people.find(p => p.id === selectedTask.assigned_to)?.name || 'Desconocido' :
                       'No especificado'
                     }
                   </div>
