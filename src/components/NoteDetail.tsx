@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useSharedNotes } from '@/hooks/useSharedNotes';
+import { supabase } from '@/integrations/supabase/client';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 
@@ -50,13 +51,27 @@ const handleSave = async () => {
   setSaving(false);
 };
 
-  const handleDeleteSoft = () => {
+  const handleDeleteSoft = async () => {
     if (!noteId) return;
-    const key = `hidden_notes_${projectId}`;
-    const current = JSON.parse(localStorage.getItem(key) || '[]');
-    if (!current.includes(noteId)) current.push(noteId);
-    localStorage.setItem(key, JSON.stringify(current));
-    navigate('/notes');
+    
+    try {
+      // Use the new delete function from Supabase
+      const { error } = await supabase.rpc('delete_shared_note', {
+        note_id: noteId
+      });
+      
+      if (error) throw error;
+      
+      navigate('/notes');
+      
+      // Also remove from local storage if exists
+      const key = `hidden_notes_${projectId}`;
+      const current = JSON.parse(localStorage.getItem(key) || '[]');
+      const updated = current.filter((id: string) => id !== noteId);
+      localStorage.setItem(key, JSON.stringify(updated));
+    } catch (error: any) {
+      console.error('Error deleting note:', error);
+    }
   };
 
   if (!note) {
@@ -105,7 +120,7 @@ const handleSave = async () => {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar nota?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción ocultará la nota de la lista, pero seguirá existiendo en la base de datos.
+              Esta acción eliminará permanentemente la nota y no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

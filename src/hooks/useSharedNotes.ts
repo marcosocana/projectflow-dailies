@@ -125,13 +125,10 @@ export function useSharedNotes(projectId?: string) {
 
   const deleteNote = async (noteId: string) => {
     try {
-      // Eliminar historiales vinculados para evitar restricciones de claves foráneas
-      await supabase.from('shared_notes_history').delete().eq('note_id', noteId);
-
-      const { error } = await supabase
-        .from('shared_notes')
-        .delete()
-        .eq('id', noteId);
+      // Usar la función RPC para eliminar la nota y su historial
+      const { error } = await supabase.rpc('delete_shared_note', {
+        note_id: noteId
+      });
 
       if (error) throw error;
       

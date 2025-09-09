@@ -174,7 +174,11 @@ const SortableIncidentCard = ({ incident, onEdit, onDelete, onViewDetails, onCop
           {STATUS_LABELS[incident.status]}
         </Badge>
       </div>
-      <h4 className="font-semibold text-sm mb-2 line-clamp-2">{incident.name}</h4>
+      <h4 className="font-semibold text-sm mb-2 line-clamp-2">
+        {incident.name.length > 32 
+          ? `${incident.name.substring(0, 32)}...` 
+          : incident.name}
+      </h4>
       {incident.description && (
         <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
           {incident.description}

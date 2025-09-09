@@ -26,10 +26,12 @@ export default function ProjectInformationModule({ projectId }: ProjectInformati
     }
     setResetting(true);
     try {
-      // Eliminar historiales de notas vinculados
+      // Eliminar notas compartidas y sus historiales usando función RPC
       const { data: noteIds } = await supabase.from('shared_notes').select('id').eq('project_id', projectId);
       if (noteIds && noteIds.length) {
-        await supabase.from('shared_notes_history').delete().in('note_id', noteIds.map((n: any) => n.id));
+        for (const note of noteIds) {
+          await supabase.rpc('delete_shared_note', { note_id: note.id });
+        }
       }
       // Eliminar comentarios de incidencias
       const { data: incidentIds } = await supabase.from('incidents').select('id').eq('project_id', projectId);

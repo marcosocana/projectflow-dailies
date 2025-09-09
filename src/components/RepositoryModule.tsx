@@ -1,76 +1,76 @@
-import { useState, useRef } from 'react';
-import { Button } from '@/components/ui/button';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Download, Upload, FileText, Lock, Unlock } from 'lucide-react';
-import { useRepositoryFiles, type RepositoryFile } from '@/hooks/useRepositoryFiles';
-import { formatDistanceToNow } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { Plus, Download, Trash2, FileText, Lock } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface RepositoryModuleProps {
   projectId: string;
 }
 
-const RepositoryModule = ({ projectId }: RepositoryModuleProps) => {
-  const { files, loading, uploadFile, downloadFile, deleteFile } = useRepositoryFiles(projectId);
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<RepositoryFile | null>(null);
-  const [uploadForm, setUploadForm] = useState({
-    password: '',
-    description: ''
-  });
+interface RepositoryFile {
+  id: string;
+  name: string;
+  file_path: string;
+  file_size: number | null;
+  content_type: string | null;
+  password_required: boolean;
+  description: string | null;
+  created_at: string;
+}
+
+export default function RepositoryModule({ projectId }: RepositoryModuleProps) {
+  const [files, setFiles] = useState<RepositoryFile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadName, setUploadName] = useState('');
+  const [description, setDescription] = useState('');
+  const [password, setPassword] = useState('');
+  const [isPasswordRequired, setIsPasswordRequired] = useState(false);
+  const [isDownloadDialogOpen, setIsDownloadDialogOpen] = useState(false);
+  const [downloadingFile, setDownloadingFile] = useState<RepositoryFile | null>(null);
   const [downloadPassword, setDownloadPassword] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [selectedFileToUpload, setSelectedFileToUpload] = useState<File | null>(null);
+  const { toast } = useToast();
+
+  const loadFiles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('repository_files')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setFiles(data || []);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los archivos",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadFiles();
+  }, [projectId]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    setSelectedFile(file || null);
     if (file) {
-      setSelectedFileToUpload(file);
+      setUploadName(file.name);
     }
-  };
-
-  const handleUploadSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedFileToUpload) return;
-    
-    await uploadFile(
-      selectedFileToUpload,
-      projectId,
-      uploadForm.password || undefined,
-      uploadForm.description || undefined
-    );
-    
-    setUploadForm({ password: '', description: '' });
-    setSelectedFileToUpload(null);
-    setUploadDialogOpen(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleDownloadRequest = (file: RepositoryFile) => {
-    if (file.password_required) {
-      setSelectedFile(file);
-      setDownloadDialogOpen(true);
-    } else {
-      downloadFile(file);
-    }
-  };
-
-  const handleDownloadSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedFile) return;
-    
-    await downloadFile(selectedFile, downloadPassword);
-    setDownloadPassword('');
-    setSelectedFile(null);
-    setDownloadDialogOpen(false);
   };
 
   const formatFileSize = (bytes: number | null) => {
@@ -80,164 +80,345 @@ const RepositoryModule = ({ projectId }: RepositoryModuleProps) => {
     return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+  const handleUploadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedFile || !uploadName.trim()) {
+      toast({
+        title: "Error",
+        description: "El archivo y el nombre son obligatorios",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Upload to Supabase Storage
+      const fileExt = selectedFile.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `${projectId}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('project-files')
+        .upload(filePath, selectedFile);
+
+      if (uploadError) throw uploadError;
+
+      // Hash password if provided
+      let passwordHash = null;
+      if (isPasswordRequired && password) {
+        passwordHash = btoa(password);
+      }
+
+      // Store file metadata in database
+      const { error: dbError } = await supabase
+        .from('repository_files')
+        .insert({
+          project_id: projectId,
+          name: uploadName.trim(),
+          file_path: filePath,
+          file_size: selectedFile.size,
+          content_type: selectedFile.type,
+          description: description.trim() || null,
+          password_required: isPasswordRequired,
+          password_hash: passwordHash,
+        });
+
+      if (dbError) throw dbError;
+      
+      await loadFiles();
+      setIsDialogOpen(false);
+      setSelectedFile(null);
+      setUploadName('');
+      setDescription('');
+      setPassword('');
+      setIsPasswordRequired(false);
+      
+      toast({
+        title: "Éxito",
+        description: "Archivo subido correctamente",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDownloadRequest = (file: RepositoryFile) => {
+    if (file.password_required) {
+      setDownloadingFile(file);
+      setIsDownloadDialogOpen(true);
+    } else {
+      handleDownload(file);
+    }
+  };
+
+  const handleDownload = async (file: RepositoryFile, password?: string) => {
+    try {
+      // Check password if required
+      if (file.password_required && password) {
+        const passwordHash = btoa(password);
+        const { data: fileData, error: fileError } = await supabase
+          .from('repository_files')
+          .select('password_hash')
+          .eq('id', file.id)
+          .single();
+
+        if (fileError) throw fileError;
+        if (fileData.password_hash !== passwordHash) {
+          throw new Error('Contraseña incorrecta');
+        }
+      }
+
+      // Download file
+      const { data, error } = await supabase.storage
+        .from('project-files')
+        .download(file.file_path);
+
+      if (error) throw error;
+
+      // Create download link
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Éxito",
+        description: "Archivo descargado correctamente",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDownloadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!downloadingFile) return;
+    
+    await handleDownload(downloadingFile, downloadPassword);
+    setIsDownloadDialogOpen(false);
+    setDownloadingFile(null);
+    setDownloadPassword('');
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este archivo?')) {
+      return;
+    }
+
+    try {
+      const file = files.find(f => f.id === id);
+      if (!file) return;
+
+      // Delete from storage
+      const { error: storageError } = await supabase.storage
+        .from('project-files')
+        .remove([file.file_path]);
+
+      if (storageError) throw storageError;
+
+      // Delete from database
+      const { error } = await supabase
+        .from('repository_files')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      await loadFiles();
+      toast({
+        title: "Éxito",
+        description: "Archivo eliminado correctamente",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Repositorio</h1>
-          <p className="text-muted-foreground">Gestión de archivos del proyecto con protección por contraseña</p>
-        </div>
-        <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Upload className="h-4 w-4 mr-2" />
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Repositorio</CardTitle>
+            <Button onClick={() => setIsDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
               Subir archivo
             </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Subir nuevo archivo</DialogTitle>
-              <DialogDescription>Selecciona un archivo y configura las opciones de seguridad</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleUploadSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="file-upload">Archivo *</Label>
-                <Input
-                  id="file-upload"
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileSelect}
-                  required
-                />
-                {selectedFileToUpload && (
-                  <p className="text-sm text-muted-foreground">
-                    Seleccionado: {selectedFileToUpload.name} ({formatFileSize(selectedFileToUpload.size)})
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="upload-password">Contraseña (opcional)</Label>
-                <Input
-                  id="upload-password"
-                  type="password"
-                  value={uploadForm.password}
-                  onChange={(e) => setUploadForm({ ...uploadForm, password: e.target.value })}
-                  placeholder="Contraseña para proteger el archivo"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Si estableces una contraseña, será necesaria para descargar el archivo
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="upload-description">Descripción</Label>
-                <Textarea
-                  id="upload-description"
-                  value={uploadForm.description}
-                  onChange={(e) => setUploadForm({ ...uploadForm, description: e.target.value })}
-                  placeholder="Descripción del archivo"
-                  rows={3}
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setUploadDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={!selectedFileToUpload}>
-                  Subir archivo
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {files.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">No hay archivos en el repositorio</p>
-            <p className="text-sm text-muted-foreground mt-1">Sube el primer archivo para empezar</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4">
-          {files.map((file) => (
-            <Card key={file.id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CardTitle className="text-lg">{file.name}</CardTitle>
-                      {file.password_required ? (
-                        <Badge variant="secondary" className="text-xs">
-                          <Lock className="h-3 w-3 mr-1" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : files.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <p>No hay archivos registrados aún</p>
+              <p className="text-sm text-muted-foreground mt-1">Sube el primer archivo para empezar</p>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {files.map((file) => (
+                <Card key={file.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start">
+                      <CardTitle className="text-lg truncate mr-2">
+                        {file.name}
+                      </CardTitle>
+                      <div className="flex gap-1 ml-auto">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDownloadRequest(file)}
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => handleDelete(file.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      {file.password_required && (
+                        <Badge variant="secondary" className="gap-1">
+                          <Lock className="h-3 w-3" />
                           Protegido
                         </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs">
-                          <Unlock className="h-3 w-3 mr-1" />
-                          Público
-                        </Badge>
                       )}
+                      <span className="text-sm text-muted-foreground">{formatFileSize(file.file_size || 0)}</span>
                     </div>
-                    <div className="flex gap-4 text-sm text-muted-foreground">
-                      <span>Tamaño: {formatFileSize(file.file_size)}</span>
-                      <span>
-                        Subido {formatDistanceToNow(new Date(file.created_at), { 
-                          addSuffix: true, 
-                          locale: es 
-                        })}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDownloadRequest(file)}
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => deleteFile(file)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              {file.description && (
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{file.description}</p>
-                </CardContent>
+                    <p className="text-xs text-muted-foreground">
+                      Subido {format(new Date(file.created_at), 'dd/MM/yyyy')}
+                    </p>
+                    {file.description && (
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {file.description}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Upload Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Subir archivo</DialogTitle>
+            <DialogDescription>
+              Sube un nuevo archivo al repositorio del proyecto
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleUploadSubmit} className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="file">Archivo</Label>
+              <Input
+                id="file"
+                type="file"
+                onChange={handleFileSelect}
+                required
+              />
+              {selectedFile && (
+                <p className="text-sm text-muted-foreground">
+                  Archivo seleccionado: {selectedFile.name}
+                </p>
               )}
-            </Card>
-          ))}
-        </div>
-      )}
+            </div>
+            
+            <div className="grid gap-2">
+              <Label htmlFor="name">Nombre</Label>
+              <Input
+                id="name"
+                value={uploadName}
+                onChange={(e) => setUploadName(e.target.value)}
+                placeholder="Nombre del archivo"
+                required
+              />
+            </div>
+            
+            <div className="grid gap-2">
+              <Label htmlFor="description">Descripción</Label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Describe el contenido del archivo..."
+                rows={3}
+              />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="password-required"
+                checked={isPasswordRequired}
+                onChange={(e) => setIsPasswordRequired(e.target.checked)}
+              />
+              <Label htmlFor="password-required">Proteger con contraseña</Label>
+            </div>
+
+            {isPasswordRequired && (
+              <div className="grid gap-2">
+                <Label htmlFor="password">Contraseña</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Contraseña para proteger el archivo"
+                  required={isPasswordRequired}
+                />
+              </div>
+            )}
+            
+            <Button type="submit" className="w-full" disabled={!selectedFile || !uploadName.trim()}>
+              Subir archivo
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Download Password Dialog */}
-      <Dialog open={downloadDialogOpen} onOpenChange={setDownloadDialogOpen}>
-        <DialogContent className="max-w-md">
+      <Dialog open={isDownloadDialogOpen} onOpenChange={setIsDownloadDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Archivo protegido</DialogTitle>
             <DialogDescription>
-              Este archivo está protegido con contraseña. Introduce la contraseña para descargarlo.
+              Este archivo está protegido con contraseña
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleDownloadSubmit} className="space-y-4">
-            <div className="space-y-2">
+          
+          <form onSubmit={handleDownloadSubmit} className="grid gap-4 py-4">
+            <div className="grid gap-2">
               <Label htmlFor="download-password">Contraseña</Label>
               <Input
                 id="download-password"
@@ -248,19 +429,13 @@ const RepositoryModule = ({ projectId }: RepositoryModuleProps) => {
                 required
               />
             </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setDownloadDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit">
-                Descargar
-              </Button>
-            </div>
+            
+            <Button type="submit" className="w-full">
+              Descargar archivo
+            </Button>
           </form>
         </DialogContent>
       </Dialog>
     </div>
   );
-};
-
-export default RepositoryModule;
+}
