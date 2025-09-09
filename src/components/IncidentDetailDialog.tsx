@@ -229,28 +229,27 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <div>
+            <div className="flex items-center gap-2">
               <DialogTitle>
                 {selected ? `Detalle T${String(selected.incident_number ?? 0).padStart(5, '0')}` : 'Detalle de incidencia'}
               </DialogTitle>
-              <DialogDescription>
-                {selected && (
-                  <div className="mt-2 text-sm">
-                    <span className="font-medium">Creado por:</span> {createdByEmail || 'Desconocido'}
-                  </div>
-                )}
-              </DialogDescription>
+              {selected && (
+                <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive p-1">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
+          <DialogDescription>
+            {selected && (
+              <div className="mt-2 text-sm">
+                <span className="font-medium">Creado por:</span> {createdByEmail || 'Desconocido'}
+              </div>
+            )}
+          </DialogDescription>
         </DialogHeader>
         {selected && (
           <div className="space-y-4">
-            <div className="flex justify-end mb-4">
-              <Button variant="outline" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive">
-                <Trash2 className="h-4 w-4 mr-1" />
-                Eliminar
-              </Button>
-            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="md:col-span-2">
                 <Label>Nombre</Label>

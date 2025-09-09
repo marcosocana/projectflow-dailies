@@ -252,8 +252,10 @@ const [form, setForm] = useState({
   status: 'pending',
   category: 'incident',
   additionalComments: '',
+  createdBy: '',
 });
 const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+const [teamMembers, setTeamMembers] = useState<any[]>([]);
 
 const [createOpen, setCreateOpen] = useState(false);
 const [detailsOpen, setDetailsOpen] = useState(false);
@@ -368,12 +370,29 @@ const fetchIncidents = async () => {
   }
 };
 
-  useEffect(() => { fetchIncidents(); }, [projectId]);
+  useEffect(() => { 
+    fetchIncidents(); 
+    fetchTeamMembers();
+  }, [projectId]);
+
+  const fetchTeamMembers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('people')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('name', { ascending: true });
+      if (error) throw error;
+      setTeamMembers(data || []);
+    } catch (e: any) {
+      console.error('Error fetching team members:', e);
+    }
+  };
 
 const resetForm = () => {
     setForm({
       name: '', description: '', evidenceLink: '', environment: 'Desconocido', device: 'Desconocido', epic: '',
-      occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', additionalComments: '',
+      occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', additionalComments: '', createdBy: '',
     });
     setEvidenceFile(null);
     setEditingId(null);
@@ -413,6 +432,7 @@ const deviceValue = form.device || '';
           additional_comments: form.additionalComments,
           project_id: projectId,
           created_by: user?.id ?? null,
+          assigned_to: form.createdBy || null,
         };
         if (evidenceFile) {
           const path = await handleUploadEvidence(id);
@@ -432,6 +452,7 @@ const deviceValue = form.device || '';
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
           category: form.category,
+          assigned_to: form.createdBy || null,
         };
         if (evidenceFile) {
           const path = await handleUploadEvidence(id);
@@ -466,6 +487,7 @@ const deviceValue = form.device || '';
       status: incident.status || 'pending',
       category: incident.category || 'incident',
       additionalComments: incident.additional_comments || '',
+      createdBy: incident.assigned_to || '',
     });
     setEvidenceFile(null);
 
@@ -1204,15 +1226,26 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                </SelectContent>
              </Select>
            </div>
-          <div className="space-y-2">
-            <Label>Categoría</Label>
-            <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
-              <SelectTrigger><SelectValue placeholder="Categoría" /></SelectTrigger>
-              <SelectContent>
-                {CATEGORY_OPTIONS.map((c) => (<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          </div>
+           <div className="space-y-2">
+             <Label>Creado por</Label>
+             <Select value={form.createdBy} onValueChange={(v) => setForm((f) => ({ ...f, createdBy: v }))}>
+               <SelectTrigger><SelectValue placeholder="Seleccionar miembro" /></SelectTrigger>
+               <SelectContent>
+                 {teamMembers.map((member) => (
+                   <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
+                 ))}
+               </SelectContent>
+             </Select>
+           </div>
+           <div className="space-y-2">
+             <Label>Categoría</Label>
+             <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
+               <SelectTrigger><SelectValue placeholder="Categoría" /></SelectTrigger>
+               <SelectContent>
+                 {CATEGORY_OPTIONS.map((c) => (<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
+               </SelectContent>
+             </Select>
+           </div>
           <div className="space-y-2 md:col-span-2">
             <Label>Descripción</Label>
             <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
