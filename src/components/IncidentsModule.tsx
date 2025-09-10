@@ -166,7 +166,12 @@ const SortableIncidentCard = ({
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           <CategoryIcon category={incident.category} />
-          <span className="font-medium text-sm">#{incident.incident_number}</span>
+          <span className="font-medium text-sm">
+            <span className="text-xs font-semibold text-muted-foreground mr-1">
+              {incident.category === 'incident' ? 'I' : 'M'}
+            </span>
+            T{String(incident.incident_number ?? 0).padStart(5, '0')}
+          </span>
         </div>
         <Badge variant="outline" className={`text-xs ${getStatusColor(incident.status)} border-transparent`}>
           {STATUS_LABELS[incident.status]}
@@ -933,7 +938,14 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                     <TableCell>
                       <CategoryIcon category={i.category} />
                     </TableCell>
-                    <TableCell className="font-mono">T{String(i.incident_number ?? 0).padStart(5, '0')}</TableCell>
+                    <TableCell className="font-mono">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-semibold text-muted-foreground">
+                          {i.category === 'incident' ? 'I' : 'M'}
+                        </span>
+                        T{String(i.incident_number ?? 0).padStart(5, '0')}
+                      </div>
+                    </TableCell>
                     <TableCell className="font-medium">{i.name}</TableCell>
                     <TableCell>{i.epic || '-'}</TableCell>
                     <TableCell>{i.device || '-'}</TableCell>

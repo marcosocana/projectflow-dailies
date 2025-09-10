@@ -424,7 +424,7 @@ export default function DailiesModule({
       personIds: task.person_id ? [task.person_id] : [],
       incidentId: task.incident_id || '',
       status: task.status as TaskStatus || 'pending',
-      assignedTo: task.assigned_to || 'unassigned'
+      assignedTo: task.assigned_to || ''
     });
     setEditing(false);
     setDetailsOpen(true);
@@ -462,7 +462,7 @@ export default function DailiesModule({
         person_id: editForm.personIds.length > 0 ? editForm.personIds[0] : null,
         incident_id: editForm.incidentId || null,
         status: editForm.status,
-        assigned_to: editForm.assignedTo === 'unassigned' ? null : editForm.assignedTo || null
+        assigned_to: editForm.assignedTo === '' ? null : editForm.assignedTo || null
       };
       const {
         error
@@ -904,7 +904,7 @@ export default function DailiesModule({
                       <SelectValue placeholder="Selecciona un miembro del equipo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="unassigned">Sin asignar</SelectItem>
+                      <SelectItem value="">Sin asignar</SelectItem>
                       {people.map((person) => (
                         <SelectItem key={person.id} value={person.id}>
                           <div className="flex items-center gap-2">
