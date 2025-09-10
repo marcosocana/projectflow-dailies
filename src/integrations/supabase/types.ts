@@ -812,6 +812,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      update_user_permissions: {
+        Args: { permissions: Json; project_id: string; user_email: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
