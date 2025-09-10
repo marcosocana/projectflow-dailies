@@ -55,9 +55,11 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
 
   const [selected, setSelected] = useState<any | null>(null);
   const [createdByEmail, setCreatedByEmail] = useState<string>('');
+  const [assignedToName, setAssignedToName] = useState<string>('');
   const [detailEvidenceFile, setDetailEvidenceFile] = useState<File | null>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState('');
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const isInitialDetailLoad = useRef(true);
   const [detailForm, setDetailForm] = useState({
     name: '',
@@ -70,6 +72,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     env: '',
     dev: '',
     evidenceLink: '',
+    assignedTo: '',
   });
   const [epicOptions, setEpicOptions] = useState<string[]>([]);
   useEffect(() => {
@@ -79,18 +82,30 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
       const uniq = Array.from(new Set((data || []).map((d: any) => d.epic).filter(Boolean)));
       setEpicOptions(uniq as string[]);
     };
+    const loadTeamMembers = async () => {
+      // Extract project ID from incident (we need to get it first)
+      if (incidentId) {
+        const { data: incident } = await supabase.from('incidents').select('project_id').eq('id', incidentId).single();
+        if (incident) {
+          const { data: members } = await supabase.from('people').select('*').eq('project_id', incident.project_id).order('name', { ascending: true });
+          setTeamMembers(members || []);
+        }
+      }
+    };
     loadEpics();
-  }, [open]);
+    loadTeamMembers();
+  }, [open, incidentId]);
 
   const resetState = () => {
     setSelected(null);
     setCreatedByEmail('');
+    setAssignedToName('');
     setComments([]);
     setCommentText('');
     setDetailEvidenceFile(null);
     isInitialDetailLoad.current = true;
     setDetailForm({
-      name: '', description: '', occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', epic: '', additionalComments: '', env: '', dev: '', evidenceLink: ''
+      name: '', description: '', occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', epic: '', additionalComments: '', env: '', dev: '', evidenceLink: '', assignedTo: ''
     });
   };
 
@@ -126,6 +141,16 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           }
         }
         
+        // Get assigned person name
+        if (data.assigned_to) {
+          const { data: assignedPerson } = await supabase
+            .from('people')
+            .select('name')
+            .eq('id', data.assigned_to)
+            .single();
+          setAssignedToName(assignedPerson?.name || 'Usuario asignado');
+        }
+        
         const pick = (raw: string, allowed: readonly string[]) =>
           (raw || '').split(',').map((s) => s.trim()).find((v) => (allowed as readonly string[]).includes(v)) || '';
         setDetailForm({
@@ -139,6 +164,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           env: pick(data.environment || '', ENV_OPTIONS),
           dev: pick(data.device || '', DEVICE_OPTIONS),
           evidenceLink: data.evidence && !String(data.evidence).startsWith('incidents/') ? data.evidence : '',
+          assignedTo: data.assigned_to || '',
         });
         const { data: cmts } = await supabase.from('incident_comments').select('*').eq('incident_id', data.id).order('created_at', { ascending: true });
         setComments(cmts || []);
@@ -172,6 +198,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         category: detailForm.category,
         epic: detailForm.epic,
         evidence: selected.evidence,
+        assigned_to: detailForm.assignedTo || null,
       };
       if (detailEvidenceFile) {
         try {
@@ -242,8 +269,9 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           </div>
           <DialogDescription>
             {selected && (
-              <div className="mt-2 text-sm">
-                <span className="font-medium">Creado por:</span> {createdByEmail || 'Desconocido'}
+              <div className="mt-2 text-sm space-y-1">
+                <div><span className="font-medium">Creado por:</span> {createdByEmail || 'Desconocido'}</div>
+                {assignedToName && <div><span className="font-medium">Asignado a:</span> {assignedToName}</div>}
               </div>
             )}
           </DialogDescription>
@@ -299,6 +327,23 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
                   <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
                     {DEVICE_OPTIONS.map((opt) => (<SelectItem key={opt} value={opt}>{opt}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Asignar a</Label>
+                <Select value={detailForm.assignedTo} onValueChange={(v) => setDetailForm((f) => ({ ...f, assignedTo: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Sin asignar</SelectItem>
+                    {teamMembers.map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded" style={{ backgroundColor: member.color }} />
+                          {member.name}
+                        </div>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

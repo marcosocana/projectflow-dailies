@@ -55,14 +55,12 @@ export default function DailiesModule({
     personIds: string[];
     incidentId: string;
     status: TaskStatus;
-    assignedTo: string;
   }>({
     title: '',
     description: '',
     personIds: [],
     incidentId: '',
-    status: 'pending',
-    assignedTo: ''
+    status: 'pending'
   });
 
   // New states for persist modal and view all tasks
@@ -97,14 +95,12 @@ export default function DailiesModule({
     personIds: string[];
     incidentId: string;
     status: TaskStatus;
-    assignedTo: string;
   }>({
     title: '',
     description: '',
     personIds: [],
     incidentId: '',
-    status: 'pending',
-    assignedTo: ''
+    status: 'pending'
   });
   const loadBaseData = async () => {
     const [{
@@ -206,8 +202,7 @@ export default function DailiesModule({
       daily_id: dailyId,
       person_id: taskForm.personIds.length > 0 ? taskForm.personIds[0] : null, // For now, use first person
       incident_id: taskForm.incidentId || null,
-      status: taskForm.status ?? 'pending',
-      assigned_to: taskForm.assignedTo || null
+      status: taskForm.status ?? 'pending'
     };
     const {
       data: created,
@@ -230,8 +225,7 @@ export default function DailiesModule({
       description: '',
       personIds: [],
       incidentId: '',
-      status: 'pending',
-      assignedTo: ''
+      status: 'pending'
     });
     setCreateTaskOpen(false);
     loadTasks(date);
@@ -423,8 +417,7 @@ export default function DailiesModule({
       description: task.description || '',
       personIds: task.person_id ? [task.person_id] : [],
       incidentId: task.incident_id || '',
-      status: task.status as TaskStatus || 'pending',
-      assignedTo: task.assigned_to || ''
+      status: task.status as TaskStatus || 'pending'
     });
     setEditing(false);
     setDetailsOpen(true);
@@ -461,8 +454,7 @@ export default function DailiesModule({
         description: editForm.description || null,
         person_id: editForm.personIds.length > 0 ? editForm.personIds[0] : null,
         incident_id: editForm.incidentId || null,
-        status: editForm.status,
-        assigned_to: editForm.assignedTo === '' ? null : editForm.assignedTo || null
+        status: editForm.status
       };
       const {
         error
@@ -568,12 +560,7 @@ export default function DailiesModule({
                            </Badge>
                          </TableCell>
                          <TableCell>
-                           <div className="flex items-center gap-2">
-                             {t.assigned_to && (
-                               <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
-                             )}
-                             <div className="font-medium">{t.title}</div>
-                           </div>
+                           <div className="font-medium">{t.title}</div>
                             {typeof t.description === 'string' && (
                               <div className="text-xs text-muted-foreground">
                                 {t.description.length > 70 ? `${t.description.slice(0, 70)}...` : t.description}
@@ -696,25 +683,6 @@ export default function DailiesModule({
                   </Command>
                 </PopoverContent>
               </Popover>
-            </div>
-            <div>
-              <Label>Asignar a</Label>
-              <Select value={taskForm.assignedTo} onValueChange={(value) => setTaskForm(f => ({ ...f, assignedTo: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sin asignar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Sin asignar</SelectItem>
-                  {people.map((person) => (
-                    <SelectItem key={person.id} value={person.id}>
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded" style={{ backgroundColor: person.color }} />
-                        {person.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <div>
               <Label>Estado</Label>
@@ -866,51 +834,26 @@ export default function DailiesModule({
                   </Popover>
                 </div>
                  <div>
-                   <Label>Creado por</Label>
-                   <div className="text-sm text-muted-foreground">
-                     {user?.email || 'No especificado'}
-                   </div>
+                   <Label>Estado</Label>
+                   <Select value={editForm.status} onValueChange={v => setEditForm(f => ({
+                 ...f,
+                 status: v as TaskStatus
+               }))}>
+                     <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="pending">Pendiente</SelectItem>
+                       <SelectItem value="in_progress">En curso</SelectItem>
+                       <SelectItem value="resolved">Resuelta</SelectItem>
+                     </SelectContent>
+                   </Select>
                  </div>
-                <div>
-                  <Label>Estado</Label>
-                  <Select value={editForm.status} onValueChange={v => setEditForm(f => ({
-                ...f,
-                status: v as TaskStatus
-              }))}>
-                    <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pendiente</SelectItem>
-                      <SelectItem value="in_progress">En curso</SelectItem>
-                      <SelectItem value="resolved">Resuelta</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="md:col-span-2">
-                  <Label>Descripción</Label>
-                  <Textarea value={editForm.description} onChange={e => setEditForm(f => ({
-                ...f,
-                description: e.target.value
-              }))} />
-                </div>
-                <div className="md:col-span-2">
-                  <Label>Asignado a</Label>
-                  <Select value={editForm.assignedTo} onValueChange={(value) => setEditForm(f => ({ ...f, assignedTo: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona un miembro del equipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Sin asignar</SelectItem>
-                      {people.map((person) => (
-                        <SelectItem key={person.id} value={person.id}>
-                          <div className="flex items-center gap-2">
-                            <span className="w-3 h-3 rounded" style={{ backgroundColor: person.color }} />
-                            {person.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                 <div className="md:col-span-2">
+                   <Label>Descripción</Label>
+                   <Textarea value={editForm.description} onChange={e => setEditForm(f => ({
+                 ...f,
+                 description: e.target.value
+               }))} />
+                 </div>
                 <div className="md:col-span-2">
                   <Label>Vincular a incidencia</Label>
                   <Popover>

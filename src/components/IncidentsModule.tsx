@@ -238,7 +238,8 @@ export default function IncidentsModule({
     status: 'pending',
     category: 'incident',
     additionalComments: '',
-    createdBy: ''
+    createdBy: '',
+    assignedTo: ''
   });
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
@@ -372,7 +373,8 @@ export default function IncidentsModule({
       status: 'pending',
       category: 'incident',
       additionalComments: '',
-      createdBy: ''
+      createdBy: '',
+      assignedTo: ''
     });
     setEvidenceFile(null);
     setEditingId(null);
@@ -412,7 +414,7 @@ export default function IncidentsModule({
           additional_comments: form.additionalComments,
           project_id: projectId,
           created_by: user?.id ?? null,
-          assigned_to: form.createdBy || null
+          assigned_to: form.assignedTo || null
         };
         if (evidenceFile) {
           const path = await handleUploadEvidence(id);
@@ -437,7 +439,7 @@ export default function IncidentsModule({
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
           category: form.category,
-          assigned_to: form.createdBy || null
+          assigned_to: form.assignedTo || null
         };
         if (evidenceFile) {
           const path = await handleUploadEvidence(id);
@@ -479,7 +481,8 @@ export default function IncidentsModule({
       status: incident.status || 'pending',
       category: incident.category || 'incident',
       additionalComments: incident.additional_comments || '',
-      createdBy: incident.assigned_to || ''
+      createdBy: incident.created_by || '',
+      assignedTo: incident.assigned_to || ''
     });
     setEvidenceFile(null);
   };
@@ -922,7 +925,14 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                       <CategoryIcon category={i.category} />
                     </TableCell>
                     <TableCell className="font-mono w-20">T{String(i.incident_number ?? 0).padStart(5, '0')}</TableCell>
-                    <TableCell className="font-medium">{i.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {i.assigned_to && (
+                          <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
+                        )}
+                        <span>{i.name}</span>
+                      </div>
+                    </TableCell>
                     <TableCell>{i.epic || '-'}</TableCell>
                     <TableCell>{i.device || '-'}</TableCell>
                     <TableCell>{i.environment || '-'}</TableCell>
@@ -1114,17 +1124,39 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
              </Select>
            </div>
            <div className="space-y-2">
-             <Label>Creado por</Label>
-             <Select value={form.createdBy} onValueChange={v => setForm(f => ({
+             <Label>Asignar a</Label>
+             <Select value={form.assignedTo} onValueChange={v => setForm(f => ({
               ...f,
-              createdBy: v
+              assignedTo: v
             }))}>
-               <SelectTrigger><SelectValue placeholder="Seleccionar miembro" /></SelectTrigger>
+               <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
                <SelectContent>
-                 {teamMembers.map(member => <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>)}
+                 <SelectItem value="">Sin asignar</SelectItem>
+                 {teamMembers.map(member => (
+                   <SelectItem key={member.id} value={member.id}>
+                     <div className="flex items-center gap-2">
+                       <span className="w-3 h-3 rounded" style={{ backgroundColor: member.color }} />
+                       {member.name}
+                     </div>
+                   </SelectItem>
+                 ))}
                </SelectContent>
              </Select>
            </div>
+           {editingId && (
+             <div className="space-y-2">
+               <Label>Creado por</Label>
+               <Select value={form.createdBy} onValueChange={v => setForm(f => ({
+                ...f,
+                createdBy: v
+              }))}>
+                 <SelectTrigger><SelectValue placeholder="Seleccionar miembro" /></SelectTrigger>
+                 <SelectContent>
+                   {teamMembers.map(member => <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>)}
+                 </SelectContent>
+               </Select>
+             </div>
+           )}
            <div className="space-y-2">
              <Label>Categoría</Label>
              <Select value={form.category} onValueChange={v => setForm(f => ({
