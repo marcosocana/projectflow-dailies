@@ -35,10 +35,10 @@ const FloatingChatbot: React.FC<FloatingChatbotProps> = ({ projectId }) => {
   if (!projectId) return null;
 
   return (
-    <div className="fixed bottom-6 left-6 z-50">
+    <div className="fixed bottom-6 right-6 z-50">
       {/* Chat Window */}
       {isOpen && (
-        <Card className="mb-4 w-80 h-96 shadow-lg border-2">
+        <Card className="mb-4 w-80 h-96 shadow-lg border-2 absolute bottom-16 right-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Asistente IA del Proyecto
