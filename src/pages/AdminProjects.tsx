@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { ColorPicker } from '@/components/ui/color-picker';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +18,7 @@ interface ProjectRow {
   project_number: number;
   project_password: string;
   dailies_password: string;
+  theme_color: string;
   logo_url: string | null;
   created_at: string;
 }
@@ -35,6 +37,7 @@ const AdminProjects = () => {
     name: '',
     project_password: '',
     dailies_password: '',
+    theme_color: '#3B82F6',
   });
 
   const { toast } = useToast();
@@ -45,7 +48,7 @@ const AdminProjects = () => {
     try {
       const { data, error } = await supabase
         .from('projects')
-        .select('id, name, project_number, project_password, dailies_password, logo_url, created_at')
+        .select('id, name, project_number, project_password, dailies_password, theme_color, logo_url, created_at')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -99,6 +102,7 @@ const AdminProjects = () => {
       name: project.name,
       project_password: project.project_password,
       dailies_password: project.dailies_password,
+      theme_color: project.theme_color,
     });
     setEditOpen(true);
   };
@@ -190,6 +194,7 @@ const AdminProjects = () => {
         name: editForm.name.trim(),
         project_password: editForm.project_password.trim(),
         dailies_password: editForm.dailies_password.trim(),
+        theme_color: editForm.theme_color,
       };
 
       if (editingProject.logo_url !== null) {
@@ -294,6 +299,7 @@ const AdminProjects = () => {
                       <TableHead>Número</TableHead>
                       <TableHead className="min-w-[120px]">Contraseña Proyecto</TableHead>
                       <TableHead className="min-w-[120px]">Contraseña Dailies</TableHead>
+                      <TableHead>Color</TableHead>
                       <TableHead>Logo</TableHead>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Acciones</TableHead>
@@ -302,13 +308,13 @@ const AdminProjects = () => {
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8">
+                        <TableCell colSpan={8} className="text-center py-8">
                           Cargando proyectos...
                         </TableCell>
                       </TableRow>
                     ) : filtered.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8">
+                        <TableCell colSpan={8} className="text-center py-8">
                           {search ? 'No se encontraron proyectos que coincidan con la búsqueda' : 'No hay proyectos'}
                         </TableCell>
                       </TableRow>
@@ -328,6 +334,15 @@ const AdminProjects = () => {
                             <code className="text-xs bg-muted px-2 py-1 rounded block truncate max-w-[100px]">
                               {project.dailies_password}
                             </code>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className="w-6 h-6 rounded border border-border"
+                                style={{ backgroundColor: project.theme_color }}
+                              />
+                              <code className="text-xs">{project.theme_color}</code>
+                            </div>
                           </TableCell>
                           <TableCell>
                             {project.logo_url ? (
@@ -435,6 +450,17 @@ const AdminProjects = () => {
                         {showPasswords.dailies ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <ColorPicker
+                      label="Color de Interacción del Proyecto"
+                      value={editForm.theme_color}
+                      onChange={(color) => setEditForm({ ...editForm, theme_color: color })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Este color se utilizará para los botones y elementos de interacción del proyecto
+                    </p>
                   </div>
 
                   <div className="space-y-2">

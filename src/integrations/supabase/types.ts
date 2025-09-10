@@ -374,6 +374,7 @@ export type Database = {
           name: string
           project_number: number
           project_password: string
+          theme_color: string
           updated_at: string
         }
         Insert: {
@@ -388,6 +389,7 @@ export type Database = {
           name: string
           project_number?: number
           project_password: string
+          theme_color?: string
           updated_at?: string
         }
         Update: {
@@ -402,6 +404,7 @@ export type Database = {
           name?: string
           project_number?: number
           project_password?: string
+          theme_color?: string
           updated_at?: string
         }
         Relationships: []

@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { ColorPicker } from '@/components/ui/color-picker';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,6 +19,7 @@ const CreateProjectForm = ({ onProjectCreated, onClose }: CreateProjectFormProps
     name: '',
     projectPassword: '',
     dailiesPassword: '',
+    themeColor: '#3B82F6',
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -106,6 +108,7 @@ const CreateProjectForm = ({ onProjectCreated, onClose }: CreateProjectFormProps
           name: formData.name,
           project_password: formData.projectPassword,
           dailies_password: formData.dailiesPassword,
+          theme_color: formData.themeColor,
           logo_url: logoUrl,
           created_by: user.id,
         })
@@ -180,6 +183,17 @@ const CreateProjectForm = ({ onProjectCreated, onClose }: CreateProjectFormProps
               placeholder="Contraseña especial para gestión diaria"
               required
             />
+          </div>
+
+          <div className="space-y-2">
+            <ColorPicker
+              label="Color de Interacción del Proyecto"
+              value={formData.themeColor}
+              onChange={(color) => handleInputChange('themeColor', color)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Este color se utilizará para los botones y elementos de interacción del proyecto
+            </p>
           </div>
 
           <div className="space-y-2">
