@@ -308,6 +308,7 @@ export type Database = {
         Row: {
           color: string
           created_at: string
+          email: string | null
           full_name: string
           id: string
           is_active: boolean
@@ -317,6 +318,7 @@ export type Database = {
         Insert: {
           color?: string
           created_at?: string
+          email?: string | null
           full_name: string
           id?: string
           is_active?: boolean
@@ -326,6 +328,7 @@ export type Database = {
         Update: {
           color?: string
           created_at?: string
+          email?: string | null
           full_name?: string
           id?: string
           is_active?: boolean
@@ -677,6 +680,7 @@ export type Database = {
           id: string
           project_id: string
           section: string
+          section_new: Database["public"]["Enums"]["project_section"] | null
           updated_at: string
           user_id: string
         }
@@ -686,6 +690,7 @@ export type Database = {
           id?: string
           project_id: string
           section: string
+          section_new?: Database["public"]["Enums"]["project_section"] | null
           updated_at?: string
           user_id: string
         }
@@ -695,6 +700,7 @@ export type Database = {
           id?: string
           project_id?: string
           section?: string
+          section_new?: Database["public"]["Enums"]["project_section"] | null
           updated_at?: string
           user_id?: string
         }
@@ -802,6 +808,18 @@ export type Database = {
         | "closed"
         | "in_qa"
         | "resolved"
+      project_section:
+        | "home"
+        | "tasks"
+        | "dailies"
+        | "notes"
+        | "repository"
+        | "team"
+        | "contacts"
+        | "releases"
+        | "vacations"
+        | "settings"
+        | "users"
       task_status: "pending" | "in_progress" | "resolved"
     }
     CompositeTypes: {
@@ -938,6 +956,19 @@ export const Constants = {
         "closed",
         "in_qa",
         "resolved",
+      ],
+      project_section: [
+        "home",
+        "tasks",
+        "dailies",
+        "notes",
+        "repository",
+        "team",
+        "contacts",
+        "releases",
+        "vacations",
+        "settings",
+        "users",
       ],
       task_status: ["pending", "in_progress", "resolved"],
     },
