@@ -105,7 +105,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     setDetailEvidenceFile(null);
     isInitialDetailLoad.current = true;
     setDetailForm({
-      name: '', description: '', occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', epic: '', additionalComments: '', env: '', dev: '', evidenceLink: '', assignedTo: ''
+      name: '', description: '', occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', epic: '', additionalComments: '', env: '', dev: '', evidenceLink: '', assignedTo: 'unassigned'
     });
   };
 
@@ -164,7 +164,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           env: pick(data.environment || '', ENV_OPTIONS),
           dev: pick(data.device || '', DEVICE_OPTIONS),
           evidenceLink: data.evidence && !String(data.evidence).startsWith('incidents/') ? data.evidence : '',
-          assignedTo: data.assigned_to || '',
+          assignedTo: data.assigned_to || 'unassigned',
         });
         const { data: cmts } = await supabase.from('incident_comments').select('*').eq('incident_id', data.id).order('created_at', { ascending: true });
         setComments(cmts || []);
@@ -198,7 +198,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         category: detailForm.category,
         epic: detailForm.epic,
         evidence: selected.evidence,
-        assigned_to: detailForm.assignedTo || null,
+        assigned_to: detailForm.assignedTo === 'unassigned' ? null : detailForm.assignedTo,
       };
       if (detailEvidenceFile) {
         try {
@@ -335,7 +335,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
                 <Select value={detailForm.assignedTo} onValueChange={(v) => setDetailForm((f) => ({ ...f, assignedTo: v }))}>
                   <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Sin asignar</SelectItem>
+                    <SelectItem value="unassigned">Sin asignar</SelectItem>
                     {teamMembers.map((member) => (
                       <SelectItem key={member.id} value={member.id}>
                         <div className="flex items-center gap-2">

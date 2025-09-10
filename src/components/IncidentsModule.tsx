@@ -239,7 +239,7 @@ export default function IncidentsModule({
     category: 'incident',
     additionalComments: '',
     createdBy: '',
-    assignedTo: ''
+    assignedTo: 'unassigned'
   });
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
@@ -374,7 +374,7 @@ export default function IncidentsModule({
       category: 'incident',
       additionalComments: '',
       createdBy: '',
-      assignedTo: ''
+      assignedTo: 'unassigned'
     });
     setEvidenceFile(null);
     setEditingId(null);
@@ -414,7 +414,7 @@ export default function IncidentsModule({
           additional_comments: form.additionalComments,
           project_id: projectId,
           created_by: user?.id ?? null,
-          assigned_to: form.assignedTo || null
+          assigned_to: form.assignedTo === 'unassigned' ? null : form.assignedTo
         };
         if (evidenceFile) {
           const path = await handleUploadEvidence(id);
@@ -439,7 +439,7 @@ export default function IncidentsModule({
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
           category: form.category,
-          assigned_to: form.assignedTo || null
+          assigned_to: form.assignedTo === 'unassigned' ? null : form.assignedTo
         };
         if (evidenceFile) {
           const path = await handleUploadEvidence(id);
@@ -482,7 +482,7 @@ export default function IncidentsModule({
       category: incident.category || 'incident',
       additionalComments: incident.additional_comments || '',
       createdBy: incident.created_by || '',
-      assignedTo: incident.assigned_to || ''
+      assignedTo: incident.assigned_to || 'unassigned'
     });
     setEvidenceFile(null);
   };
@@ -1130,8 +1130,8 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
               assignedTo: v
             }))}>
                <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
-               <SelectContent>
-                 <SelectItem value="">Sin asignar</SelectItem>
+                <SelectContent>
+                  <SelectItem value="unassigned">Sin asignar</SelectItem>
                  {teamMembers.map(member => (
                    <SelectItem key={member.id} value={member.id}>
                      <div className="flex items-center gap-2">
