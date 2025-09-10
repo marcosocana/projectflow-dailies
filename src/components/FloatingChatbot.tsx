@@ -34,27 +34,11 @@ const FloatingChatbot: React.FC<FloatingChatbotProps> = ({ projectId }) => {
 
   console.log('FloatingChatbot projectId:', projectId); // Debug log
   
-  if (!projectId) {
-    console.log('No projectId provided, rendering fallback button');
-    return (
-      <div className="fixed bottom-6 right-6 z-50">
-        <Button
-          onClick={() => console.log('Need to select a project first')}
-          size="lg"
-          className="rounded-full h-14 w-14 shadow-lg bg-muted"
-          disabled
-        >
-          <MessageCircle className="h-6 w-6" />
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <div className="fixed bottom-6 right-6 z-50">
+    <div className="fixed bottom-6 left-6 z-50">
       {/* Chat Window */}
-      {isOpen && (
-        <Card className="mb-4 w-80 h-96 shadow-lg border-2 absolute bottom-16 right-0">
+      {isOpen && projectId && (
+        <Card className="mb-4 w-80 h-96 shadow-lg border-2 absolute bottom-16 left-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Asistente IA del Proyecto
@@ -85,11 +69,15 @@ const FloatingChatbot: React.FC<FloatingChatbotProps> = ({ projectId }) => {
             {/* Messages Area */}
             <ScrollArea className="flex-1 pr-3 mb-3">
               <div className="space-y-3">
-                {messages.length === 0 && (
+                {!projectId ? (
+                  <div className="text-center text-muted-foreground text-sm py-4">
+                    Por favor, accede a un proyecto para usar el chatbot.
+                  </div>
+                ) : messages.length === 0 ? (
                   <div className="text-center text-muted-foreground text-sm py-4">
                     ¡Hola! Soy tu asistente IA. Puedo ayudarte con información sobre las tareas y contenido del proyecto.
                   </div>
-                )}
+                ) : null}
                 
                 {messages.map((message) => (
                   <div
@@ -143,14 +131,14 @@ const FloatingChatbot: React.FC<FloatingChatbotProps> = ({ projectId }) => {
               <Input
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                placeholder="Pregunta sobre las tareas..."
-                disabled={isLoading}
+                placeholder={projectId ? "Pregunta sobre las tareas..." : "Accede a un proyecto primero"}
+                disabled={isLoading || !projectId}
                 className="text-sm"
               />
               <Button 
                 type="submit" 
                 size="sm" 
-                disabled={isLoading || !inputValue.trim()}
+                disabled={isLoading || !inputValue.trim() || !projectId}
                 className="px-3"
               >
                 <Send className="h-3 w-3" />
@@ -162,14 +150,24 @@ const FloatingChatbot: React.FC<FloatingChatbotProps> = ({ projectId }) => {
 
       {/* Floating Button */}
       <Button
-        onClick={toggleChat}
+        onClick={() => {
+          if (!projectId) {
+            // Mostrar mensaje si no hay proyecto
+            console.log('Por favor, accede a un proyecto primero');
+            return;
+          }
+          toggleChat();
+        }}
         size="lg"
         className={cn(
           "rounded-full h-14 w-14 shadow-lg transition-all duration-300",
-          isOpen ? "rotate-180" : "hover:scale-110"
+          projectId 
+            ? (isOpen ? "rotate-180 bg-primary hover:bg-primary/90" : "hover:scale-110 bg-primary hover:bg-primary/90")
+            : "bg-muted hover:bg-muted/90 cursor-not-allowed"
         )}
+        disabled={!projectId}
       >
-        {isOpen ? (
+        {isOpen && projectId ? (
           <X className="h-6 w-6" />
         ) : (
           <MessageCircle className="h-6 w-6" />
@@ -177,7 +175,7 @@ const FloatingChatbot: React.FC<FloatingChatbotProps> = ({ projectId }) => {
       </Button>
 
       {/* Notification Badge */}
-      {!isOpen && messages.length > 0 && (
+      {!isOpen && messages.length > 0 && projectId && (
         <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
           {messages.filter(m => !m.isUser).length}
         </div>
