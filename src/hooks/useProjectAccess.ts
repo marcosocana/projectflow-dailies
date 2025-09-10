@@ -6,6 +6,7 @@ export interface Project {
   id: string;
   name: string;
   project_number: number;
+  theme_color: string;
   logo_url: string | null;
   created_at: string;
   updated_at: string;
@@ -86,7 +87,7 @@ export function useProjectAccess() {
       const projectIds = projectAccess.map(access => access.project_id);
       const { data: projects, error: projectsError } = await supabase
         .from('projects')
-        .select('id, name, project_number, logo_url, created_at, updated_at')
+        .select('id, name, project_number, theme_color, logo_url, created_at, updated_at')
         .in('id', projectIds);
 
       if (projectsError) throw projectsError;

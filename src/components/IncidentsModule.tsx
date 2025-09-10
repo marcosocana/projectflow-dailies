@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { ProjectButton } from '@/components/ui/project-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -821,12 +822,12 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
             <div className="flex items-center gap-4">
               <CardTitle>Gestión de tareas</CardTitle>
               <div className="flex items-center gap-0 bg-muted rounded-lg p-1">
-                <Button variant={viewMode === 'list' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('list')} className="rounded-md" title="Lista">
+                <ProjectButton variant={viewMode === 'list' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('list')} className="rounded-md" title="Lista">
                   <List className="h-4 w-4" />
-                </Button>
-                <Button variant={viewMode === 'pipeline' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('pipeline')} className="rounded-md" title="Pipeline">
+                </ProjectButton>
+                <ProjectButton variant={viewMode === 'pipeline' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('pipeline')} className="rounded-md" title="Pipeline">
                   <Columns3 className="h-4 w-4" />
-                </Button>
+                </ProjectButton>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">

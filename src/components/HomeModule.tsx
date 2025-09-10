@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ProjectButton } from '@/components/ui/project-button';
 import { supabase } from '@/integrations/supabase/client';
 import { AlertTriangle, Calendar, CheckCircle2, Clock, List, Columns3, FileText } from 'lucide-react';
 import { 
@@ -420,7 +421,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
         <CardContent className="space-y-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Button
+              <ProjectButton
                 variant={viewMode === 'list' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setViewMode('list')}
@@ -428,8 +429,8 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
               >
                 <List className="h-4 w-4" />
                 Lista
-              </Button>
-              <Button
+              </ProjectButton>
+              <ProjectButton
                 variant={viewMode === 'pipeline' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setViewMode('pipeline')}
@@ -437,7 +438,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
               >
                 <Columns3 className="h-4 w-4" />
                 Pipeline
-              </Button>
+              </ProjectButton>
             </div>
           </div>
           
