@@ -783,6 +783,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_user_to_project: {
+        Args: { granted_by_id?: string; project_id: string; user_email: string }
+        Returns: Json
+      }
       current_user_is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
@@ -790,6 +794,16 @@ export type Database = {
       delete_shared_note: {
         Args: { note_id: string }
         Returns: undefined
+      }
+      find_user_by_email: {
+        Args: { user_email: string }
+        Returns: {
+          created_at: string
+          email: string
+          full_name: string
+          is_active: boolean
+          user_id: string
+        }[]
       }
       has_role: {
         Args: {
