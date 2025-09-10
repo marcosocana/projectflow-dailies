@@ -136,21 +136,38 @@ serve(async (req) => {
       .order('start_date', { ascending: true })
       .limit(10);
 
+    // Group incidents by category
+    const incidentsData = incidents || [];
+    const bugs = incidentsData.filter(i => i.category === 'incident');
+    const improvements = incidentsData.filter(i => i.category === 'improvement');
+    
     // Prepare context for the AI
     const projectContext = `
 Proyecto: ${project?.name || 'Proyecto'} (ID: ${project?.project_number || 'N/A'})
 
-INCIDENCIAS/TAREAS PRINCIPALES:
-${incidents?.map(incident => `
-- #${incident.incident_number}: ${incident.name}
+INCIDENCIAS (BUGS/PROBLEMAS):
+${bugs.length > 0 ? bugs.map(incident => `
+- 🐛 #${incident.incident_number}: ${incident.name}
 - Descripción: ${incident.description || 'Sin descripción'}
-- Estado: ${incident.status} | Categoría: ${incident.category}
+- Estado: ${incident.status}
 - Creado por: ${incident.profiles?.full_name || 'Usuario desconocido'}
 - Asignado a: ${incident.assigned_profiles?.full_name || 'Sin asignar'}
 - Entorno: ${incident.environment || 'N/A'} | Dispositivo: ${incident.device || 'N/A'}
 - Epic: ${incident.epic || 'N/A'}
 - Fecha: ${new Date(incident.created_at).toLocaleDateString()}
-`).join('\n') || 'No hay incidencias disponibles'}
+`).join('\n') : 'No hay incidencias registradas'}
+
+MEJORAS EVOLUTIVAS:
+${improvements.length > 0 ? improvements.map(incident => `
+- ✨ #${incident.incident_number}: ${incident.name}
+- Descripción: ${incident.description || 'Sin descripción'}
+- Estado: ${incident.status}
+- Creado por: ${incident.profiles?.full_name || 'Usuario desconocido'}
+- Asignado a: ${incident.assigned_profiles?.full_name || 'Sin asignar'}
+- Entorno: ${incident.environment || 'N/A'} | Dispositivo: ${incident.device || 'N/A'}
+- Epic: ${incident.epic || 'N/A'}
+- Fecha: ${new Date(incident.created_at).toLocaleDateString()}
+`).join('\n') : 'No hay mejoras registradas'}
 
 TAREAS ADICIONALES:
 ${tasks?.length > 0 ? tasks.map(task => {
