@@ -14,10 +14,16 @@ serve(async (req) => {
 
   try {
     const { message, projectId } = await req.json();
+    console.log('Chatbot request received:', { message, projectId });
+    
     const googleApiKey = Deno.env.get('GOOGLE_AI_API_KEY');
     
     if (!googleApiKey) {
       throw new Error('Google AI API key not configured');
+    }
+    
+    if (!projectId) {
+      throw new Error('Project ID is required');
     }
 
     // Get project context
@@ -26,11 +32,14 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Fetch project data
-    const { data: project } = await supabase
+    console.log('Fetching project data for ID:', projectId);
+    const { data: project, error: projectError } = await supabase
       .from('projects')
       .select('name, project_number')
       .eq('id', projectId)
       .single();
+    
+    console.log('Project data:', { project, projectError });
 
     // Fetch recent incidents/tasks
     const { data: incidents } = await supabase
@@ -56,7 +65,8 @@ serve(async (req) => {
       .limit(20);
 
     // Fetch tasks
-    const { data: tasks } = await supabase
+    console.log('Fetching tasks for project:', projectId);
+    const { data: tasks, error: tasksError } = await supabase
       .from('tasks')
       .select(`
         id,
@@ -76,7 +86,7 @@ serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(25);
 
-    console.log('Tasks fetched:', JSON.stringify(tasks, null, 2));
+    console.log('Tasks result:', { tasks: tasks?.length || 0, tasksError });
 
     // Fetch notes
     const { data: notes } = await supabase
