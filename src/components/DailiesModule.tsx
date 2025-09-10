@@ -567,14 +567,19 @@ export default function DailiesModule({
                              {t.status === 'in_progress' ? 'En curso' : t.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
                            </Badge>
                          </TableCell>
-                        <TableCell>
-                          <div className="font-medium">{t.title}</div>
-                           {typeof t.description === 'string' && (
-                             <div className="text-xs text-muted-foreground">
-                               {t.description.length > 70 ? `${t.description.slice(0, 70)}...` : t.description}
-                             </div>
-                          )}
-                        </TableCell>
+                         <TableCell>
+                           <div className="flex items-center gap-2">
+                             {t.assigned_to && (
+                               <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
+                             )}
+                             <div className="font-medium">{t.title}</div>
+                           </div>
+                            {typeof t.description === 'string' && (
+                              <div className="text-xs text-muted-foreground">
+                                {t.description.length > 70 ? `${t.description.slice(0, 70)}...` : t.description}
+                              </div>
+                           )}
+                         </TableCell>
                         <TableCell>
                           {person ? (
                             <div className="flex items-center gap-2">
@@ -585,15 +590,20 @@ export default function DailiesModule({
                             <span className="text-muted-foreground">—</span>
                           )}
                         </TableCell>
-                         <TableCell>
-                           {inc ? (
-                             <Button variant="link" className="px-0" onClick={() => openIncidentDetails(inc.id)}>
-                               {getTicketCode(inc)}
-                             </Button>
-                           ) : (
-                             <span className="text-muted-foreground">—</span>
-                           )}
-                         </TableCell>
+                          <TableCell>
+                            {inc ? (
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs font-semibold text-muted-foreground">
+                                  {inc.category === 'incident' ? 'I' : 'M'}
+                                </span>
+                                <Button variant="link" className="px-0" onClick={() => openIncidentDetails(inc.id)}>
+                                  {getTicketCode(inc)}
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
                          <TableCell className="flex gap-1">
                            <Button 
                              variant="ghost" 
@@ -691,6 +701,25 @@ export default function DailiesModule({
                   </Command>
                 </PopoverContent>
               </Popover>
+            </div>
+            <div>
+              <Label>Asignar a</Label>
+              <Select value={taskForm.assignedTo} onValueChange={(value) => setTaskForm(f => ({ ...f, assignedTo: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sin asignar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sin asignar</SelectItem>
+                  {people.map((person) => (
+                    <SelectItem key={person.id} value={person.id}>
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded" style={{ backgroundColor: person.color }} />
+                        {person.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Estado</Label>
@@ -844,10 +873,7 @@ export default function DailiesModule({
                  <div>
                    <Label>Creado por</Label>
                    <div className="text-sm text-muted-foreground">
-                     {selectedTask.assigned_to && selectedTask.assigned_to !== 'unassigned' ? 
-                       people.find(p => p.id === selectedTask.assigned_to)?.name || 'Desconocido' :
-                       'No especificado'
-                     }
+                     {user?.email || 'No especificado'}
                    </div>
                  </div>
                 <div>
@@ -1082,10 +1108,15 @@ export default function DailiesModule({
                             {task.status === 'in_progress' ? 'En curso' : task.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          <div className="font-medium">{task.title}</div>
-                          {typeof task.description === 'string' && <div className="text-xs text-muted-foreground">{task.description.length > 150 ? `${task.description.slice(0, 150)}...` : task.description}</div>}
-                        </TableCell>
+                         <TableCell>
+                           <div className="flex items-center gap-2">
+                             {task.assigned_to && (
+                               <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
+                             )}
+                             <div className="font-medium">{task.title}</div>
+                           </div>
+                           {typeof task.description === 'string' && <div className="text-xs text-muted-foreground">{task.description.length > 150 ? `${task.description.slice(0, 150)}...` : task.description}</div>}
+                         </TableCell>
                         <TableCell>
                           {person ? <div className="flex items-center gap-2">
                               <span className="h-3 w-3 rounded" style={{
