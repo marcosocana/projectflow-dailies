@@ -166,12 +166,7 @@ const SortableIncidentCard = ({
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           <CategoryIcon category={incident.category} />
-          <span className="font-medium text-sm">
-            <span className="text-xs font-semibold text-muted-foreground mr-1">
-              {incident.category === 'incident' ? 'I' : 'M'}
-            </span>
-            T{String(incident.incident_number ?? 0).padStart(5, '0')}
-          </span>
+          <span className="font-medium text-sm">T{String(incident.incident_number ?? 0).padStart(5, '0')}</span>
         </div>
         <Badge variant="outline" className={`text-xs ${getStatusColor(incident.status)} border-transparent`}>
           {STATUS_LABELS[incident.status]}
@@ -906,46 +901,27 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
 
         {viewMode === 'list' ? <>
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead></TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('incident_number')}>
-                    ID <ArrowUpDown className="inline h-4 w-4 ml-1" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('name')}>
-                    Nombre <ArrowUpDown className="inline h-4 w-4 ml-1" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('epic')}>
-                    Épica <ArrowUpDown className="inline h-4 w-4 ml-1" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('device')}>
-                    Canal <ArrowUpDown className="inline h-4 w-4 ml-1" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('environment')}>
-                    Entorno <ArrowUpDown className="inline h-4 w-4 ml-1" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('occurred_at')}>
-                    Fecha <ArrowUpDown className="inline h-4 w-4 ml-1" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('status')}>
-                    Estado <ArrowUpDown className="inline h-4 w-4 ml-1" />
-                  </TableHead>
-                  <TableHead>Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12"></TableHead>
+                    <TableHead className="w-20">ID</TableHead>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Épica</TableHead>
+                    <TableHead>Canal</TableHead>
+                    <TableHead>Entorno</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('status')}>
+                      Estado <ArrowUpDown className="inline h-4 w-4 ml-1" />
+                    </TableHead>
+                    <TableHead>Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
               <TableBody>
                 {paginatedIncidents.map((i: any) => <TableRow key={i.id}>
-                    <TableCell>
+                    <TableCell className="w-12">
                       <CategoryIcon category={i.category} />
                     </TableCell>
-                    <TableCell className="font-mono">
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs font-semibold text-muted-foreground">
-                          {i.category === 'incident' ? 'I' : 'M'}
-                        </span>
-                        T{String(i.incident_number ?? 0).padStart(5, '0')}
-                      </div>
-                    </TableCell>
+                    <TableCell className="font-mono w-20">T{String(i.incident_number ?? 0).padStart(5, '0')}</TableCell>
                     <TableCell className="font-medium">{i.name}</TableCell>
                     <TableCell>{i.epic || '-'}</TableCell>
                     <TableCell>{i.device || '-'}</TableCell>

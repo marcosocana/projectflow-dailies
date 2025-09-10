@@ -592,14 +592,9 @@ export default function DailiesModule({
                         </TableCell>
                           <TableCell>
                             {inc ? (
-                              <div className="flex items-center gap-1">
-                                <span className="text-xs font-semibold text-muted-foreground">
-                                  {inc.category === 'incident' ? 'I' : 'M'}
-                                </span>
-                                <Button variant="link" className="px-0" onClick={() => openIncidentDetails(inc.id)}>
-                                  {getTicketCode(inc)}
-                                </Button>
-                              </div>
+                              <Button variant="link" className="px-0" onClick={() => openIncidentDetails(inc.id)}>
+                                {getTicketCode(inc)}
+                              </Button>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
