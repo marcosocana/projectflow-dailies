@@ -75,18 +75,6 @@ const menuItems = [
     icon: Settings,
     description: "Seguimiento diario y gestión del equipo" 
   },
-  { 
-    title: "Gestión de usuarios", 
-    url: "users", 
-    icon: UserCog,
-    description: "Administrar usuarios y permisos" 
-  },
-  { 
-    title: "Información", 
-    url: "info", 
-    icon: Info,
-    description: "Información del proyecto" 
-  },
 ];
 
 export function AppSidebar({ currentProject }: AppSidebarProps) {

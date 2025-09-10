@@ -15,17 +15,17 @@ import ReleasesModule from '@/components/ReleasesModule';
 import InterestingLinksModule from '@/components/InterestingLinksModule';
 import VacationsModule from '@/components/VacationsModule';
 import NotesModule from '@/components/NotesModule';
-import ProjectInformationModule from '@/components/ProjectInformationModule';
 import ContactsModule from '@/components/ContactsModule';
 import RepositoryModule from '@/components/RepositoryModule';
 // import HomeModule from '@/components/HomeModule';
 import InternalConfigModule from '@/components/InternalConfigModule';
 import UsersModule from '@/components/UsersModule';
+import UserProfileModule from '@/components/UserProfileModule';
 import { AppSidebar } from '@/components/AppSidebar';
 import NoteDetail from '@/components/NoteDetail';
 import NoteCreate from '@/components/NoteCreate';
 import ScrollToTop from '@/components/ScrollToTop';
-import { LogOut, Menu } from 'lucide-react';
+import { LogOut, Menu, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import vecturaLogo from '@/assets/vectura-logo.png';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -33,6 +33,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 const Dashboard = () => {
   const [projectPassword, setProjectPassword] = useState('');
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const { user, signOut } = useAuth();
   const { toast } = useToast();
   const {
@@ -145,19 +146,25 @@ const Dashboard = () => {
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/config">Configuración interna</a>
                   </Button>
-                  <Button asChild variant="ghost" className="justify-start">
-                    <a href="/users">Gestión de usuarios</a>
-                  </Button>
-                  <Button asChild variant="ghost" className="justify-start">
-                    <a href="/info">Información</a>
-                  </Button>
                 </nav>
               </SheetContent>
             </Sheet>
 
-            <span className="hidden md:inline text-sm text-muted-foreground">
-              {user?.email}
-            </span>
+            <Sheet open={isProfileOpen} onOpenChange={setIsProfileOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" aria-label="Perfil de usuario">
+                  <User className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-full sm:w-[600px] sm:max-w-[90vw] overflow-y-auto">
+                <SheetHeader>
+                  <SheetTitle>Perfil de Usuario</SheetTitle>
+                </SheetHeader>
+                <div className="mt-6">
+                  {currentProject && <UserProfileModule projectId={currentProject.id} />}
+                </div>
+              </SheetContent>
+            </Sheet>
             <Button
               variant="outline"
               size="sm"
@@ -237,7 +244,6 @@ const Dashboard = () => {
                 <Route path="links" element={<InterestingLinksModule projectId={currentProject.id} />} />
                 <Route path="config" element={<InternalConfigModule projectId={currentProject.id} dailiesPassword={(currentProject as any).dailies_password || 'default'} />} />
                 <Route path="users" element={<UsersModule projectId={currentProject.id} />} />
-                <Route path="info" element={<ProjectInformationModule projectId={currentProject.id} />} />
               </Routes>
             </main>
           </div>
