@@ -37,6 +37,7 @@ serve(async (req) => {
       .from('incidents')
       .select(`
         id,
+        incident_number,
         name,
         description,
         status,
@@ -44,8 +45,28 @@ serve(async (req) => {
         created_at,
         assigned_to,
         created_by,
+        environment,
+        device,
+        epic,
         profiles:created_by(full_name),
         assigned_profiles:assigned_to(full_name)
+      `)
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    // Fetch tasks
+    const { data: tasks } = await supabase
+      .from('tasks')
+      .select(`
+        id,
+        title,
+        description,
+        status,
+        is_completed,
+        created_at,
+        assigned_to,
+        profiles:assigned_to(full_name)
       `)
       .eq('project_id', projectId)
       .order('created_at', { ascending: false })
@@ -58,26 +79,123 @@ serve(async (req) => {
       .eq('project_id', projectId)
       .limit(10);
 
+    // Fetch contacts
+    const { data: contacts } = await supabase
+      .from('contacts')
+      .select('name, email, phone, role, description')
+      .eq('project_id', projectId)
+      .limit(10);
+
+    // Fetch team members
+    const { data: people } = await supabase
+      .from('people')
+      .select('name, role')
+      .eq('project_id', projectId)
+      .limit(15);
+
+    // Fetch releases
+    const { data: releases } = await supabase
+      .from('releases')
+      .select('platform, version, description, created_at')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    // Fetch interesting links
+    const { data: links } = await supabase
+      .from('interesting_links')
+      .select('name, url, description')
+      .eq('project_id', projectId)
+      .limit(10);
+
+    // Fetch repository files
+    const { data: files } = await supabase
+      .from('repository_files')
+      .select('name, description, content_type, file_size')
+      .eq('project_id', projectId)
+      .limit(10);
+
+    // Fetch recent vacations
+    const { data: vacations } = await supabase
+      .from('vacations')
+      .select(`
+        start_date,
+        end_date,
+        description,
+        type,
+        profiles:user_id(full_name)
+      `)
+      .eq('project_id', projectId)
+      .gte('end_date', new Date().toISOString().split('T')[0])
+      .order('start_date', { ascending: true })
+      .limit(10);
+
     // Prepare context for the AI
     const projectContext = `
 Proyecto: ${project?.name || 'Proyecto'} (ID: ${project?.project_number || 'N/A'})
 
-TAREAS/INCIDENCIAS RECIENTES:
+INCIDENCIAS/TAREAS PRINCIPALES:
 ${incidents?.map(incident => `
-- ID: ${incident.id}
-- Nombre: ${incident.name}
+- #${incident.incident_number}: ${incident.name}
 - Descripción: ${incident.description || 'Sin descripción'}
-- Estado: ${incident.status}
-- Categoría: ${incident.category}
+- Estado: ${incident.status} | Categoría: ${incident.category}
 - Creado por: ${incident.profiles?.full_name || 'Usuario desconocido'}
 - Asignado a: ${incident.assigned_profiles?.full_name || 'Sin asignar'}
+- Entorno: ${incident.environment || 'N/A'} | Dispositivo: ${incident.device || 'N/A'}
+- Epic: ${incident.epic || 'N/A'}
 - Fecha: ${new Date(incident.created_at).toLocaleDateString()}
-`).join('\n') || 'No hay tareas disponibles'}
+`).join('\n') || 'No hay incidencias disponibles'}
+
+TAREAS ADICIONALES:
+${tasks?.map(task => `
+- ${task.title}
+- Descripción: ${task.description || 'Sin descripción'}
+- Estado: ${task.status} | Completada: ${task.is_completed ? 'Sí' : 'No'}
+- Asignado a: ${task.profiles?.full_name || 'Sin asignar'}
+- Fecha: ${new Date(task.created_at).toLocaleDateString()}
+`).join('\n') || 'No hay tareas adicionales'}
 
 NOTAS DEL PROYECTO:
 ${notes?.map(note => `
-- ${note.title}: ${note.content?.substring(0, 200)}...
+- ${note.title}: ${note.content?.substring(0, 200)}${note.content?.length > 200 ? '...' : ''}
 `).join('\n') || 'No hay notas disponibles'}
+
+CONTACTOS:
+${contacts?.map(contact => `
+- ${contact.name} (${contact.role || 'Sin rol'})
+- Email: ${contact.email || 'N/A'} | Teléfono: ${contact.phone || 'N/A'}
+- Descripción: ${contact.description || 'Sin descripción'}
+`).join('\n') || 'No hay contactos disponibles'}
+
+EQUIPO DEL PROYECTO:
+${people?.map(person => `
+- ${person.name} - ${person.role}
+`).join('\n') || 'No hay miembros del equipo definidos'}
+
+RELEASES/VERSIONES:
+${releases?.map(release => `
+- ${release.platform} v${release.version}
+- Descripción: ${release.description || 'Sin descripción'}
+- Fecha: ${new Date(release.created_at).toLocaleDateString()}
+`).join('\n') || 'No hay releases disponibles'}
+
+ENLACES DE INTERÉS:
+${links?.map(link => `
+- ${link.name}: ${link.url}
+- Descripción: ${link.description || 'Sin descripción'}
+`).join('\n') || 'No hay enlaces disponibles'}
+
+ARCHIVOS DEL REPOSITORIO:
+${files?.map(file => `
+- ${file.name} (${file.content_type || 'Unknown'}, ${Math.round((file.file_size || 0) / 1024)}KB)
+- Descripción: ${file.description || 'Sin descripción'}
+`).join('\n') || 'No hay archivos disponibles'}
+
+VACACIONES PRÓXIMAS:
+${vacations?.map(vacation => `
+- ${vacation.profiles?.full_name || 'Usuario'}: ${vacation.start_date} a ${vacation.end_date}
+- Tipo: ${vacation.type} | Descripción: ${vacation.description || 'Sin descripción'}
+`).join('\n') || 'No hay vacaciones próximas'}
 `;
 
     // Call Google Gemini API
@@ -89,14 +207,23 @@ ${notes?.map(note => `
       body: JSON.stringify({
         contents: [{
           parts: [{
-            text: `Eres un asistente IA especializado en gestión de proyectos. Ayudas a los usuarios con información sobre tareas, incidencias y contenido del proyecto.
+            text: `Eres un asistente IA especializado en gestión de proyectos. Ayudas a los usuarios con información completa sobre el proyecto actual.
 
 CONTEXTO DEL PROYECTO:
 ${projectContext}
 
 PREGUNTA DEL USUARIO: ${message}
 
-Responde de manera útil y específica basándote en la información del proyecto. Si no tienes información suficiente sobre algo específico, díselo al usuario. Mantén las respuestas concisas pero informativas.`
+Responde de manera útil y específica basándote en toda la información del proyecto disponible. Puedes proporcionar información sobre:
+- Incidencias y tareas (estado, asignaciones, fechas, detalles técnicos)
+- Notas y documentación del proyecto
+- Contactos y equipo del proyecto
+- Releases y versiones
+- Enlaces de interés y recursos
+- Archivos del repositorio
+- Vacaciones y disponibilidad del equipo
+
+Si no tienes información suficiente sobre algo específico, díselo al usuario. Mantén las respuestas concisas pero informativas. Si es relevante, puedes mencionar números de incidencias (#123) o fechas específicas.`
           }]
         }],
         generationConfig: {
