@@ -805,6 +805,35 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_project_users: {
+        Args: { project_id: string }
+        Returns: {
+          email: string
+          full_name: string
+          granted_at: string
+          granted_by: string
+          is_active: boolean
+          user_id: string
+        }[]
+      }
+      get_project_users_with_permissions: {
+        Args: { project_id: string }
+        Returns: {
+          email: string
+          full_name: string
+          granted_at: string
+          is_active: boolean
+          permissions: Json
+          user_id: string
+        }[]
+      }
+      get_user_project_permissions: {
+        Args: { project_id: string; user_email: string }
+        Returns: {
+          can_access: boolean
+          section: Database["public"]["Enums"]["project_section"]
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -812,9 +841,17 @@ export type Database = {
         }
         Returns: boolean
       }
+      remove_user_from_project: {
+        Args: { project_id: string; user_email: string }
+        Returns: Json
+      }
       update_user_permissions: {
         Args: { permissions: Json; project_id: string; user_email: string }
         Returns: Json
+      }
+      user_has_permission: {
+        Args: { project_id: string; section_name: string; user_email: string }
+        Returns: boolean
       }
     }
     Enums: {
