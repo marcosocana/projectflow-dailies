@@ -158,7 +158,7 @@ const Dashboard = () => {
               </SheetTrigger>
               <SheetContent side="right" className="w-full sm:w-[600px] sm:max-w-[90vw] overflow-y-auto">
                 <SheetHeader>
-                  <SheetTitle>Perfil de Usuario</SheetTitle>
+                  <SheetTitle></SheetTitle>
                 </SheetHeader>
                 <div className="mt-6">
                   {currentProject && <UserProfileModule projectId={currentProject.id} />}
