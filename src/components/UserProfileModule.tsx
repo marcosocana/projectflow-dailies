@@ -1,15 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Eye, EyeOff, Calendar, Users, Settings, Key } from 'lucide-react';
+import { Users } from 'lucide-react';
 
 interface UserProfileModuleProps {
   projectId: string;
@@ -18,115 +16,62 @@ interface UserProfileModuleProps {
 export default function UserProfileModule({ projectId }: UserProfileModuleProps) {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [project, setProject] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [showPasswords, setShowPasswords] = useState({
-    project: false,
-    dailies: false
-  });
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetPass, setResetPass] = useState('');
+  const [resetting, setResetting] = useState(false);
 
-  useEffect(() => {
-    fetchProjectInfo();
-  }, [projectId]);
-
-  const fetchProjectInfo = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('id', projectId)
-        .single();
-
-      if (error) throw error;
-      setProject(data);
-    } catch (error: any) {
-      console.error('Error fetching project:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo cargar la información del proyecto",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePasswordChange = async (e: React.FormEvent) => {
+  const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Las contraseñas no coinciden",
-        variant: "destructive",
-      });
+    if (resetPass !== 'Resete0') {
+      toast({ title: 'Contraseña incorrecta', description: 'Introduce la contraseña de Admin', variant: 'destructive' });
       return;
     }
-
-    if (passwordForm.newPassword.length < 6) {
-      toast({
-        title: "Error", 
-        description: "La contraseña debe tener al menos 6 caracteres",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsChangingPassword(true);
-
+    setResetting(true);
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: passwordForm.newPassword
-      });
+      // Eliminar notas compartidas y sus historiales usando función RPC
+      const { data: noteIds } = await supabase.from('shared_notes').select('id').eq('project_id', projectId);
+      if (noteIds && noteIds.length) {
+        for (const note of noteIds) {
+          await supabase.rpc('delete_shared_note', { note_id: note.id });
+        }
+      }
+      // Eliminar comentarios de incidencias
+      const { data: incidentIds } = await supabase.from('incidents').select('id').eq('project_id', projectId);
+      if (incidentIds && incidentIds.length) {
+        await supabase.from('incident_comments').delete().in('incident_id', incidentIds.map((i: any) => i.id));
+      }
+      // Eliminar relaciones daily_tasks por daily y por task
+      const { data: dailyIds } = await supabase.from('dailies').select('id').eq('project_id', projectId);
+      if (dailyIds && dailyIds.length) {
+        await supabase.from('daily_tasks').delete().in('daily_id', dailyIds.map((d: any) => d.id));
+      }
+      const { data: taskIds } = await supabase.from('tasks').select('id').eq('project_id', projectId);
+      if (taskIds && taskIds.length) {
+        await supabase.from('daily_tasks').delete().in('task_id', taskIds.map((t: any) => t.id));
+      }
+      // Eliminar tablas principales
+      await supabase.from('tasks').delete().eq('project_id', projectId);
+      await supabase.from('dailies').delete().eq('project_id', projectId);
+      await supabase.from('incidents').delete().eq('project_id', projectId);
+      await supabase.from('shared_notes').delete().eq('project_id', projectId);
+      await supabase.from('vacations').delete().eq('project_id', projectId);
+      await supabase.from('people').delete().eq('project_id', projectId);
 
-      if (error) throw error;
-
-      toast({
-        title: "Contraseña actualizada",
-        description: "Tu contraseña ha sido actualizada correctamente",
-      });
-
-      setPasswordForm({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      });
-      setIsPasswordDialogOpen(false);
+      toast({ title: 'Sistema reseteado', description: 'Se eliminó todo el contenido del proyecto.' });
     } catch (error: any) {
-      console.error('Error updating password:', error);
-      toast({
-        title: "Error",
-        description: error.message || "No se pudo actualizar la contraseña",
-        variant: "destructive",
-      });
+      toast({ title: 'Error', description: error.message || 'No se pudo resetear el proyecto', variant: 'destructive' });
     } finally {
-      setIsChangingPassword(false);
+      setResetting(false);
+      setResetOpen(false);
+      setResetPass('');
     }
   };
-
-  const togglePasswordVisibility = (field: 'project' | 'dailies') => {
-    setShowPasswords(prev => ({
-      ...prev,
-      [field]: !prev[field]
-    }));
-  };
-
-  if (loading) {
-    return <div className="p-6 text-center">Cargando información del perfil...</div>;
-  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Perfil de Usuario</h1>
-        <p className="text-muted-foreground">Información personal y del proyecto</p>
+        <p className="text-muted-foreground">Información personal y de la aplicación</p>
       </div>
 
       {/* Información Personal */}
@@ -137,7 +82,7 @@ export default function UserProfileModule({ projectId }: UserProfileModuleProps)
             Información Personal
           </CardTitle>
           <CardDescription>
-            Tu información de usuario y configuración de cuenta
+            Tu información de usuario
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -161,217 +106,72 @@ export default function UserProfileModule({ projectId }: UserProfileModuleProps)
               />
             </div>
           </div>
-          
-          <div className="pt-4">
-            <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="flex items-center gap-2">
-                  <Key className="h-4 w-4" />
-                  Cambiar Contraseña
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Cambiar Contraseña</DialogTitle>
-                  <DialogDescription>
-                    Actualiza tu contraseña de acceso
-                  </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handlePasswordChange} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="new-password">Nueva Contraseña</Label>
-                    <Input
-                      id="new-password"
-                      type="password"
-                      value={passwordForm.newPassword}
-                      onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
-                      placeholder="Mínimo 6 caracteres"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Confirmar Nueva Contraseña</Label>
-                    <Input
-                      id="confirm-password"
-                      type="password"
-                      value={passwordForm.confirmPassword}
-                      onChange={(e) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                      placeholder="Repite la nueva contraseña"
-                      required
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => setIsPasswordDialogOpen(false)}
-                      disabled={isChangingPassword}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button type="submit" disabled={isChangingPassword}>
-                      {isChangingPassword ? 'Actualizando...' : 'Actualizar Contraseña'}
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
         </CardContent>
       </Card>
 
-      <Separator />
-
-      {/* Información del Proyecto */}
+      {/* Información de Vectorea */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Información del Proyecto
-          </CardTitle>
-          <CardDescription>
-            Detalles y configuración del proyecto actual
-          </CardDescription>
+          <CardTitle>Información de Vectorea</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {project && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Nombre del Proyecto</Label>
-                    <p className="text-lg font-semibold">{project.name}</p>
-                  </div>
-                  
-                  <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Número de Proyecto</Label>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-lg px-3 py-1">
-                        #{project.project_number}
-                      </Badge>
-                    </div>
-                  </div>
+        <CardContent className="space-y-8">
+          <section className="space-y-2">
+            <h3 className="text-lg font-semibold">Versión</h3>
+            <Input value="V.1.0.0" disabled className="bg-muted" />
+          </section>
 
-                  <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Color del Tema</Label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div 
-                        className="w-8 h-8 rounded-lg border-2 border-border shadow-sm"
-                        style={{ backgroundColor: project.theme_color }}
-                      />
-                      <span className="font-mono text-sm">{project.theme_color}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Cliente</Label>
-                    <p className="text-lg">{project.client_name || 'No especificado'}</p>
-                    {project.client_email && (
-                      <p className="text-sm text-muted-foreground">{project.client_email}</p>
-                    )}
-                    {project.client_phone && (
-                      <p className="text-sm text-muted-foreground">{project.client_phone}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Fecha de Creación</Label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span>{new Date(project.created_at).toLocaleDateString('es-ES', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}</span>
-                    </div>
-                  </div>
-                </div>
+          <section className="space-y-2">
+            <h3 className="text-lg font-semibold">Datos de soporte</h3>
+            <div className="flex items-start justify-between gap-4 p-4 border rounded">
+              <div>
+                <p className="font-medium">Marcos Ocaña Talavera</p>
+                <p className="text-sm text-muted-foreground">mocanat@minsait.com</p>
+                <p className="text-sm text-muted-foreground">Contacta por Teams o email</p>
               </div>
-
-              <Separator />
-
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Contraseñas de Acceso</h3>
-                <p className="text-sm text-muted-foreground">
-                  Estas contraseñas son necesarias para acceder a diferentes funcionalidades del proyecto
-                </p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Contraseña del Proyecto</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type={showPasswords.project ? "text" : "password"}
-                        value={project.project_password}
-                        disabled
-                        className="bg-muted font-mono"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => togglePasswordVisibility('project')}
-                        className="px-3"
-                      >
-                        {showPasswords.project ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Contraseña principal para acceder al proyecto
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Contraseña de Seguimiento Diario</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type={showPasswords.dailies ? "text" : "password"}
-                        value={project.dailies_password}
-                        disabled
-                        className="bg-muted font-mono"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => togglePasswordVisibility('dailies')}
-                        className="px-3"
-                      >
-                        {showPasswords.dailies ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Contraseña para acceso al seguimiento diario
-                    </p>
-                  </div>
-                </div>
+              <div className="flex gap-2">
+                <Button asChild variant="secondary">
+                  <a href="https://teams.microsoft.com/l/chat/0/0?users=mocanat@minsait.com" target="_blank" rel="noreferrer">Contactar por Teams</a>
+                </Button>
+                <Button asChild>
+                  <a href="mailto:mocanat@minsait.com">Contactar por email</a>
+                </Button>
               </div>
+            </div>
+          </section>
 
-              {project.logo_url && (
-                <>
-                  <Separator />
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold">Logo del Proyecto</h3>
-                    <div className="flex items-center gap-4">
-                      <img
-                        src={project.logo_url}
-                        alt={`Logo de ${project.name}`}
-                        className="h-16 w-auto object-contain bg-muted rounded-lg p-2"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">Logo actual</p>
-                        <p className="text-xs text-muted-foreground truncate">{project.logo_url}</p>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </>
-          )}
+          <section className="space-y-3">
+            <h3 className="text-lg font-semibold">Acciones</h3>
+            <Button variant="destructive" onClick={() => setResetOpen(true)}>
+              Resetar sistema
+            </Button>
+          </section>
         </CardContent>
       </Card>
+
+      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¿Estás seguro?</DialogTitle>
+            <DialogDescription>
+              Esta acción borrará todo el contenido del proyecto. Para continuar, introduce la contraseña de Admin.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleReset} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="reset-pass">Contraseña</Label>
+              <Input id="reset-pass" type="password" value={resetPass} onChange={(e) => setResetPass(e.target.value)} placeholder="Introduce la contraseña" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setResetOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={resetting}>
+                {resetting ? 'Reseteando...' : 'Confirmar'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
