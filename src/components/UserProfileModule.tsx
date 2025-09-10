@@ -7,7 +7,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Users } from 'lucide-react';
 
 interface UserProfileModuleProps {
   projectId: string;
@@ -77,8 +76,7 @@ export default function UserProfileModule({ projectId }: UserProfileModuleProps)
       {/* Información Personal */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
+          <CardTitle>
             Información Personal
           </CardTitle>
           <CardDescription>
@@ -124,9 +122,8 @@ export default function UserProfileModule({ projectId }: UserProfileModuleProps)
             <h3 className="text-lg font-semibold">Datos de soporte</h3>
             <div className="flex items-start justify-between gap-4 p-4 border rounded">
               <div>
-                <p className="font-medium">Marcos Ocaña Talavera</p>
+                <p className="font-medium">Marcos Ocaña</p>
                 <p className="text-sm text-muted-foreground">mocanat@minsait.com</p>
-                <p className="text-sm text-muted-foreground">Contacta por Teams o email</p>
               </div>
               <div className="flex gap-2">
                 <Button asChild variant="secondary">
