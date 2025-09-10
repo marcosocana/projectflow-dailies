@@ -28,7 +28,7 @@ const AppContent = () => {
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="/admin" element={<AdminProjects />} />
       </Routes>
-      <FloatingChatbot projectId={currentProject?.id} />
+      <FloatingChatbot />
     </>
   );
 };
