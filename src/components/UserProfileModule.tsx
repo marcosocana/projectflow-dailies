@@ -68,11 +68,6 @@ export default function UserProfileModule({ projectId }: UserProfileModuleProps)
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Perfil de Usuario</h1>
-        <p className="text-muted-foreground">Información personal y de la aplicación</p>
-      </div>
-
       {/* Información Personal */}
       <Card>
         <CardHeader>
@@ -127,10 +122,10 @@ export default function UserProfileModule({ projectId }: UserProfileModuleProps)
               </div>
               <div className="flex gap-2">
                 <Button asChild variant="secondary">
-                  <a href="https://teams.microsoft.com/l/chat/0/0?users=mocanat@minsait.com" target="_blank" rel="noreferrer">Contactar por Teams</a>
+                  <a href="https://teams.microsoft.com/l/chat/0/0?users=mocanat@minsait.com" target="_blank" rel="noreferrer">Por Teams</a>
                 </Button>
                 <Button asChild>
-                  <a href="mailto:mocanat@minsait.com">Contactar por email</a>
+                  <a href="mailto:mocanat@minsait.com">Por email</a>
                 </Button>
               </div>
             </div>
