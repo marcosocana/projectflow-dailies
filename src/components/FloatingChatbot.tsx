@@ -32,7 +32,23 @@ const FloatingChatbot: React.FC<FloatingChatbotProps> = ({ projectId }) => {
     setInputValue('');
   };
 
-  if (!projectId) return null;
+  console.log('FloatingChatbot projectId:', projectId); // Debug log
+  
+  if (!projectId) {
+    console.log('No projectId provided, rendering fallback button');
+    return (
+      <div className="fixed bottom-6 right-6 z-50">
+        <Button
+          onClick={() => console.log('Need to select a project first')}
+          size="lg"
+          className="rounded-full h-14 w-14 shadow-lg bg-muted"
+          disabled
+        >
+          <MessageCircle className="h-6 w-6" />
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed bottom-6 right-6 z-50">

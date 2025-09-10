@@ -17,6 +17,8 @@ const queryClient = new QueryClient();
 const AppContent = () => {
   const { currentProject } = useProjectAccess();
   
+  console.log('Current project in App:', currentProject); // Debug log
+  
   return (
     <>
       <Routes>
