@@ -66,11 +66,17 @@ serve(async (req) => {
         is_completed,
         created_at,
         assigned_to,
-        profiles:assigned_to(full_name)
+        person_id,
+        daily_id,
+        incident_id,
+        assigned_profile:assigned_to(full_name),
+        person:person_id(name, role)
       `)
       .eq('project_id', projectId)
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(25);
+
+    console.log('Tasks fetched:', JSON.stringify(tasks, null, 2));
 
     // Fetch notes
     const { data: notes } = await supabase
@@ -147,13 +153,20 @@ ${incidents?.map(incident => `
 `).join('\n') || 'No hay incidencias disponibles'}
 
 TAREAS ADICIONALES:
-${tasks?.map(task => `
-- ${task.title}
+${tasks?.length > 0 ? tasks.map(task => {
+  const assignedPerson = task.assigned_profile?.full_name || task.person?.name || 'Sin asignar';
+  const taskType = task.incident_id ? 'Relacionada con incidencia' : 
+                   task.daily_id ? 'Tarea diaria' : 'Tarea independiente';
+  const completionStatus = task.is_completed ? '✅ COMPLETADA' : '⏳ PENDIENTE';
+  
+  return `
+- 📋 ${task.title}
 - Descripción: ${task.description || 'Sin descripción'}
-- Estado: ${task.status} | Completada: ${task.is_completed ? 'Sí' : 'No'}
-- Asignado a: ${task.profiles?.full_name || 'Sin asignar'}
-- Fecha: ${new Date(task.created_at).toLocaleDateString()}
-`).join('\n') || 'No hay tareas adicionales'}
+- Estado: ${task.status} | ${completionStatus}
+- Tipo: ${taskType}
+- Asignado a: ${assignedPerson}${task.person?.role ? ` (${task.person.role})` : ''}
+- Fecha: ${new Date(task.created_at).toLocaleDateString()}`;
+}).join('\n') : 'No hay tareas adicionales registradas'}
 
 NOTAS DEL PROYECTO:
 ${notes?.map(note => `
@@ -215,13 +228,21 @@ ${projectContext}
 PREGUNTA DEL USUARIO: ${message}
 
 Responde de manera útil y específica basándote en toda la información del proyecto disponible. Puedes proporcionar información sobre:
-- Incidencias y tareas (estado, asignaciones, fechas, detalles técnicos)
+- **Incidencias y tareas**: estado, asignaciones, fechas, detalles técnicos, tipo (incidencia/mejora)
+- **Tasks/Tareas**: pueden ser incidencias, mejoras o tareas diarias. Indica si están completadas o pendientes
 - Notas y documentación del proyecto
-- Contactos y equipo del proyecto
+- Contactos y equipo del proyecto  
 - Releases y versiones
 - Enlaces de interés y recursos
 - Archivos del repositorio
 - Vacaciones y disponibilidad del equipo
+
+IMPORTANTE: Las "tasks" son elementos de trabajo que pueden ser de diferentes tipos:
+- 🐛 Incidencias (bugs, problemas)
+- ✨ Mejoras evolutivas (nuevas funcionalidades)
+- 📋 Tareas diarias o generales
+
+Cuando muestres información sobre tasks, especifica claramente su estado (completada/pendiente) y tipo.
 
 Si no tienes información suficiente sobre algo específico, díselo al usuario. Mantén las respuestas concisas pero informativas. Si es relevante, puedes mencionar números de incidencias (#123) o fechas específicas.`
           }]
