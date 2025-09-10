@@ -18,7 +18,8 @@ import {
   Rocket,
   Link,
   Users,
-  Archive
+  Archive,
+  UserCog
 } from 'lucide-react';
 
 interface AppSidebarProps {
@@ -73,6 +74,12 @@ const menuItems = [
     url: "config", 
     icon: Settings,
     description: "Seguimiento diario y gestión del equipo" 
+  },
+  { 
+    title: "Gestión de usuarios", 
+    url: "users", 
+    icon: UserCog,
+    description: "Administrar usuarios y permisos" 
   },
   { 
     title: "Información", 

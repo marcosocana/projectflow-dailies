@@ -20,6 +20,7 @@ import ContactsModule from '@/components/ContactsModule';
 import RepositoryModule from '@/components/RepositoryModule';
 // import HomeModule from '@/components/HomeModule';
 import InternalConfigModule from '@/components/InternalConfigModule';
+import UsersModule from '@/components/UsersModule';
 import { AppSidebar } from '@/components/AppSidebar';
 import NoteDetail from '@/components/NoteDetail';
 import NoteCreate from '@/components/NoteCreate';
@@ -145,6 +146,9 @@ const Dashboard = () => {
                     <a href="/config">Configuración interna</a>
                   </Button>
                   <Button asChild variant="ghost" className="justify-start">
+                    <a href="/users">Gestión de usuarios</a>
+                  </Button>
+                  <Button asChild variant="ghost" className="justify-start">
                     <a href="/info">Información</a>
                   </Button>
                 </nav>
@@ -232,6 +236,7 @@ const Dashboard = () => {
                 <Route path="contacts" element={<ContactsModule projectId={currentProject.id} />} />
                 <Route path="links" element={<InterestingLinksModule projectId={currentProject.id} />} />
                 <Route path="config" element={<InternalConfigModule projectId={currentProject.id} dailiesPassword={(currentProject as any).dailies_password || 'default'} />} />
+                <Route path="users" element={<UsersModule projectId={currentProject.id} />} />
                 <Route path="info" element={<ProjectInformationModule projectId={currentProject.id} />} />
               </Routes>
             </main>
