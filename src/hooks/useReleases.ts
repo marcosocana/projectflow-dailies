@@ -86,15 +86,40 @@ export function useReleases(projectId?: string) {
     }
   };
 
+  const deleteRelease = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('releases')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      await fetchReleases();
+      toast({
+        title: "Éxito",
+        description: "Release eliminado correctamente",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   useEffect(() => {
     fetchReleases();
   }, [projectId]);
+
 
   return {
     releases,
     loading,
     createRelease,
     updateRelease,
+    deleteRelease,
     refetch: fetchReleases,
   };
 }

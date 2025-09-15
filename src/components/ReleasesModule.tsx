@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useReleases, Release } from '@/hooks/useReleases';
-import { supabase } from '@/integrations/supabase/client';
+
 import { Plus, Smartphone, Globe, Eye, Trash2, Edit, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface ReleasesModuleProps {
@@ -16,7 +16,7 @@ interface ReleasesModuleProps {
 }
 
 export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
-  const { releases, loading, createRelease, updateRelease } = useReleases(projectId);
+  const { releases, loading, createRelease, updateRelease, deleteRelease } = useReleases(projectId);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
@@ -104,19 +104,9 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
       return;
     }
 
-    try {
-      const { error } = await supabase
-        .from('releases')
-        .delete()
-        .eq('id', releaseId);
-
-      if (error) throw error;
-
-      setIsDetailDialogOpen(false);
-      setSelectedRelease(null);
-    } catch (error: any) {
-      console.error('Error deleting release:', error);
-    }
+    await deleteRelease(releaseId);
+    setIsDetailDialogOpen(false);
+    setSelectedRelease(null);
   };
 
   // Group releases by platform and environment
@@ -436,6 +426,7 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Detalle del Release</DialogTitle>
+            <DialogDescription>Consulta o edita los datos del release seleccionado.</DialogDescription>
           </DialogHeader>
           
           {selectedRelease && (
