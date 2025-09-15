@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Badge } from '@/components/ui/badge';
 import { useReleases, Release } from '@/hooks/useReleases';
 
-import { Plus, Smartphone, Globe, Eye, Trash2, Edit, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Smartphone, Globe, Eye, Trash2, Edit, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 
 interface ReleasesModuleProps {
   projectId: string;
@@ -107,6 +107,31 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
     await deleteRelease(releaseId);
     setIsDetailDialogOpen(false);
     setSelectedRelease(null);
+  };
+
+  const copyReleaseInfo = async (release: Release) => {
+    const platformLabel = release.platform === 'web' ? 'Web' : 'App';
+    const environmentLabel = getEnvironmentLabel(release.environment);
+    const formattedDate = new Date(release.created_at).toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    const releaseInfo = `Fecha: ${formattedDate}
+Plataforma: ${platformLabel}
+Entorno: ${environmentLabel}
+Versión: v${release.version}
+Qué incluye: ${release.description || 'Sin descripción'}`;
+
+    try {
+      await navigator.clipboard.writeText(releaseInfo);
+      // You could add a toast here if you have toast functionality
+    } catch (err) {
+      console.error('Error copying to clipboard:', err);
+    }
   };
 
   // Group releases by platform and environment
@@ -566,14 +591,24 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
                     </Button>
                   </div>
                 ) : (
-                  <Button
-                    variant="outline"
-                    onClick={handleEdit}
-                    className="flex items-center gap-2"
-                  >
-                    <Edit className="h-4 w-4" />
-                    Editar
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleEdit}
+                      className="flex items-center gap-2"
+                    >
+                      <Edit className="h-4 w-4" />
+                      Editar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => copyReleaseInfo(selectedRelease)}
+                      className="flex items-center gap-2"
+                    >
+                      <Copy className="h-4 w-4" />
+                      Copiar info
+                    </Button>
+                  </div>
                 )}
                 <Button
                   variant="destructive"
