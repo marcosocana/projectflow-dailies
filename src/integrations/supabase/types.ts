@@ -416,6 +416,7 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          environment: string
           id: string
           platform: string
           project_id: string
@@ -425,6 +426,7 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
+          environment?: string
           id?: string
           platform: string
           project_id: string
@@ -434,6 +436,7 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
+          environment?: string
           id?: string
           platform?: string
           project_id?: string
