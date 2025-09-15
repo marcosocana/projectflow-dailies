@@ -7,108 +7,88 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
+import { useReleases, Release } from '@/hooks/useReleases';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Smartphone, Globe, Eye, Trash2 } from 'lucide-react';
+import { Plus, Smartphone, Globe, Eye, Trash2, Edit, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface ReleasesModuleProps {
   projectId: string;
 }
 
-interface Release {
-  id: string;
-  platform: 'web' | 'app';
-  environment: 'dev' | 'pre' | 'pro';
-  version: string;
-  description: string | null;
-  created_at: string;
-}
-
 export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
-  const [releases, setReleases] = useState<Release[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { releases, loading, createRelease, updateRelease } = useReleases(projectId);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [platform, setPlatform] = useState<'web' | 'app'>('web');
   const [environment, setEnvironment] = useState<'dev' | 'pre' | 'pro'>('pro');
   const [version, setVersion] = useState('');
   const [description, setDescription] = useState('');
-  const { toast } = useToast();
+  
+  // Edit form states
+  const [editVersion, setEditVersion] = useState('');
+  const [editDescription, setEditDescription] = useState('');
 
-  const loadReleases = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('releases')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setReleases(data as Release[] || []);
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los releases",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+  // Check if any environment has more than 3 releases
+  const hasMoreThanThree = () => {
+    const webByEnv = groupReleasesByEnvironment(releases.filter(r => r.platform === 'web'));
+    const appByEnv = groupReleasesByEnvironment(releases.filter(r => r.platform === 'app'));
+    
+    return Object.values(webByEnv).some(envReleases => envReleases.length > 3) ||
+           Object.values(appByEnv).some(envReleases => envReleases.length > 3);
   };
-
-  useEffect(() => {
-    loadReleases();
-  }, [projectId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!version.trim()) {
-      toast({
-        title: "Error",
-        description: "El número de versión es obligatorio",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (!version.trim()) return;
 
-    try {
-      const { error } = await supabase
-        .from('releases')
-        .insert({
-          project_id: projectId,
-          platform,
-          environment,
-          version: version.trim(),
-          description: description.trim() || null,
-        });
+    await createRelease({
+      project_id: projectId,
+      platform,
+      environment,
+      version: version.trim(),
+      description: description.trim() || null,
+    });
 
-      if (error) throw error;
-
-      await loadReleases();
-      setIsDialogOpen(false);
-      setVersion('');
-      setDescription('');
-      setPlatform('web');
-      setEnvironment('pro');
-      
-      toast({
-        title: "Éxito",
-        description: "Release añadido correctamente",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
+    setIsDialogOpen(false);
+    setVersion('');
+    setDescription('');
+    setPlatform('web');
+    setEnvironment('pro');
   };
 
   const handleViewDetail = (release: Release) => {
     setSelectedRelease(release);
+    setEditVersion(release.version);
+    setEditDescription(release.description || '');
+    setIsEditing(false);
     setIsDetailDialogOpen(true);
+  };
+
+  const handleEdit = () => {
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedRelease || !editVersion.trim()) return;
+    
+    await updateRelease(selectedRelease.id, {
+      version: editVersion.trim(),
+      description: editDescription.trim() || null,
+    });
+    
+    setIsEditing(false);
+    setIsDetailDialogOpen(false);
+    setSelectedRelease(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditVersion(selectedRelease?.version || '');
+    setEditDescription(selectedRelease?.description || '');
+    setIsEditing(false);
   };
 
   const handleDeleteRelease = async (releaseId: string) => {
@@ -124,27 +104,14 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
 
       if (error) throw error;
 
-      await loadReleases();
       setIsDetailDialogOpen(false);
       setSelectedRelease(null);
-      
-      toast({
-        title: "Éxito",
-        description: "Release eliminado correctamente",
-      });
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      console.error('Error deleting release:', error);
     }
   };
 
   // Group releases by platform and environment
-  const webReleases = releases.filter(r => r.platform === 'web');
-  const appReleases = releases.filter(r => r.platform === 'app');
-  
   const groupReleasesByEnvironment = (releases: Release[]) => {
     return releases.reduce((acc, release) => {
       if (!acc[release.environment]) {
@@ -155,8 +122,15 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
     }, {} as Record<string, Release[]>);
   };
 
+  const webReleases = releases.filter(r => r.platform === 'web');
+  const appReleases = releases.filter(r => r.platform === 'app');
   const webByEnvironment = groupReleasesByEnvironment(webReleases);
   const appByEnvironment = groupReleasesByEnvironment(appReleases);
+
+  // Get displayed releases based on expanded state
+  const getDisplayedReleases = (envReleases: Release[]) => {
+    return expanded ? envReleases : envReleases.slice(0, 3);
+  };
 
   const getEnvironmentLabel = (env: string) => {
     const labels = { dev: 'Desarrollo', pre: 'Preproducción', pro: 'Producción' };
@@ -183,10 +157,31 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
                 Registro de versiones de Web y App
               </CardDescription>
             </div>
-            <Button onClick={() => setIsDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Añadir release
-            </Button>
+            <div className="flex gap-2">
+              {hasMoreThanThree() && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => setExpanded(!expanded)}
+                  className="flex items-center gap-2"
+                >
+                  {expanded ? (
+                    <>
+                      <ChevronUp className="h-4 w-4" />
+                      Ver menos
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-4 w-4" />
+                      Ver más
+                    </>
+                  )}
+                </Button>
+              )}
+              <Button onClick={() => setIsDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Añadir release
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -222,7 +217,7 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
                               Sin releases
                             </div>
                           ) : (
-                            envReleases.map((release, index) => (
+                            getDisplayedReleases(envReleases).map((release, index) => (
                               <Card key={release.id} className="border">
                                 <CardContent className="p-2">
                                   <div className="space-y-1">
@@ -291,7 +286,7 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
                               Sin releases
                             </div>
                           ) : (
-                            envReleases.map((release, index) => (
+                            getDisplayedReleases(envReleases).map((release, index) => (
                               <Card key={release.id} className="border">
                                 <CardContent className="p-2">
                                   <div className="space-y-1">
@@ -465,23 +460,40 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
               
               <div>
                 <Label>Versión</Label>
-                <div className="mt-1">
-                  <Badge variant="outline" className="font-mono">
-                    v{selectedRelease.version}
-                  </Badge>
-                </div>
+                {isEditing ? (
+                  <Input
+                    value={editVersion}
+                    onChange={(e) => setEditVersion(e.target.value)}
+                    className="mt-1"
+                    placeholder="ej: 1.0.0"
+                  />
+                ) : (
+                  <div className="mt-1">
+                    <Badge variant="outline" className="font-mono">
+                      v{selectedRelease.version}
+                    </Badge>
+                  </div>
+                )}
               </div>
               
-              {selectedRelease.description && (
-                <div>
-                  <Label>Qué incluye</Label>
+              <div>
+                <Label>Qué incluye</Label>
+                {isEditing ? (
+                  <Textarea
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    className="mt-1"
+                    placeholder="Describe las nuevas características, mejoras o correcciones..."
+                    rows={4}
+                  />
+                ) : (
                   <div className="mt-1 p-3 bg-muted rounded-md">
                     <p className="text-sm whitespace-pre-wrap">
-                      {selectedRelease.description}
+                      {selectedRelease.description || 'Sin descripción'}
                     </p>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
               
               <div>
                 <Label>Fecha de creación</Label>
@@ -496,7 +508,26 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
                 </p>
               </div>
               
-              <div className="flex justify-end pt-4 border-t">
+              <div className="flex justify-between pt-4 border-t">
+                {isEditing ? (
+                  <div className="flex gap-2">
+                    <Button onClick={handleSaveEdit} className="flex items-center gap-2">
+                      Guardar
+                    </Button>
+                    <Button variant="outline" onClick={handleCancelEdit}>
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={handleEdit}
+                    className="flex items-center gap-2"
+                  >
+                    <Edit className="h-4 w-4" />
+                    Editar
+                  </Button>
+                )}
                 <Button
                   variant="destructive"
                   onClick={() => selectedRelease && handleDeleteRelease(selectedRelease.id)}

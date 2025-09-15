@@ -63,6 +63,29 @@ export function useReleases(projectId?: string) {
     }
   };
 
+  const updateRelease = async (id: string, releaseData: Partial<Omit<Release, 'id' | 'created_at' | 'updated_at' | 'project_id'>>) => {
+    try {
+      const { error } = await supabase
+        .from('releases')
+        .update(releaseData)
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      await fetchReleases();
+      toast({
+        title: "Éxito",
+        description: "Release actualizado correctamente",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   useEffect(() => {
     fetchReleases();
   }, [projectId]);
@@ -71,6 +94,7 @@ export function useReleases(projectId?: string) {
     releases,
     loading,
     createRelease,
+    updateRelease,
     refetch: fetchReleases,
   };
 }
