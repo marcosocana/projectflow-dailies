@@ -195,40 +195,38 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
               <div className="text-muted-foreground">Cargando releases...</div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Web Column */}
+            <div className="space-y-8">
+              {/* Web Section */}
               <div>
                 <div className="flex items-center gap-2 mb-4">
                   <Globe className="h-5 w-5 text-blue-500" />
                   <h3 className="text-lg font-semibold">Web</h3>
                   <Badge variant="secondary">{webReleases.length}</Badge>
                 </div>
-                <div className="space-y-4">
-                  {webReleases.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      No hay releases de Web
-                    </div>
-                  ) : (
-                    ['dev', 'pre', 'pro'].map(env => {
-                      const envReleases = webByEnvironment[env] || [];
-                      if (envReleases.length === 0) return null;
-                      
-                      return (
-                        <div key={env}>
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge className={getEnvironmentColor(env)}>
-                              {getEnvironmentLabel(env)}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {envReleases.length} versión{envReleases.length !== 1 ? 'es' : ''}
-                            </span>
-                          </div>
-                          <div className="space-y-2">
-                            {envReleases.map((release, index) => (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {['dev', 'pre', 'pro'].map(env => {
+                    const envReleases = webByEnvironment[env] || [];
+                    return (
+                      <div key={env} className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Badge className={getEnvironmentColor(env)}>
+                            {getEnvironmentLabel(env)}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {envReleases.length} versión{envReleases.length !== 1 ? 'es' : ''}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          {envReleases.length === 0 ? (
+                            <div className="text-center py-6 text-muted-foreground text-sm">
+                              Sin releases
+                            </div>
+                          ) : (
+                            envReleases.map((release, index) => (
                               <Card key={release.id} className="border">
                                 <CardContent className="p-3">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
                                       <Badge variant="outline" className="font-mono text-xs">
                                         v{release.version}
                                       </Badge>
@@ -238,64 +236,63 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
                                         </Badge>
                                       )}
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs text-muted-foreground">
+                                        {new Date(release.created_at).toLocaleDateString()}
+                                      </span>
                                       <Button
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => handleViewDetail(release)}
                                         aria-label="Ver detalle"
+                                        className="h-6 w-6 p-0"
                                       >
                                         <Eye className="h-3 w-3" />
                                       </Button>
-                                      <span className="text-xs text-muted-foreground">
-                                        {new Date(release.created_at).toLocaleDateString()}
-                                      </span>
                                     </div>
                                   </div>
                                 </CardContent>
                               </Card>
-                            ))}
-                          </div>
+                            ))
+                          )}
                         </div>
-                      );
-                    })
-                  )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* App Column */}
+              {/* App Section */}
               <div>
                 <div className="flex items-center gap-2 mb-4">
                   <Smartphone className="h-5 w-5 text-green-500" />
                   <h3 className="text-lg font-semibold">App</h3>
                   <Badge variant="secondary">{appReleases.length}</Badge>
                 </div>
-                <div className="space-y-4">
-                  {appReleases.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      No hay releases de App
-                    </div>
-                  ) : (
-                    ['pre', 'pro'].map(env => {
-                      const envReleases = appByEnvironment[env] || [];
-                      if (envReleases.length === 0) return null;
-                      
-                      return (
-                        <div key={env}>
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge className={getEnvironmentColor(env)}>
-                              {getEnvironmentLabel(env)}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {envReleases.length} versión{envReleases.length !== 1 ? 'es' : ''}
-                            </span>
-                          </div>
-                          <div className="space-y-2">
-                            {envReleases.map((release, index) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {['pre', 'pro'].map(env => {
+                    const envReleases = appByEnvironment[env] || [];
+                    return (
+                      <div key={env} className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Badge className={getEnvironmentColor(env)}>
+                            {getEnvironmentLabel(env)}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {envReleases.length} versión{envReleases.length !== 1 ? 'es' : ''}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          {envReleases.length === 0 ? (
+                            <div className="text-center py-6 text-muted-foreground text-sm">
+                              Sin releases
+                            </div>
+                          ) : (
+                            envReleases.map((release, index) => (
                               <Card key={release.id} className="border">
                                 <CardContent className="p-3">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
                                       <Badge variant="outline" className="font-mono text-xs">
                                         v{release.version}
                                       </Badge>
@@ -305,28 +302,29 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
                                         </Badge>
                                       )}
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs text-muted-foreground">
+                                        {new Date(release.created_at).toLocaleDateString()}
+                                      </span>
                                       <Button
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => handleViewDetail(release)}
                                         aria-label="Ver detalle"
+                                        className="h-6 w-6 p-0"
                                       >
                                         <Eye className="h-3 w-3" />
                                       </Button>
-                                      <span className="text-xs text-muted-foreground">
-                                        {new Date(release.created_at).toLocaleDateString()}
-                                      </span>
                                     </div>
                                   </div>
                                 </CardContent>
                               </Card>
-                            ))}
-                          </div>
+                            ))
+                          )}
                         </div>
-                      );
-                    })
-                  )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
