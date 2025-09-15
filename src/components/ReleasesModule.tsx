@@ -28,6 +28,8 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
   const [description, setDescription] = useState('');
   
   // Edit form states
+  const [editPlatform, setEditPlatform] = useState<'web' | 'app'>('web');
+  const [editEnvironment, setEditEnvironment] = useState<'dev' | 'pre' | 'pro'>('pro');
   const [editVersion, setEditVersion] = useState('');
   const [editDescription, setEditDescription] = useState('');
 
@@ -62,6 +64,8 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
 
   const handleViewDetail = (release: Release) => {
     setSelectedRelease(release);
+    setEditPlatform(release.platform);
+    setEditEnvironment(release.environment);
     setEditVersion(release.version);
     setEditDescription(release.description || '');
     setIsEditing(false);
@@ -76,6 +80,8 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
     if (!selectedRelease || !editVersion.trim()) return;
     
     await updateRelease(selectedRelease.id, {
+      platform: editPlatform,
+      environment: editEnvironment,
       version: editVersion.trim(),
       description: editDescription.trim() || null,
     });
@@ -86,6 +92,8 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
   };
 
   const handleCancelEdit = () => {
+    setEditPlatform(selectedRelease?.platform || 'web');
+    setEditEnvironment(selectedRelease?.environment || 'pro');
     setEditVersion(selectedRelease?.version || '');
     setEditDescription(selectedRelease?.description || '');
     setIsEditing(false);
@@ -434,28 +442,76 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
             <div className="space-y-4">
               <div>
                 <Label>Plataforma</Label>
-                <div className="flex items-center gap-2 mt-1">
-                  {selectedRelease.platform === 'web' ? (
-                    <>
-                      <Globe className="h-4 w-4 text-blue-500" />
-                      <span>Web</span>
-                    </>
-                  ) : (
-                    <>
-                      <Smartphone className="h-4 w-4 text-green-500" />
-                      <span>App</span>
-                    </>
-                  )}
-                </div>
+                {isEditing ? (
+                  <Select value={editPlatform} onValueChange={(value: 'web' | 'app') => {
+                    setEditPlatform(value);
+                    // Reset environment when platform changes and set default
+                    const defaultEnv = value === 'web' ? 'pro' : 'pro';
+                    setEditEnvironment(defaultEnv);
+                  }}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Selecciona la plataforma" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="web">
+                        <div className="flex items-center gap-2">
+                          <Globe className="h-4 w-4" />
+                          Web
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="app">
+                        <div className="flex items-center gap-2">
+                          <Smartphone className="h-4 w-4" />
+                          App
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="flex items-center gap-2 mt-1">
+                    {selectedRelease.platform === 'web' ? (
+                      <>
+                        <Globe className="h-4 w-4 text-blue-500" />
+                        <span>Web</span>
+                      </>
+                    ) : (
+                      <>
+                        <Smartphone className="h-4 w-4 text-green-500" />
+                        <span>App</span>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               
               <div>
                 <Label>Entorno</Label>
-                <div className="mt-1">
-                  <Badge className={getEnvironmentColor(selectedRelease.environment)}>
-                    {getEnvironmentLabel(selectedRelease.environment)}
-                  </Badge>
-                </div>
+                {isEditing ? (
+                  <Select value={editEnvironment} onValueChange={(value: 'dev' | 'pre' | 'pro') => setEditEnvironment(value)}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Selecciona el entorno" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getAvailableEnvironments(editPlatform).map(env => (
+                        <SelectItem key={env} value={env}>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${
+                              env === 'dev' ? 'bg-blue-500' : 
+                              env === 'pre' ? 'bg-yellow-500' : 'bg-green-500'
+                            }`} />
+                            {getEnvironmentLabel(env)}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="mt-1">
+                    <Badge className={getEnvironmentColor(selectedRelease.environment)}>
+                      {getEnvironmentLabel(selectedRelease.environment)}
+                    </Badge>
+                  </div>
+                )}
               </div>
               
               <div>
