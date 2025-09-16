@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, MoreVertical, RefreshCcw, AlertTriangle, ListChecks, CheckCircle2, Copy, List, Columns3, Clock } from 'lucide-react';
+import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, ArrowUp, ArrowDown, MoreVertical, RefreshCcw, AlertTriangle, ListChecks, CheckCircle2, Copy, List, Columns3, Clock } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
@@ -58,8 +58,8 @@ const CATEGORY_OPTIONS = [{
   value: 'improvement',
   label: 'Mejora'
 }];
-const ENV_OPTIONS = ['DEV', 'PRE', 'PRO', 'Otro', 'Desconocido'] as const;
-const DEVICE_OPTIONS = ['APP', 'Web', 'Otro', 'Desconocido'] as const;
+const ENV_OPTIONS = ['DEV', 'PRE', 'PRO', 'Otro', 'N/A'] as const;
+const DEVICE_OPTIONS = ['APP', 'Web', 'Otro', 'N/A'] as const;
 // Dynamic epic options will be calculated from database
 
 // Status constants available module-wide to avoid TDZ issues
@@ -220,11 +220,21 @@ export default function IncidentsModule({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
-  const [sortKey, setSortKey] = useState<'name' | 'status' | 'occurred_at' | 'incident_number' | 'epic' | 'device' | 'environment'>('occurred_at');
+  const [sortKey, setSortKey] = useState<'name' | 'status' | 'occurred_at' | 'incident_number' | 'epic' | 'device' | 'environment' | 'assigned_to'>('occurred_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const toggleSort = (key: 'name' | 'status' | 'occurred_at' | 'incident_number' | 'epic' | 'device' | 'environment') => {
+  const toggleSort = (key: 'name' | 'status' | 'occurred_at' | 'incident_number' | 'epic' | 'device' | 'environment' | 'assigned_to') => {
     setSortDir(d => sortKey === key ? d === 'asc' ? 'desc' : 'asc' : 'asc');
     setSortKey(key);
+  };
+  
+  // Utility function to get initials from name
+  const getInitials = (name: string): string => {
+    if (!name) return '';
+    const words = name.trim().split(' ');
+    if (words.length === 1) {
+      return words[0].charAt(0).toUpperCase();
+    }
+    return (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase();
   };
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -366,8 +376,8 @@ export default function IncidentsModule({
       name: '',
       description: '',
       evidenceLink: '',
-      environment: 'Desconocido',
-      device: 'Desconocido',
+      environment: 'N/A',
+      device: 'N/A',
       epic: '',
       occurredAt: new Date().toISOString(),
       status: 'pending',
@@ -907,53 +917,90 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-12"></TableHead>
-                    <TableHead className="w-20">ID</TableHead>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Épica</TableHead>
-                    <TableHead>Canal</TableHead>
-                    <TableHead>Entorno</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('status')}>
-                      Estado <ArrowUpDown className="inline h-4 w-4 ml-1" />
+                    <TableHead className="w-20 cursor-pointer select-none" onClick={() => toggleSort('incident_number')}>
+                      ID {sortKey === 'incident_number' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
-                    <TableHead>Acciones</TableHead>
+                    <TableHead className="w-80 cursor-pointer select-none" onClick={() => toggleSort('name')}>
+                      Nombre {sortKey === 'name' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('epic')}>
+                      Épica {sortKey === 'epic' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
+                    </TableHead>
+                    <TableHead className="w-20 cursor-pointer select-none" onClick={() => toggleSort('device')}>
+                      Canal {sortKey === 'device' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
+                    </TableHead>
+                    <TableHead className="w-24 cursor-pointer select-none" onClick={() => toggleSort('environment')}>
+                      Entorno {sortKey === 'environment' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('occurred_at')}>
+                      Fecha {sortKey === 'occurred_at' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
+                    </TableHead>
+                    <TableHead className="w-32 cursor-pointer select-none" onClick={() => toggleSort('status')}>
+                      Estado {sortKey === 'status' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
+                    </TableHead>
+                    <TableHead className="w-16 cursor-pointer select-none" onClick={() => toggleSort('assigned_to')}>
+                      Asign. {sortKey === 'assigned_to' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
+                    </TableHead>
+                    <TableHead className="w-24">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
               <TableBody>
-                {paginatedIncidents.map((i: any) => <TableRow key={i.id}>
-                    <TableCell className="w-12">
-                      <CategoryIcon category={i.category} />
-                    </TableCell>
-                    <TableCell className="font-mono w-20">T{String(i.incident_number ?? 0).padStart(5, '0')}</TableCell>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        {i.assigned_to && (
-                          <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
+                {paginatedIncidents.map((i: any) => {
+                  const assignedMember = teamMembers.find(member => member.id === i.assigned_to);
+                  return (
+                    <TableRow key={i.id}>
+                      <TableCell className="w-12">
+                        <CategoryIcon category={i.category} />
+                      </TableCell>
+                      <TableCell className="font-mono w-20">T{String(i.incident_number ?? 0).padStart(5, '0')}</TableCell>
+                      <TableCell className="font-medium w-80">
+                        <div className="flex items-center gap-2">
+                          {i.assigned_to && (
+                            <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
+                          )}
+                          <div className="max-w-[320px] break-words hyphens-auto leading-tight">
+                            {i.name}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{i.epic || '-'}</TableCell>
+                      <TableCell className="w-20">{i.device || '-'}</TableCell>
+                      <TableCell className="w-24">{i.environment || '-'}</TableCell>
+                      <TableCell>{new Date(i.occurred_at).toLocaleDateString('es-ES')}</TableCell>
+                      <TableCell className="w-32"><StatusBadge status={i.status} /></TableCell>
+                      <TableCell className="w-16">
+                        {assignedMember ? (
+                          <div className="flex items-center justify-center">
+                            <div 
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+                              style={{ backgroundColor: assignedMember.color }}
+                              title={assignedMember.name}
+                            >
+                              {getInitials(assignedMember.name)}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
                         )}
-                        <span>{i.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{i.epic || '-'}</TableCell>
-                    <TableCell>{i.device || '-'}</TableCell>
-                    <TableCell>{i.environment || '-'}</TableCell>
-                    <TableCell>{new Date(i.occurred_at).toLocaleDateString('es-ES')}</TableCell>
-                    <TableCell><StatusBadge status={i.status} /></TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => copyToClipboard(i)}>
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => {
-                      setSelected(i);
-                      setDetailsOpen(true);
-                    }}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>)}
+                      </TableCell>
+                      <TableCell className="w-24">
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => copyToClipboard(i)}>
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => {
+                        setSelected(i);
+                        setDetailsOpen(true);
+                      }}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
                 {paginatedIncidents.length === 0 && <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground">No hay incidencias</TableCell>
+                    <TableCell colSpan={10} className="text-center text-muted-foreground">No hay incidencias</TableCell>
                   </TableRow>}
               </TableBody>
             </Table>
