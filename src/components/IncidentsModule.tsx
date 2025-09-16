@@ -954,13 +954,8 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                       </TableCell>
                       <TableCell className="font-mono w-20">T{String(i.incident_number ?? 0).padStart(5, '0')}</TableCell>
                       <TableCell className="font-medium w-80">
-                        <div className="flex items-center gap-2">
-                          {i.assigned_to && (
-                            <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
-                          )}
-                          <div className="max-w-[320px] break-words hyphens-auto leading-tight">
-                            {i.name}
-                          </div>
+                        <div className="max-w-[320px] break-words hyphens-auto leading-tight">
+                          {i.name}
                         </div>
                       </TableCell>
                       <TableCell>{i.epic || '-'}</TableCell>
