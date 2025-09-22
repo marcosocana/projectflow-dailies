@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, ArrowUp, ArrowDown, MoreVertical, RefreshCcw, AlertTriangle, ListChecks, CheckCircle2, Copy, List, Columns3, Clock } from 'lucide-react';
+import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, ArrowUp, ArrowDown, MoreVertical, RefreshCcw, AlertTriangle, ListChecks, CheckCircle2, Copy, List, Columns3, Clock, Filter, Check, X } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
@@ -22,6 +22,8 @@ import type { Database } from '@/integrations/supabase/types';
 import type React from 'react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu';
 import IncidentDetailDialog from '@/components/IncidentDetailDialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 interface IncidentsModuleProps {
   projectId: string;
 }
@@ -217,8 +219,9 @@ export default function IncidentsModule({
   } | null>(null);
 
   // KPI filtering state
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<'name' | 'status' | 'occurred_at' | 'incident_number' | 'epic' | 'device' | 'environment' | 'assigned_to'>('occurred_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -269,8 +272,35 @@ export default function IncidentsModule({
   const [pageSize, setPageSize] = useState(25);
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return incidents.filter(i => (channelFilter === 'all' || i.device === channelFilter) && (environmentFilter === 'all' || i.environment === environmentFilter) && (epicFilter === 'all' || i.epic === epicFilter) && (statusFilter === 'all' || i.status === statusFilter) && (categoryFilter === 'all' || i.category === categoryFilter) && (term ? [i.id, `T${String(i.incident_number ?? 0).padStart(5, '0')}`, i.name, i.description, i.environment, i.device, i.status, i.category, i.additional_comments].filter(Boolean).some((v: any) => String(v).toLowerCase().includes(term)) : true));
-  }, [incidents, channelFilter, environmentFilter, epicFilter, statusFilter, categoryFilter, search]);
+    return incidents.filter(i => {
+      // Basic filters
+      const matchesChannel = channelFilter === 'all' || i.device === channelFilter;
+      const matchesEnvironment = environmentFilter === 'all' || i.environment === environmentFilter;
+      const matchesEpic = epicFilter === 'all' || i.epic === epicFilter;
+      
+      // Multi-select filters
+      const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(i.status);
+      const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(i.category);
+      const matchesAssignee = selectedAssignees.length === 0 || 
+        (selectedAssignees.includes('unassigned') && !i.assigned_to) ||
+        (i.assigned_to && selectedAssignees.includes(i.assigned_to));
+      
+      // Search term
+      const matchesSearch = !term || [
+        i.id, 
+        `T${String(i.incident_number ?? 0).padStart(5, '0')}`, 
+        i.name, 
+        i.description, 
+        i.environment, 
+        i.device, 
+        i.status, 
+        i.category, 
+        i.additional_comments
+      ].filter(Boolean).some((v: any) => String(v).toLowerCase().includes(term));
+      
+      return matchesChannel && matchesEnvironment && matchesEpic && matchesStatus && matchesCategory && matchesAssignee && matchesSearch;
+    });
+  }, [incidents, channelFilter, environmentFilter, epicFilter, selectedStatuses, selectedCategories, selectedAssignees, search]);
   const sorted = useMemo(() => {
     const arr = [...filtered];
     arr.sort((a, b) => {
@@ -388,6 +418,149 @@ export default function IncidentsModule({
     });
     setEvidenceFile(null);
     setEditingId(null);
+  };
+
+  const MultiSelectFilter = ({ 
+    title, 
+    options, 
+    selected, 
+    onSelectionChange, 
+    showTotal = false 
+  }: {
+    title: string;
+    options: { value: string; label: string }[];
+    selected: string[];
+    onSelectionChange: (values: string[]) => void;
+    showTotal?: boolean;
+  }) => {
+    const [open, setOpen] = useState(false);
+    
+    const handleToggle = (value: string) => {
+      if (value === 'total') {
+        onSelectionChange([]);
+        return;
+      }
+      
+      const newSelected = selected.includes(value)
+        ? selected.filter(item => item !== value)
+        : [...selected, value];
+      onSelectionChange(newSelected);
+    };
+
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-between h-10"
+          >
+            <span>
+              {selected.length === 0 ? `Todos ${title.toLowerCase()}` : `${selected.length} seleccionado${selected.length > 1 ? 's' : ''}`}
+            </span>
+            <Filter className="ml-2 h-4 w-4" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[200px] p-0" align="start">
+          <Command>
+            <CommandInput placeholder={`Buscar ${title.toLowerCase()}...`} />
+            <CommandList>
+              <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+              <CommandGroup>
+                {showTotal && (
+                  <CommandItem
+                    onSelect={() => {
+                      handleToggle('total');
+                      setOpen(false);
+                    }}
+                  >
+                    <div className="flex items-center space-x-2 w-full">
+                      <div className="h-4 w-4 flex items-center justify-center">
+                        {selected.length === 0 && <Check className="h-4 w-4" />}
+                      </div>
+                      <span>Total</span>
+                    </div>
+                  </CommandItem>
+                )}
+                {options.map((option) => (
+                  <CommandItem
+                    key={option.value}
+                    onSelect={() => handleToggle(option.value)}
+                  >
+                    <div className="flex items-center space-x-2 w-full">
+                      <div className="h-4 w-4 flex items-center justify-center">
+                        {selected.includes(option.value) && <Check className="h-4 w-4" />}
+                      </div>
+                      <span>{option.label}</span>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    );
+  };
+
+  const AssigneeFilter = () => {
+    const [open, setOpen] = useState(false);
+    
+    const assignedPeople = teamMembers.filter(person => 
+      incidents.some(inc => inc.assigned_to === person.id)
+    );
+    
+    const options = [
+      { value: 'unassigned', label: 'Sin asignar' },
+      ...assignedPeople.map(person => ({ value: person.id, label: person.name }))
+    ];
+
+    const handleToggle = (value: string) => {
+      const newSelected = selectedAssignees.includes(value)
+        ? selectedAssignees.filter(item => item !== value)
+        : [...selectedAssignees, value];
+      setSelectedAssignees(newSelected);
+    };
+
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-between h-10"
+          >
+            <span>
+              {selectedAssignees.length === 0 ? 'Todos' : `${selectedAssignees.length} seleccionado${selectedAssignees.length > 1 ? 's' : ''}`}
+            </span>
+            <Filter className="ml-2 h-4 w-4" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[200px] p-0" align="start">
+          <Command>
+            <CommandInput placeholder="Buscar persona..." />
+            <CommandList>
+              <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+              <CommandGroup>
+                {options.map((option) => (
+                  <CommandItem
+                    key={option.value}
+                    onSelect={() => handleToggle(option.value)}
+                  >
+                    <div className="flex items-center space-x-2 w-full">
+                      <div className="h-4 w-4 flex items-center justify-center">
+                        {selectedAssignees.includes(option.value) && <Check className="h-4 w-4" />}
+                      </div>
+                      <span>{option.label}</span>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    );
   };
   const handleUploadEvidence = async (incidentId: string, file?: File) => {
     const fileToUpload = file || evidenceFile;
@@ -708,41 +881,38 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
             <div className="flex items-stretch gap-3 flex-wrap md:flex-nowrap">
               {/* Total como primer KPI */}
               {(() => {
-              const selected = statusFilter === 'all' && categoryFilter === 'incident';
-              return <div className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                if (statusFilter === 'all' && categoryFilter === 'incident') {
-                  setStatusFilter('all');
-                  setCategoryFilter('all');
-                } else {
-                  setStatusFilter('all');
-                  setCategoryFilter('incident');
-                }
-                setCurrentPage(1);
-              }} role="button" aria-label="Filtrar incidencias: Total">
-                    <div className="text-xl font-bold">{totalIncidents}</div>
-                    <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">Total</Badge>
-                  </div>;
-            })()}
+                const selected = selectedStatuses.length === 0 && selectedCategories.length === 0;
+                return <div className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
+                  setSelectedStatuses([]);
+                  setSelectedCategories([]);
+                  setCurrentPage(1);
+                }} role="button" aria-label="Filtrar incidencias: Total">
+                      <div className="text-xl font-bold">{totalIncidents}</div>
+                      <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">Total</Badge>
+                    </div>;
+              })()}
 
               {/* Estados estándar en orden */}
-              {statusOrder.map(key => {
-              const selected = statusFilter === key && categoryFilter === 'incident';
-              return <div key={key} className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                if (statusFilter === key && categoryFilter === 'incident') {
-                  setStatusFilter('all');
-                  setCategoryFilter('all');
-                } else {
-                  setStatusFilter(key);
-                  setCategoryFilter('incident');
-                }
-                setCurrentPage(1);
-              }} role="button" aria-label={`Filtrar por estado ${STATUS_LABELS[key] || key}`}>
-                    <div className="text-xl font-bold">{statusCounts[key] || 0}</div>
-                    <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[10px] px-1 py-0.5`}>
-                      {STATUS_LABELS[key] || key}
-                    </Badge>
-                  </div>;
-            })}
+              {(statusOrder as readonly string[]).map((key) => {
+                const selected = selectedStatuses.includes(key) && selectedCategories.includes('incident');
+                return <div key={key} className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
+                  // Multi-select logic
+                  const newStatuses = selectedStatuses.includes(key) 
+                    ? selectedStatuses.filter(s => s !== key)
+                    : [...selectedStatuses, key];
+                  setSelectedStatuses(newStatuses);
+                  
+                  if (!selectedCategories.includes('incident')) {
+                    setSelectedCategories(['incident']);
+                  }
+                  setCurrentPage(1);
+                }} role="button" aria-label={`Filtrar por estado ${STATUS_LABELS[key] || key}`}>
+                      <div className="text-xl font-bold">{statusCounts[key] || 0}</div>
+                      <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[10px] px-1 py-0.5`}>
+                        {STATUS_LABELS[key] || key}
+                      </Badge>
+                    </div>;
+              })}
 
               {/* Cualquier estado desconocido extra */}
               {Object.keys(statusCounts).filter(k => !(statusOrder as readonly string[]).includes(k)).map(k => {
@@ -773,41 +943,38 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
             <div className="flex items-stretch gap-3 flex-wrap md:flex-nowrap">
               {/* Total como primer KPI */}
               {(() => {
-              const selected = statusFilter === 'all' && categoryFilter === 'improvement';
-              return <div className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                if (statusFilter === 'all' && categoryFilter === 'improvement') {
-                  setStatusFilter('all');
-                  setCategoryFilter('all');
-                } else {
-                  setStatusFilter('all');
-                  setCategoryFilter('improvement');
-                }
-                setCurrentPage(1);
-              }} role="button" aria-label="Filtrar mejoras: Total">
-                    <div className="text-xl font-bold">{totalImprovements}</div>
-                    <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">Total</Badge>
-                  </div>;
-            })()}
+                const selected = selectedStatuses.length === 0 && selectedCategories.length === 0;
+                return <div className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
+                  setSelectedStatuses([]);
+                  setSelectedCategories([]);
+                  setCurrentPage(1);
+                }} role="button" aria-label="Filtrar mejoras: Total">
+                      <div className="text-xl font-bold">{totalImprovements}</div>
+                      <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">Total</Badge>
+                    </div>;
+              })()}
 
               {/* Estados estándar en orden */}
-              {statusOrder.map(key => {
-              const selected = statusFilter === key && categoryFilter === 'improvement';
-              return <div key={key} className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                if (statusFilter === key && categoryFilter === 'improvement') {
-                  setStatusFilter('all');
-                  setCategoryFilter('all');
-                } else {
-                  setStatusFilter(key);
-                  setCategoryFilter('improvement');
-                }
-                setCurrentPage(1);
-              }} role="button" aria-label={`Filtrar mejoras por estado ${STATUS_LABELS[key] || key}`}>
-                    <div className="text-xl font-bold">{improvementStatusCounts[key] || 0}</div>
-                    <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[10px] px-1 py-0.5`}>
-                      {STATUS_LABELS[key] || key}
-                    </Badge>
-                  </div>;
-            })}
+              {(statusOrder as readonly string[]).map((key) => {
+                const selected = selectedStatuses.includes(key) && selectedCategories.includes('improvement');
+                return <div key={key} className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
+                  // Multi-select logic
+                  const newStatuses = selectedStatuses.includes(key) 
+                    ? selectedStatuses.filter(s => s !== key)
+                    : [...selectedStatuses, key];
+                  setSelectedStatuses(newStatuses);
+                  
+                  if (!selectedCategories.includes('improvement')) {
+                    setSelectedCategories(['improvement']);
+                  }
+                  setCurrentPage(1);
+                }} role="button" aria-label={`Filtrar mejoras por estado ${STATUS_LABELS[key] || key}`}>
+                      <div className="text-xl font-bold">{improvementStatusCounts[key] || 0}</div>
+                      <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[10px] px-1 py-0.5`}>
+                        {STATUS_LABELS[key] || key}
+                      </Badge>
+                    </div>;
+              })}
 
               {/* Cualquier estado desconocido extra */}
               {Object.keys(improvementStatusCounts).filter(k => !(statusOrder as readonly string[]).includes(k)).map(k => {
