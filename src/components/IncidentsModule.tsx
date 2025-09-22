@@ -219,9 +219,9 @@ export default function IncidentsModule({
   } | null>(null);
 
   // KPI filtering state
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<'name' | 'status' | 'occurred_at' | 'incident_number' | 'epic' | 'device' | 'environment' | 'assigned_to'>('occurred_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -277,13 +277,11 @@ export default function IncidentsModule({
       const matchesChannel = channelFilter === 'all' || i.device === channelFilter;
       const matchesEnvironment = environmentFilter === 'all' || i.environment === environmentFilter;
       const matchesEpic = epicFilter === 'all' || i.epic === epicFilter;
-      
-      // Multi-select filters
-      const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(i.status);
-      const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(i.category);
-      const matchesAssignee = selectedAssignees.length === 0 || 
-        (selectedAssignees.includes('unassigned') && !i.assigned_to) ||
-        (i.assigned_to && selectedAssignees.includes(i.assigned_to));
+      const matchesStatus = statusFilter === 'all' || i.status === statusFilter;
+      const matchesCategory = categoryFilter === 'all' || i.category === categoryFilter;
+      const matchesAssignee = assigneeFilter === 'all' || 
+        (assigneeFilter === 'unassigned' && !i.assigned_to) ||
+        (i.assigned_to && assigneeFilter === i.assigned_to);
       
       // Search term
       const matchesSearch = !term || [
@@ -300,7 +298,7 @@ export default function IncidentsModule({
       
       return matchesChannel && matchesEnvironment && matchesEpic && matchesStatus && matchesCategory && matchesAssignee && matchesSearch;
     });
-  }, [incidents, channelFilter, environmentFilter, epicFilter, selectedStatuses, selectedCategories, selectedAssignees, search]);
+  }, [incidents, channelFilter, environmentFilter, epicFilter, statusFilter, categoryFilter, assigneeFilter, search]);
   const sorted = useMemo(() => {
     const arr = [...filtered];
     arr.sort((a, b) => {
@@ -420,89 +418,6 @@ export default function IncidentsModule({
     setEditingId(null);
   };
 
-  const MultiSelectFilter = ({ 
-    title, 
-    options, 
-    selected, 
-    onSelectionChange, 
-    showTotal = false 
-  }: {
-    title: string;
-    options: { value: string; label: string }[];
-    selected: string[];
-    onSelectionChange: (values: string[]) => void;
-    showTotal?: boolean;
-  }) => {
-    const [open, setOpen] = useState(false);
-    
-    const handleToggle = (value: string) => {
-      if (value === 'total') {
-        onSelectionChange([]);
-        return;
-      }
-      
-      const newSelected = selected.includes(value)
-        ? selected.filter(item => item !== value)
-        : [...selected, value];
-      onSelectionChange(newSelected);
-    };
-
-    return (
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full justify-between h-10"
-          >
-            <span>
-              {selected.length === 0 ? `Todos ${title.toLowerCase()}` : `${selected.length} seleccionado${selected.length > 1 ? 's' : ''}`}
-            </span>
-            <Filter className="ml-2 h-4 w-4" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[200px] p-0" align="start">
-          <Command>
-            <CommandInput placeholder={`Buscar ${title.toLowerCase()}...`} />
-            <CommandList>
-              <CommandEmpty>No se encontraron resultados.</CommandEmpty>
-              <CommandGroup>
-                {showTotal && (
-                  <CommandItem
-                    onSelect={() => {
-                      handleToggle('total');
-                      setOpen(false);
-                    }}
-                  >
-                    <div className="flex items-center space-x-2 w-full">
-                      <div className="h-4 w-4 flex items-center justify-center">
-                        {selected.length === 0 && <Check className="h-4 w-4" />}
-                      </div>
-                      <span>Total</span>
-                    </div>
-                  </CommandItem>
-                )}
-                {options.map((option) => (
-                  <CommandItem
-                    key={option.value}
-                    onSelect={() => handleToggle(option.value)}
-                  >
-                    <div className="flex items-center space-x-2 w-full">
-                      <div className="h-4 w-4 flex items-center justify-center">
-                        {selected.includes(option.value) && <Check className="h-4 w-4" />}
-                      </div>
-                      <span>{option.label}</span>
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-    );
-  };
-
   const AssigneeFilter = () => {
     const [open, setOpen] = useState(false);
     
@@ -516,50 +431,27 @@ export default function IncidentsModule({
     ];
 
     const handleToggle = (value: string) => {
-      const newSelected = selectedAssignees.includes(value)
-        ? selectedAssignees.filter(item => item !== value)
-        : [...selectedAssignees, value];
-      setSelectedAssignees(newSelected);
+      setAssigneeFilter(value);
     };
 
     return (
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full justify-between h-10"
-          >
-            <span>
-              {selectedAssignees.length === 0 ? 'Todos' : `${selectedAssignees.length} seleccionado${selectedAssignees.length > 1 ? 's' : ''}`}
-            </span>
-            <Filter className="ml-2 h-4 w-4" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[200px] p-0" align="start">
-          <Command>
-            <CommandInput placeholder="Buscar persona..." />
-            <CommandList>
-              <CommandEmpty>No se encontraron resultados.</CommandEmpty>
-              <CommandGroup>
-                {options.map((option) => (
-                  <CommandItem
-                    key={option.value}
-                    onSelect={() => handleToggle(option.value)}
-                  >
-                    <div className="flex items-center space-x-2 w-full">
-                      <div className="h-4 w-4 flex items-center justify-center">
-                        {selectedAssignees.includes(option.value) && <Check className="h-4 w-4" />}
-                      </div>
-                      <span>{option.label}</span>
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+      <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+        <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos</SelectItem>
+          <SelectItem value="unassigned">Sin asignar</SelectItem>
+          {teamMembers.filter(person => 
+            incidents.some(inc => inc.assigned_to === person.id)
+          ).map(person => (
+            <SelectItem key={person.id} value={person.id}>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded" style={{ backgroundColor: person.color }} />
+                {person.name}
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     );
   };
   const handleUploadEvidence = async (incidentId: string, file?: File) => {
@@ -881,10 +773,15 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
             <div className="flex items-stretch gap-3 flex-wrap md:flex-nowrap">
               {/* Total como primer KPI */}
               {(() => {
-                const selected = selectedStatuses.length === 0 && selectedCategories.length === 0;
+                const selected = statusFilter === 'all' && categoryFilter === 'incident';
                 return <div className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                  setSelectedStatuses([]);
-                  setSelectedCategories([]);
+                  if (statusFilter === 'all' && categoryFilter === 'incident') {
+                    setStatusFilter('all');
+                    setCategoryFilter('all');
+                  } else {
+                    setStatusFilter('all');
+                    setCategoryFilter('incident');
+                  }
                   setCurrentPage(1);
                 }} role="button" aria-label="Filtrar incidencias: Total">
                       <div className="text-xl font-bold">{totalIncidents}</div>
@@ -894,16 +791,14 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
 
               {/* Estados estándar en orden */}
               {(statusOrder as readonly string[]).map((key) => {
-                const selected = selectedStatuses.includes(key) && selectedCategories.includes('incident');
+                const selected = statusFilter === key && categoryFilter === 'incident';
                 return <div key={key} className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                  // Multi-select logic
-                  const newStatuses = selectedStatuses.includes(key) 
-                    ? selectedStatuses.filter(s => s !== key)
-                    : [...selectedStatuses, key];
-                  setSelectedStatuses(newStatuses);
-                  
-                  if (!selectedCategories.includes('incident')) {
-                    setSelectedCategories(['incident']);
+                  if (statusFilter === key && categoryFilter === 'incident') {
+                    setStatusFilter('all');
+                    setCategoryFilter('all');
+                  } else {
+                    setStatusFilter(key);
+                    setCategoryFilter('incident');
                   }
                   setCurrentPage(1);
                 }} role="button" aria-label={`Filtrar por estado ${STATUS_LABELS[key] || key}`}>
@@ -943,10 +838,15 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
             <div className="flex items-stretch gap-3 flex-wrap md:flex-nowrap">
               {/* Total como primer KPI */}
               {(() => {
-                const selected = selectedStatuses.length === 0 && selectedCategories.length === 0;
+                const selected = statusFilter === 'all' && categoryFilter === 'improvement';
                 return <div className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                  setSelectedStatuses([]);
-                  setSelectedCategories([]);
+                  if (statusFilter === 'all' && categoryFilter === 'improvement') {
+                    setStatusFilter('all');
+                    setCategoryFilter('all');
+                  } else {
+                    setStatusFilter('all');
+                    setCategoryFilter('improvement');
+                  }
                   setCurrentPage(1);
                 }} role="button" aria-label="Filtrar mejoras: Total">
                       <div className="text-xl font-bold">{totalImprovements}</div>
@@ -956,16 +856,14 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
 
               {/* Estados estándar en orden */}
               {(statusOrder as readonly string[]).map((key) => {
-                const selected = selectedStatuses.includes(key) && selectedCategories.includes('improvement');
+                const selected = statusFilter === key && categoryFilter === 'improvement';
                 return <div key={key} className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                  // Multi-select logic
-                  const newStatuses = selectedStatuses.includes(key) 
-                    ? selectedStatuses.filter(s => s !== key)
-                    : [...selectedStatuses, key];
-                  setSelectedStatuses(newStatuses);
-                  
-                  if (!selectedCategories.includes('improvement')) {
-                    setSelectedCategories(['improvement']);
+                  if (statusFilter === key && categoryFilter === 'improvement') {
+                    setStatusFilter('all');
+                    setCategoryFilter('all');
+                  } else {
+                    setStatusFilter(key);
+                    setCategoryFilter('improvement');
                   }
                   setCurrentPage(1);
                 }} role="button" aria-label={`Filtrar mejoras por estado ${STATUS_LABELS[key] || key}`}>
