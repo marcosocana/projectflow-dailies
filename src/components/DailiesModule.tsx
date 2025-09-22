@@ -127,7 +127,8 @@ export default function DailiesModule({
       supabase.from('incidents').select('id,name,incident_number,status,category').eq('project_id', projectId).order('incident_number', {
         ascending: false
       }),
-      supabase.from('tasks').select('id,title,status,incident_id').eq('project_id', projectId).order('created_at', {
+      // Get ALL tasks from the main tasks list (/tasks) - no field limitations
+      supabase.from('tasks').select('*').eq('project_id', projectId).order('created_at', {
         ascending: false
       })
     ]);
