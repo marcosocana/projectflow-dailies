@@ -99,42 +99,25 @@ export default function DailiesModule({
     personIds: string[];
     incidentId: string;
     status: TaskStatus;
-    linkedTaskId: string;
-    isIndependent: boolean;
   }>({
     title: '',
     description: '',
     personIds: [],
     incidentId: '',
-    status: 'pending',
-    linkedTaskId: '',
-    isIndependent: true
+    status: 'pending'
   });
-  
-  // Lista de todas las tareas del sistema para vinculación
-  const [systemTasks, setSystemTasks] = useState<any[]>([]);
   const loadBaseData = async () => {
     const [{
       data: ppl
     }, {
       data: incs
-    }, {
-      data: tasks
-    }] = await Promise.all([
-      supabase.from('people').select('*').eq('project_id', projectId).order('created_at', {
-        ascending: true
-      }), 
-      supabase.from('incidents').select('id,name,incident_number,status,category').eq('project_id', projectId).order('incident_number', {
-        ascending: false
-      }),
-      // Get ALL tasks from the main tasks list (/tasks) - no field limitations
-      supabase.from('tasks').select('*').eq('project_id', projectId).order('created_at', {
-        ascending: false
-      })
-    ]);
+    }] = await Promise.all([supabase.from('people').select('*').eq('project_id', projectId).order('created_at', {
+      ascending: true
+    }), supabase.from('incidents').select('id,name,incident_number,status,category').eq('project_id', projectId).order('incident_number', {
+      ascending: false
+    })]);
     setPeople(ppl || []);
     setIncidents(incs || []);
-    setSystemTasks(tasks || []);
   };
   const ensureDaily = async (d: Date) => {
     const isoDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -216,52 +199,37 @@ export default function DailiesModule({
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!dailyId) return;
-    
-    if (taskForm.isIndependent) {
-      // Crear nueva tarea independiente
-      const payload: TablesInsert<'tasks'> = {
-        title: taskForm.title,
-        description: taskForm.description || null,
-        project_id: projectId,
-        daily_id: dailyId,
-        person_id: taskForm.personIds.length > 0 ? taskForm.personIds[0] : null,
-        incident_id: taskForm.incidentId || null,
-        status: taskForm.status ?? 'pending'
-      };
-      const {
-        data: created,
-        error
-      } = await supabase.from('tasks').insert(payload).select().single();
-      if (error || !created) return toast({
-        title: 'Error',
-        description: 'No se pudo crear la tarea',
-        variant: 'destructive'
-      });
-      // Map task to current daily
-      await supabase.from('daily_tasks').upsert({
-        daily_id: dailyId,
-        task_id: created.id
-      } as any, {
-        onConflict: 'daily_id,task_id'
-      } as any);
-    } else if (taskForm.linkedTaskId) {
-      // Vincular tarea existente al día actual
-      await supabase.from('daily_tasks').upsert({
-        daily_id: dailyId,
-        task_id: taskForm.linkedTaskId
-      } as any, {
-        onConflict: 'daily_id,task_id'
-      } as any);
-    }
-    
+    const payload: TablesInsert<'tasks'> = {
+      title: taskForm.title,
+      description: taskForm.description || null,
+      project_id: projectId,
+      daily_id: dailyId,
+      person_id: taskForm.personIds.length > 0 ? taskForm.personIds[0] : null, // For now, use first person
+      incident_id: taskForm.incidentId || null,
+      status: taskForm.status ?? 'pending'
+    };
+    const {
+      data: created,
+      error
+    } = await supabase.from('tasks').insert(payload).select().single();
+    if (error || !created) return toast({
+      title: 'Error',
+      description: 'No se pudo crear la tarea',
+      variant: 'destructive'
+    });
+    // Map task to current daily
+    await supabase.from('daily_tasks').upsert({
+      daily_id: dailyId,
+      task_id: created.id
+    } as any, {
+      onConflict: 'daily_id,task_id'
+    } as any);
     setTaskForm({
       title: '',
       description: '',
       personIds: [],
       incidentId: '',
-      status: 'pending',
-      linkedTaskId: '',
-      isIndependent: true
+      status: 'pending'
     });
     setCreateTaskOpen(false);
     loadTasks(date);
@@ -496,17 +464,6 @@ export default function DailiesModule({
     if (num === null || num === undefined) return null;
     return `T${String(num).padStart(4, '0')}`;
   };
-
-  // Helper para formatear código de tarea
-  const getTaskCode = (task: any) => {
-    const incident = incidents.find(i => i.id === task.incident_id);
-    if (incident) {
-      return getTicketCode(incident);
-    }
-    // For independent tasks, create a task identifier based on creation order
-    const taskIndex = systemTasks.findIndex(t => t.id === task.id);
-    return `T${String(taskIndex + 1).padStart(5, '0')}`;
-  };
   const formatIncidentLabel = (incident: any) => {
     const code = getTicketCode(incident);
     return code ? `${code} - ${incident.name}` : incident.name;
@@ -553,7 +510,7 @@ export default function DailiesModule({
       });
     }
   };
-  // Autosave task edits (500ms debounce) + sync with linked tasks
+  // Autosave task edits (500ms debounce)
   useEffect(() => {
     if (!selectedTask) return;
     const handler = setTimeout(async () => {
@@ -576,16 +533,10 @@ export default function DailiesModule({
           ...prev,
           ...update
         } : prev);
-        
-        // Si la tarea está vinculada a una tarea del sistema (por título), sincronizar estados
-        const linkedSystemTask = systemTasks.find(st => st.title === selectedTask.title);
-        if (linkedSystemTask && linkedSystemTask.id !== selectedTask.id) {
-          await supabase.from('tasks').update({ status: editForm.status }).eq('id', linkedSystemTask.id);
-        }
       }
     }, 500);
     return () => clearTimeout(handler);
-  }, [editForm, selectedTask, systemTasks]);
+  }, [editForm, selectedTask]);
   if (!unlocked) {
     return <Card>
         <CardHeader>
@@ -646,9 +597,9 @@ export default function DailiesModule({
               <Table className="mt-0">
                 <TableHeader>
                   <TableRow>
-                    <SortableHeader field="status">Estado</SortableHeader>
-                    <SortableHeader field="title">Tarea</SortableHeader>
-                    <SortableHeader field="person">Persona</SortableHeader>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Tarea</TableHead>
+                    <TableHead>Persona</TableHead>
                     <TableHead>Incidencia</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
@@ -740,96 +691,12 @@ export default function DailiesModule({
           </DialogHeader>
           <form onSubmit={addTask} className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="md:col-span-2">
-              <div className="flex items-center space-x-2 mb-3">
-                <Checkbox 
-                  id="independent-task"
-                  checked={taskForm.isIndependent}
-                  onCheckedChange={(checked) => setTaskForm(f => ({ 
-                    ...f, 
-                    isIndependent: !!checked,
-                    linkedTaskId: checked ? '' : f.linkedTaskId,
-                    title: checked ? '' : f.title
-                  }))}
-                />
-                <Label htmlFor="independent-task">Tarea independiente</Label>
-              </div>
+              <Label>Título</Label>
+              <Input value={taskForm.title} onChange={e => setTaskForm(f => ({
+              ...f,
+              title: e.target.value
+            }))} required />
             </div>
-
-            {!taskForm.isIndependent && (
-              <div className="md:col-span-2">
-                <Label>Seleccionar tarea del listado</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      className="w-full justify-between"
-                    >
-                      {taskForm.linkedTaskId ? 
-                        (() => {
-                          const selectedTask = systemTasks.find(t => t.id === taskForm.linkedTaskId);
-                          if (selectedTask) {
-                            const taskCode = getTaskCode(selectedTask);
-                            return `${taskCode} - ${selectedTask.title}`;
-                          }
-                          return "Tarea no encontrada";
-                        })() : 
-                        "Seleccionar tarea..."
-                      }
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[500px] p-0">
-                    <Command>
-                      <CommandInput placeholder="Buscar tarea..." />
-                      <CommandList>
-                        <CommandEmpty>No se encontraron tareas.</CommandEmpty>
-                        <CommandGroup>
-                          {systemTasks.map((task) => {
-                            const taskCode = getTaskCode(task);
-                            return (
-                              <CommandItem
-                                key={task.id}
-                                value={`${taskCode} ${task.title}`}
-                                onSelect={() => {
-                                  setTaskForm(f => ({
-                                    ...f,
-                                    linkedTaskId: task.id,
-                                    title: task.title,
-                                    status: task.status,
-                                    incidentId: task.incident_id || ''
-                                  }));
-                                }}
-                              >
-                                <div className="flex flex-col">
-                                  <span className="font-medium">{taskCode} - {task.title}</span>
-                                  <span className="text-xs text-muted-foreground">
-                                    Estado: {task.status === 'pending' ? 'Pendiente' : task.status === 'in_progress' ? 'En progreso' : 'Completada'}
-                                  </span>
-                                </div>
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            )}
-
-            {taskForm.isIndependent && (
-              <div className="md:col-span-2">
-                <Label>Título</Label>
-                <Input 
-                  value={taskForm.title} 
-                  onChange={e => setTaskForm(f => ({
-                    ...f,
-                    title: e.target.value
-                  }))} 
-                  required 
-                />
-              </div>
-            )}
             <div>
               <Label>Personas</Label>
               <Popover>
@@ -950,12 +817,7 @@ export default function DailiesModule({
               </Popover>
             </div>
             <div className="md:col-span-2">
-              <Button 
-                type="submit" 
-                disabled={!dailyId || (!taskForm.isIndependent && !taskForm.linkedTaskId) || (taskForm.isIndependent && !taskForm.title.trim())}
-              >
-                {taskForm.isIndependent ? 'Crear tarea' : 'Vincular tarea'}
-              </Button>
+              <Button type="submit" disabled={!dailyId}>Crear</Button>
             </div>
           </form>
         </DialogContent>
