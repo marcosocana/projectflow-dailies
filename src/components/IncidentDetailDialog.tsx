@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 // Options same as IncidentsModule to keep UI identical
@@ -251,6 +251,25 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     }
   };
 
+  const handleCopyInfo = () => {
+    if (!selected) return;
+
+    const status = STATUS_OPTIONS.find(s => s.value === selected.status)?.label || selected.status;
+    const category = CATEGORY_OPTIONS.find(c => c.value === selected.category)?.label || selected.category;
+    
+    const info = `Fecha: ${new Date(selected.occurred_at).toLocaleDateString()}
+Plataforma: ${selected.device || 'N/A'}
+Entorno: ${selected.environment || 'N/A'}
+Versión: T${String(selected.incident_number ?? 0).padStart(5, '0')}
+Qué incluye: ${selected.description || 'Sin descripción'}`;
+
+    navigator.clipboard.writeText(info).then(() => {
+      toast({ title: 'Información copiada', description: 'La información ha sido copiada al portapapeles' });
+    }).catch(() => {
+      toast({ title: 'Error', description: 'No se pudo copiar la información', variant: 'destructive' });
+    });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -261,9 +280,14 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
                 {selected ? `Detalle T${String(selected.incident_number ?? 0).padStart(5, '0')}` : 'Detalle de incidencia'}
               </DialogTitle>
               {selected && (
-                <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive p-1">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" onClick={handleCopyInfo} className="p-1" title="Copiar info">
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive p-1">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               )}
             </div>
           </div>

@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 import { es } from 'date-fns/locale';
 import type { TablesInsert } from '@/integrations/supabase/types';
-import { Trash2, Eye, Pencil, RefreshCcw, List } from 'lucide-react';
+import { Trash2, Eye, Pencil, RefreshCcw, List, ChevronUp, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -72,6 +72,10 @@ export default function DailiesModule({
   const [filteredTasks, setFilteredTasks] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  
+  // Sorting state
+  const [sortField, setSortField] = useState<'status' | 'title' | 'person'>('status');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   // Sync when parent unlocks via modal
   useEffect(() => {
     if (initiallyUnlocked) setUnlocked(true);
@@ -345,13 +349,13 @@ export default function DailiesModule({
         // Remove duplicates based on task ID
         const uniqueTasks = tasksData.filter((task, index, self) => index === self.findIndex(t => t.id === task.id));
 
-        // Sort by status: in_progress, pending, resolved
-        const statusOrder = {
-          'in_progress': 0,
-          'pending': 1,
-          'resolved': 2
-        };
+        // Sort by default: in_progress, pending, resolved
         uniqueTasks.sort((a, b) => {
+          const statusOrder = {
+            'in_progress': 0,
+            'pending': 1,
+            'resolved': 2
+          };
           const aOrder = statusOrder[a.status as keyof typeof statusOrder] ?? 3;
           const bOrder = statusOrder[b.status as keyof typeof statusOrder] ?? 3;
           return aOrder - bOrder;
@@ -368,7 +372,7 @@ export default function DailiesModule({
     }
   };
 
-  // Filter and search logic for all tasks view
+  // Filter, search and sort logic for all tasks view
   useEffect(() => {
     let filtered = [...allTasks];
 
@@ -382,8 +386,69 @@ export default function DailiesModule({
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(task => task.title?.toLowerCase().includes(query) || task.description?.toLowerCase().includes(query));
     }
+
+    // Sort
+    filtered.sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortField) {
+        case 'status':
+          const statusOrder = { 'in_progress': 0, 'pending': 1, 'resolved': 2 };
+          aValue = statusOrder[a.status as keyof typeof statusOrder] ?? 3;
+          bValue = statusOrder[b.status as keyof typeof statusOrder] ?? 3;
+          break;
+        case 'title':
+          aValue = a.title?.toLowerCase() || '';
+          bValue = b.title?.toLowerCase() || '';
+          break;
+        case 'person':
+          const aPerson = people.find(p => p.id === a.person_id);
+          const bPerson = people.find(p => p.id === b.person_id);
+          aValue = aPerson?.name?.toLowerCase() || 'z'; // Put unassigned at the end
+          bValue = bPerson?.name?.toLowerCase() || 'z';
+          break;
+        default:
+          aValue = 0;
+          bValue = 0;
+      }
+
+      if (sortDirection === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      }
+    });
+
     setFilteredTasks(filtered);
-  }, [allTasks, statusFilter, searchQuery]);
+  }, [allTasks, statusFilter, searchQuery, sortField, sortDirection, people]);
+
+  const handleSort = (field: 'status' | 'title' | 'person') => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortableHeader = ({ field, children }: { field: 'status' | 'title' | 'person'; children: React.ReactNode }) => (
+    <TableHead 
+      className="cursor-pointer hover:bg-muted/50 select-none"
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        <div className="flex flex-col">
+          <ChevronUp 
+            className={`h-3 w-3 ${sortField === field && sortDirection === 'asc' ? 'text-primary' : 'text-muted-foreground'}`} 
+          />
+          <ChevronDown 
+            className={`h-3 w-3 -mt-1 ${sortField === field && sortDirection === 'desc' ? 'text-primary' : 'text-muted-foreground'}`} 
+          />
+        </div>
+      </div>
+    </TableHead>
+  );
   const loadTaskComments = async (taskId: string) => {
     const {
       data
@@ -1021,9 +1086,9 @@ export default function DailiesModule({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Tarea</TableHead>
-                    <TableHead>Persona</TableHead>
+                    <SortableHeader field="status">Estado</SortableHeader>
+                    <SortableHeader field="title">Tarea</SortableHeader>
+                    <SortableHeader field="person">Persona</SortableHeader>
                     <TableHead>Creada</TableHead>
                     <TableHead></TableHead>
                   </TableRow>

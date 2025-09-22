@@ -5,7 +5,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ProjectButton } from '@/components/ui/project-button';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, Calendar, CheckCircle2, Clock, List, Columns3, FileText } from 'lucide-react';
+import { AlertTriangle, Calendar, CheckCircle2, Clock, List, Columns3, FileText, Filter, Check, X } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 import { 
   DndContext, 
   closestCenter, 
@@ -45,6 +49,7 @@ interface Incident {
   created_at: string;
   environment: string | null;
   device: string | null;
+  assigned_to: string | null;
 }
 
 interface UpcomingVacation {
@@ -144,6 +149,16 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [loading, setLoading] = useState(true);
+  
+  // Filters state
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
+  
+  // Incident detail state
+  const [incidentDetailOpen, setIncidentDetailOpen] = useState(false);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -170,14 +185,29 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
       setIncidents(data || []);
     } catch (error) {
       console.error('Error loading incidents:', error);
-      toast.error('Error al cargar las incidencias');
     } finally {
       setLoading(false);
     }
   };
 
+  const loadPeople = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('people')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setPeople(data || []);
+    } catch (error) {
+      console.error('Error loading people:', error);
+    }
+  };
+
   useEffect(() => {
     loadIncidents();
+    loadPeople();
   }, [projectId]);
 
   useEffect(() => {
@@ -294,13 +324,213 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
       <CheckCircle2 className="h-4 w-4 text-blue-500" />;
   };
 
+  // Filter incidents based on selected filters
+  const filteredIncidents = useMemo(() => {
+    let filtered = incidents;
+
+    // Status filter
+    if (selectedStatuses.length > 0) {
+      filtered = filtered.filter(inc => selectedStatuses.includes(inc.status));
+    }
+
+    // Category filter
+    if (selectedCategories.length > 0) {
+      filtered = filtered.filter(inc => selectedCategories.includes(inc.category));
+    }
+
+    // Assignee filter
+    if (selectedAssignees.length > 0) {
+      filtered = filtered.filter(inc => 
+        selectedAssignees.includes('unassigned') ? !inc.assigned_to : 
+        inc.assigned_to && selectedAssignees.includes(inc.assigned_to)
+      );
+    }
+
+    return filtered;
+  }, [incidents, selectedStatuses, selectedCategories, selectedAssignees]);
+
   const incidentsByStatus = useMemo(() => {
     return {
-      pending: incidents.filter(inc => inc.status === 'pending'),
-      in_progress: incidents.filter(inc => inc.status === 'in_progress'),
-      resolved: incidents.filter(inc => inc.status === 'resolved'),
+      pending: filteredIncidents.filter(inc => inc.status === 'pending'),
+      in_progress: filteredIncidents.filter(inc => inc.status === 'in_progress'),
+      resolved: filteredIncidents.filter(inc => inc.status === 'resolved'),
     };
-  }, [incidents]);
+  }, [filteredIncidents]);
+
+  const getInitials = (name: string) => {
+    const words = name.trim().split(' ');
+    if (words.length === 1) {
+      return words[0].charAt(0).toUpperCase();
+    }
+    return (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase();
+  };
+
+  const openIncidentDetail = (incidentId: string) => {
+    setSelectedIncidentId(incidentId);
+    setIncidentDetailOpen(true);
+  };
+
+  const statusOptions = [
+    { value: 'pending', label: 'Pendiente' },
+    { value: 'in_progress', label: 'En curso' },
+    { value: 'resolved', label: 'Resuelto' },
+    { value: 'closed', label: 'Cerrado' },
+    { value: 'in_qa', label: 'En QA' },
+  ];
+
+  const categoryOptions = [
+    { value: 'incident', label: 'Incidencia' },
+    { value: 'improvement', label: 'Mejora' },
+  ];
+
+  const MultiSelectFilter = ({ 
+    title, 
+    options, 
+    selected, 
+    onSelectionChange, 
+    showTotal = false 
+  }: {
+    title: string;
+    options: { value: string; label: string }[];
+    selected: string[];
+    onSelectionChange: (values: string[]) => void;
+    showTotal?: boolean;
+  }) => {
+    const [open, setOpen] = useState(false);
+    
+    const handleToggle = (value: string) => {
+      if (value === 'total') {
+        onSelectionChange([]);
+        return;
+      }
+      
+      const newSelected = selected.includes(value)
+        ? selected.filter(item => item !== value)
+        : [...selected, value];
+      onSelectionChange(newSelected);
+    };
+
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 border-dashed"
+          >
+            <Filter className="mr-2 h-4 w-4" />
+            {title}
+            {selected.length > 0 && (
+              <Badge variant="secondary" className="ml-2 h-4 px-1 text-xs">
+                {selected.length}
+              </Badge>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[200px] p-0" align="start">
+          <Command>
+            <CommandInput placeholder={`Buscar ${title.toLowerCase()}...`} />
+            <CommandList>
+              <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+              <CommandGroup>
+                {showTotal && (
+                  <CommandItem
+                    onSelect={() => {
+                      handleToggle('total');
+                      setOpen(false);
+                    }}
+                  >
+                    <div className="flex items-center space-x-2 w-full">
+                      <div className="h-4 w-4 flex items-center justify-center">
+                        {selected.length === 0 && <Check className="h-4 w-4" />}
+                      </div>
+                      <span>Total</span>
+                    </div>
+                  </CommandItem>
+                )}
+                {options.map((option) => (
+                  <CommandItem
+                    key={option.value}
+                    onSelect={() => handleToggle(option.value)}
+                  >
+                    <div className="flex items-center space-x-2 w-full">
+                      <div className="h-4 w-4 flex items-center justify-center">
+                        {selected.includes(option.value) && <Check className="h-4 w-4" />}
+                      </div>
+                      <span>{option.label}</span>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    );
+  };
+
+  const AssigneeFilter = () => {
+    const [open, setOpen] = useState(false);
+    
+    const assignedPeople = people.filter(person => 
+      incidents.some(inc => inc.assigned_to === person.id)
+    );
+    
+    const options = [
+      { value: 'unassigned', label: 'Sin asignar' },
+      ...assignedPeople.map(person => ({ value: person.id, label: person.name }))
+    ];
+
+    const handleToggle = (value: string) => {
+      const newSelected = selectedAssignees.includes(value)
+        ? selectedAssignees.filter(item => item !== value)
+        : [...selectedAssignees, value];
+      setSelectedAssignees(newSelected);
+    };
+
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 border-dashed"
+          >
+            <Filter className="mr-2 h-4 w-4" />
+            Asignado a
+            {selectedAssignees.length > 0 && (
+              <Badge variant="secondary" className="ml-2 h-4 px-1 text-xs">
+                {selectedAssignees.length}
+              </Badge>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[200px] p-0" align="start">
+          <Command>
+            <CommandInput placeholder="Buscar persona..." />
+            <CommandList>
+              <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+              <CommandGroup>
+                {options.map((option) => (
+                  <CommandItem
+                    key={option.value}
+                    onSelect={() => handleToggle(option.value)}
+                  >
+                    <div className="flex items-center space-x-2 w-full">
+                      <div className="h-4 w-4 flex items-center justify-center">
+                        {selectedAssignees.includes(option.value) && <Check className="h-4 w-4" />}
+                      </div>
+                      <span>{option.label}</span>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    );
+  };
 
   const renderListView = () => (
     <Card>
@@ -311,13 +541,49 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
         <CardDescription>Últimas 20 incidencias del proyecto</CardDescription>
       </CardHeader>
       <CardContent>
+        {/* Filters */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <MultiSelectFilter
+            title="Estado"
+            options={statusOptions}
+            selected={selectedStatuses}
+            onSelectionChange={setSelectedStatuses}
+            showTotal={true}
+          />
+          <MultiSelectFilter
+            title="Categoría"
+            options={categoryOptions}
+            selected={selectedCategories}
+            onSelectionChange={setSelectedCategories}
+            showTotal={true}
+          />
+          <AssigneeFilter />
+          {(selectedStatuses.length > 0 || selectedCategories.length > 0 || selectedAssignees.length > 0) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSelectedStatuses([]);
+                setSelectedCategories([]);
+                setSelectedAssignees([]);
+              }}
+              className="h-8"
+            >
+              <X className="mr-2 h-4 w-4" />
+              Limpiar filtros
+            </Button>
+          )}
+        </div>
+
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <div className="text-muted-foreground">Cargando incidencias...</div>
           </div>
-        ) : incidents.length === 0 ? (
+        ) : filteredIncidents.length === 0 ? (
           <div className="flex items-center justify-center py-8">
-            <div className="text-muted-foreground">No hay incidencias registradas</div>
+            <div className="text-muted-foreground">
+              {incidents.length === 0 ? 'No hay incidencias registradas' : 'No se encontraron incidencias con los filtros aplicados'}
+            </div>
           </div>
         ) : (
           <Table>
@@ -327,28 +593,55 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
                 <TableHead>Nombre</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Categoría</TableHead>
+                <TableHead>Asignado a</TableHead>
                 <TableHead>Fecha</TableHead>
+                <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {incidents.map((incident) => (
-                <TableRow key={incident.id}>
-                  <TableCell className="font-medium">#{incident.incident_number}</TableCell>
-                  <TableCell>{incident.name}</TableCell>
-                  <TableCell>
-                    <Badge className={`${getStatusColor(incident.status)}`}>
-                      {getStatusLabel(incident.status)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      {getCategoryIcon(incident.category)}
-                      <span className="capitalize">{incident.category === 'incident' ? 'Incidencia' : 'Mejora'}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{new Date(incident.occurred_at).toLocaleDateString()}</TableCell>
-                </TableRow>
-              ))}
+              {filteredIncidents.map((incident) => {
+                const assignedPerson = people.find(p => p.id === incident.assigned_to);
+                return (
+                  <TableRow key={incident.id}>
+                    <TableCell className="font-medium">#{incident.incident_number}</TableCell>
+                    <TableCell>{incident.name}</TableCell>
+                    <TableCell>
+                      <Badge className={`${getStatusColor(incident.status)}`}>
+                        {getStatusLabel(incident.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        {getCategoryIcon(incident.category)}
+                        <span className="capitalize">{incident.category === 'incident' ? 'Incidencia' : 'Mejora'}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {assignedPerson ? (
+                        <div 
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-medium"
+                          style={{ backgroundColor: assignedPerson.color }}
+                          title={assignedPerson.name}
+                        >
+                          {getInitials(assignedPerson.name)}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{new Date(incident.occurred_at).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => openIncidentDetail(incident.id)}
+                      >
+                        Ver detalle
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
@@ -469,6 +762,19 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
           {viewMode === 'list' ? renderListView() : renderPipelineView()}
         </CardContent>
       </Card>
+
+      {/* Incident Detail Dialog */}
+      <IncidentDetailDialog
+        open={incidentDetailOpen}
+        onOpenChange={setIncidentDetailOpen}
+        incidentId={selectedIncidentId}
+        onPatched={(id, payload) => {
+          setIncidents(prev => prev.map(inc => inc.id === id ? { ...inc, ...payload } : inc));
+        }}
+        onDeleted={(id) => {
+          setIncidents(prev => prev.filter(inc => inc.id !== id));
+        }}
+      />
     </main>
   );
 }
