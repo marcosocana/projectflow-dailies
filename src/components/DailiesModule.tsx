@@ -496,6 +496,17 @@ export default function DailiesModule({
     if (num === null || num === undefined) return null;
     return `T${String(num).padStart(4, '0')}`;
   };
+
+  // Helper para formatear código de tarea
+  const getTaskCode = (task: any) => {
+    const incident = incidents.find(i => i.id === task.incident_id);
+    if (incident) {
+      return getTicketCode(incident);
+    }
+    // For independent tasks, create a task identifier based on creation order
+    const taskIndex = systemTasks.findIndex(t => t.id === task.id);
+    return `T${String(taskIndex + 1).padStart(5, '0')}`;
+  };
   const formatIncidentLabel = (incident: any) => {
     const code = getTicketCode(incident);
     return code ? `${code} - ${incident.name}` : incident.name;
@@ -755,7 +766,14 @@ export default function DailiesModule({
                       className="w-full justify-between"
                     >
                       {taskForm.linkedTaskId ? 
-                        systemTasks.find(t => t.id === taskForm.linkedTaskId)?.title || "Tarea no encontrada" : 
+                        (() => {
+                          const selectedTask = systemTasks.find(t => t.id === taskForm.linkedTaskId);
+                          if (selectedTask) {
+                            const taskCode = getTaskCode(selectedTask);
+                            return `${taskCode} - ${selectedTask.title}`;
+                          }
+                          return "Tarea no encontrada";
+                        })() : 
                         "Seleccionar tarea..."
                       }
                     </Button>
@@ -767,12 +785,11 @@ export default function DailiesModule({
                         <CommandEmpty>No se encontraron tareas.</CommandEmpty>
                         <CommandGroup>
                           {systemTasks.map((task) => {
-                            const incident = incidents.find(i => i.id === task.incident_id);
-                            const ticketCode = incident ? getTicketCode(incident) : null;
+                            const taskCode = getTaskCode(task);
                             return (
                               <CommandItem
                                 key={task.id}
-                                value={`${task.title} ${ticketCode || ''}`}
+                                value={`${taskCode} ${task.title}`}
                                 onSelect={() => {
                                   setTaskForm(f => ({
                                     ...f,
@@ -784,10 +801,10 @@ export default function DailiesModule({
                                 }}
                               >
                                 <div className="flex flex-col">
-                                  <span className="font-medium">{task.title}</span>
-                                  {ticketCode && (
-                                    <span className="text-xs text-muted-foreground">{ticketCode}</span>
-                                  )}
+                                  <span className="font-medium">{taskCode} - {task.title}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    Estado: {task.status === 'pending' ? 'Pendiente' : task.status === 'in_progress' ? 'En progreso' : 'Completada'}
+                                  </span>
                                 </div>
                               </CommandItem>
                             );
