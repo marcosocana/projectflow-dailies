@@ -364,13 +364,24 @@ export default function DailiesModule({
         return;
       }
 
-      // Get tasks from the last day with tasks
+      // Get tasks from the last day with tasks with their order
       const {
         data: taskData
-      } = await supabase.from('daily_tasks').select('tasks(*)').eq('daily_id', sourceDailyId);
-      const tasks = (taskData || []).map((r: any) => r.tasks).filter(Boolean);
-      setLastDayTasks(tasks);
-      setSelectedTasksForPersist(tasks.map((t: any) => t.id)); // All selected by default
+      } = await supabase
+        .from('daily_tasks')
+        .select('tasks(*), order_position')
+        .eq('daily_id', sourceDailyId)
+        .order('order_position');
+      
+      const tasksWithOrder = (taskData || [])
+        .filter((r: any) => r.tasks)
+        .map((r: any) => ({
+          ...r.tasks,
+          original_order: r.order_position
+        }));
+      
+      setLastDayTasks(tasksWithOrder);
+      setSelectedTasksForPersist(tasksWithOrder.map((t: any) => t.id)); // All selected by default
       setPersistModalOpen(true);
     } catch (e) {
       toast({
@@ -408,13 +419,23 @@ export default function DailiesModule({
         ? (maxOrderData[0].order_position || 0) + 1 
         : 0;
       
-      const rows = selectedTasksForPersist
+      // Sort selected tasks by their original order before assigning new positions
+      const tasksWithOriginalOrder = selectedTasksForPersist
         .filter((taskId) => !existingIds.includes(taskId))
-        .map((taskId, index) => ({ 
-          daily_id: todayId, 
-          task_id: taskId,
-          order_position: startPosition + index
-        }));
+        .map(taskId => {
+          const task = lastDayTasks.find((t: any) => t.id === taskId);
+          return {
+            taskId,
+            originalOrder: task?.original_order ?? 999999
+          };
+        })
+        .sort((a, b) => a.originalOrder - b.originalOrder);
+      
+      const rows = tasksWithOriginalOrder.map((item, index) => ({ 
+        daily_id: todayId, 
+        task_id: item.taskId,
+        order_position: startPosition + index
+      }));
 
       if (rows.length) {
         const { error: insertErr } = await supabase.from('daily_tasks').insert(rows as any);
