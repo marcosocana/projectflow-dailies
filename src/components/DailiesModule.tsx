@@ -128,6 +128,9 @@ export default function DailiesModule({
     incidentId: '',
     status: 'pending'
   });
+  
+  // New state for task creation mode
+  const [creationMode, setCreationMode] = useState<'select' | 'linked' | 'manual'>('select');
   const loadBaseData = async () => {
     const [{
       data: ppl
@@ -217,6 +220,31 @@ export default function DailiesModule({
     });
     loadBaseData();
   };
+  const handleIncidentSelect = (incidentId: string) => {
+    const incident = incidents.find(i => i.id === incidentId);
+    if (incident) {
+      setTaskForm({
+        title: incident.name || '',
+        description: incident.description || '',
+        personIds: [],
+        incidentId: incident.id,
+        status: incident.status === 'resolved' ? 'resolved' : incident.status === 'in_progress' ? 'in_progress' : 'pending'
+      });
+      setCreationMode('linked');
+    }
+  };
+
+  const handleCreateWithoutLink = () => {
+    setTaskForm({
+      title: '',
+      description: '',
+      personIds: [],
+      incidentId: '',
+      status: 'pending'
+    });
+    setCreationMode('manual');
+  };
+
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!dailyId) return;
@@ -225,7 +253,7 @@ export default function DailiesModule({
       description: taskForm.description || null,
       project_id: projectId,
       daily_id: dailyId,
-      person_id: taskForm.personIds.length > 0 ? taskForm.personIds[0] : null, // For now, use first person
+      person_id: taskForm.personIds.length > 0 ? taskForm.personIds[0] : null,
       incident_id: taskForm.incidentId || null,
       status: taskForm.status ?? 'pending'
     };
@@ -238,6 +266,14 @@ export default function DailiesModule({
       description: 'No se pudo crear la tarea',
       variant: 'destructive'
     });
+    
+    // If linked to incident, sync status
+    if (taskForm.incidentId) {
+      await supabase
+        .from('incidents')
+        .update({ status: taskForm.status })
+        .eq('id', taskForm.incidentId);
+    }
     
     // Get the current max order_position for this daily
     const { data: existingTasks } = await supabase
@@ -266,8 +302,10 @@ export default function DailiesModule({
       incidentId: '',
       status: 'pending'
     });
+    setCreationMode('select');
     setCreateTaskOpen(false);
     loadTasks(date);
+    loadBaseData(); // Reload to get updated incident status
   };
   const toggleTask = async (task: any) => {
     const {
@@ -763,7 +801,7 @@ export default function DailiesModule({
       });
     }
   };
-  // Autosave task edits (500ms debounce)
+  // Autosave task edits (500ms debounce) with incident sync
   useEffect(() => {
     if (!selectedTask) return;
     const handler = setTimeout(async () => {
@@ -778,6 +816,15 @@ export default function DailiesModule({
         error
       } = await supabase.from('tasks').update(update).eq('id', selectedTask.id);
       if (!error) {
+        // If task is linked to incident and status changed, sync incident status
+        if (update.incident_id && update.status !== selectedTask.status) {
+          await supabase
+            .from('incidents')
+            .update({ status: update.status })
+            .eq('id', update.incident_id);
+          loadBaseData(); // Reload incidents to reflect status change
+        }
+        
         setTasks(t => t.map(x => x.id === selectedTask.id ? {
           ...x,
           ...update
@@ -898,143 +945,217 @@ export default function DailiesModule({
 
       {/* Modal Crear Tarea */}
 
-      <Dialog open={createTaskOpen} onOpenChange={setCreateTaskOpen}>
+      <Dialog open={createTaskOpen} onOpenChange={(open) => {
+        setCreateTaskOpen(open);
+        if (!open) {
+          setCreationMode('select');
+          setTaskForm({
+            title: '',
+            description: '',
+            personIds: [],
+            incidentId: '',
+            status: 'pending'
+          });
+        }
+      }}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Crear tarea</DialogTitle>
-            <DialogDescription>Completa la información de la nueva tarea</DialogDescription>
+            <DialogDescription>
+              {creationMode === 'select' && 'Selecciona una incidencia existente o crea una tarea sin vinculación'}
+              {creationMode === 'linked' && 'Tarea vinculada a incidencia (información precargada)'}
+              {creationMode === 'manual' && 'Tarea sin vinculación (información manual)'}
+            </DialogDescription>
           </DialogHeader>
-          <form onSubmit={addTask} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="md:col-span-2">
-              <Label>Título</Label>
-              <Input value={taskForm.title} onChange={e => setTaskForm(f => ({
-              ...f,
-              title: e.target.value
-            }))} required />
-            </div>
-            <div>
-              <Label>Personas</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    className="w-full justify-between"
-                  >
-                    {taskForm.personIds.length === 0 
-                      ? "Sin asignar" 
-                      : `${taskForm.personIds.length} persona${taskForm.personIds.length > 1 ? 's' : ''} seleccionada${taskForm.personIds.length > 1 ? 's' : ''}`
-                    }
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[200px] p-0">
-                  <Command>
-                    <CommandList>
-                      <CommandEmpty>No se encontraron personas.</CommandEmpty>
-                      <CommandGroup>
-                        {people.map((person) => (
-                          <CommandItem
-                            key={person.id}
-                            value={person.id}
-                            onSelect={() => {
-                              setTaskForm(f => ({
-                                ...f,
-                                personIds: f.personIds.includes(person.id)
-                                  ? f.personIds.filter(id => id !== person.id)
-                                  : [...f.personIds, person.id]
-                              }));
-                            }}
-                          >
-                            <div className="flex items-center gap-2 flex-1">
-                              <div 
-                                className="w-3 h-3 rounded-full" 
-                                style={{ backgroundColor: person.color }}
-                              />
-                              <span>{person.name}</span>
+
+          {creationMode === 'select' && (
+            <div className="space-y-4">
+              <div>
+                <Label>Vincular con incidencia existente</Label>
+                <ScrollArea className="h-[300px] border rounded-md p-4 mt-2">
+                  <div className="space-y-2">
+                    {incidents.filter(i => i.status !== 'resolved').map(incident => (
+                      <Button
+                        key={incident.id}
+                        variant="outline"
+                        className="w-full justify-start h-auto py-3"
+                        onClick={() => handleIncidentSelect(incident.id)}
+                      >
+                        <div className="text-left flex-1">
+                          <div className="font-medium flex items-center gap-2">
+                            {getTicketCode(incident)} - {incident.name}
+                            <Badge 
+                              variant="outline"
+                              className={
+                                incident.status === 'in_progress' 
+                                  ? 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent'
+                                  : 'bg-muted text-muted-foreground border-transparent'
+                              }
+                            >
+                              {incident.status === 'in_progress' ? 'En curso' : 'Pendiente'}
+                            </Badge>
+                          </div>
+                          {incident.category && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {incident.category === 'incident' ? 'Incidencia' : 
+                               incident.category === 'improvement' ? 'Mejora' : 'Característica'}
                             </div>
-                            <Checkbox 
-                              checked={taskForm.personIds.includes(person.id)}
-                              className="ml-auto"
-                            />
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+                          )}
+                        </div>
+                      </Button>
+                    ))}
+                    {incidents.filter(i => i.status !== 'resolved').length === 0 && (
+                      <div className="text-center text-muted-foreground py-8">
+                        No hay incidencias activas
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex-1 border-t" />
+                <span className="text-sm text-muted-foreground">o</span>
+                <div className="flex-1 border-t" />
+              </div>
+
+              <Button 
+                variant="secondary" 
+                className="w-full"
+                onClick={handleCreateWithoutLink}
+              >
+                Crear tarea sin vinculación
+              </Button>
             </div>
-            <div>
-              <Label>Estado</Label>
-              <Select value={taskForm.status} onValueChange={v => setTaskForm(f => ({
-              ...f,
-              status: v as TaskStatus
-            }))}>
-                <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pendiente</SelectItem>
-                  <SelectItem value="in_progress">En curso</SelectItem>
-                  <SelectItem value="resolved">Resuelta</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="md:col-span-2">
-              <Label>Descripción</Label>
-              <Textarea value={taskForm.description} onChange={e => setTaskForm(f => ({
-              ...f,
-              description: e.target.value
-            }))} />
-            </div>
-            <div className="md:col-span-2">
-              <Label>Vincular a incidencia</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    className="w-full justify-between"
-                  >
-                    {taskForm.incidentId ? 
-                      formatIncidentLabel(incidents.find(i => i.id === taskForm.incidentId)!) : 
-                      "Ninguna"
-                    }
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[400px] p-0">
-                  <Command>
-                    <CommandInput placeholder="Buscar incidencia..." />
-                    <CommandList>
-                      <CommandEmpty>No se encontraron incidencias.</CommandEmpty>
-                      <CommandGroup>
-                        <CommandItem
-                          value="none"
-                          onSelect={() => {
-                            setTaskForm(f => ({ ...f, incidentId: '' }));
-                          }}
-                        >
-                          Ninguna
-                        </CommandItem>
-                         {incidents.map(i => (
-                           <CommandItem
-                             key={i.id}
-                             value={formatIncidentLabel(i)}
-                             onSelect={() => {
-                               setTaskForm(f => ({ ...f, incidentId: i.id }));
-                             }}
-                           >
-                             {formatIncidentLabel(i)}
-                           </CommandItem>
-                         ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="md:col-span-2">
-              <Button type="submit" disabled={!dailyId}>Crear</Button>
-            </div>
-          </form>
+          )}
+
+          {(creationMode === 'linked' || creationMode === 'manual') && (
+            <form onSubmit={addTask} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {creationMode === 'linked' && (
+                <div className="md:col-span-2 p-3 bg-muted rounded-lg border border-primary/20">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Badge className="bg-primary">Vinculada</Badge>
+                    <span className="font-medium">
+                      {formatIncidentLabel(incidents.find(i => i.id === taskForm.incidentId)!)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Los cambios de estado se sincronizarán automáticamente
+                  </p>
+                </div>
+              )}
+
+              {creationMode === 'manual' && (
+                <div className="md:col-span-2 p-3 bg-muted/50 rounded-lg border">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Badge variant="outline">Sin vinculación</Badge>
+                    <span className="text-muted-foreground">Tarea independiente</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="md:col-span-2">
+                <Label>Título</Label>
+                <Input value={taskForm.title} onChange={e => setTaskForm(f => ({
+                  ...f,
+                  title: e.target.value
+                }))} required />
+              </div>
+              <div>
+                <Label>Personas</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between"
+                    >
+                      {taskForm.personIds.length === 0 
+                        ? "Sin asignar" 
+                        : `${taskForm.personIds.length} persona${taskForm.personIds.length > 1 ? 's' : ''} seleccionada${taskForm.personIds.length > 1 ? 's' : ''}`
+                      }
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[200px] p-0">
+                    <Command>
+                      <CommandList>
+                        <CommandEmpty>No se encontraron personas.</CommandEmpty>
+                        <CommandGroup>
+                          {people.map((person) => (
+                            <CommandItem
+                              key={person.id}
+                              value={person.id}
+                              onSelect={() => {
+                                setTaskForm(f => ({
+                                  ...f,
+                                  personIds: f.personIds.includes(person.id)
+                                    ? f.personIds.filter(id => id !== person.id)
+                                    : [...f.personIds, person.id]
+                                }));
+                              }}
+                            >
+                              <div className="flex items-center gap-2 flex-1">
+                                <div 
+                                  className="w-3 h-3 rounded-full" 
+                                  style={{ backgroundColor: person.color }}
+                                />
+                                <span>{person.name}</span>
+                              </div>
+                              <Checkbox 
+                                checked={taskForm.personIds.includes(person.id)}
+                                className="ml-auto"
+                              />
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div>
+                <Label>Estado</Label>
+                <Select value={taskForm.status} onValueChange={v => setTaskForm(f => ({
+                  ...f,
+                  status: v as TaskStatus
+                }))}>
+                  <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pendiente</SelectItem>
+                    <SelectItem value="in_progress">En curso</SelectItem>
+                    <SelectItem value="resolved">Resuelta</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="md:col-span-2">
+                <Label>Descripción</Label>
+                <Textarea value={taskForm.description} onChange={e => setTaskForm(f => ({
+                  ...f,
+                  description: e.target.value
+                }))} />
+              </div>
+              
+              <div className="md:col-span-2 flex gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setCreationMode('select');
+                    setTaskForm({
+                      title: '',
+                      description: '',
+                      personIds: [],
+                      incidentId: '',
+                      status: 'pending'
+                    });
+                  }}
+                >
+                  Volver
+                </Button>
+                <Button type="submit" disabled={!dailyId} className="flex-1">Crear</Button>
+              </div>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 
