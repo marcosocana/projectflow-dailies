@@ -15,13 +15,30 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 import { es } from 'date-fns/locale';
 import type { TablesInsert } from '@/integrations/supabase/types';
-import { Trash2, Eye, Pencil, RefreshCcw, List, ChevronUp, ChevronDown } from 'lucide-react';
+import { Trash2, Eye, Pencil, RefreshCcw, List, ChevronUp, ChevronDown, GripVertical } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 type TaskStatus = 'pending' | 'in_progress' | 'resolved';
 interface DailiesModuleProps {
   projectId: string;
@@ -143,10 +160,9 @@ export default function DailiesModule({
     const {
       data,
       error
-    } = await supabase.from('daily_tasks').select('tasks(*)').eq('daily_id', id);
+    } = await supabase.from('daily_tasks').select('task_id, order_position, tasks(*)').eq('daily_id', id).order('order_position', { ascending: true });
     if (!error) {
       const list = (data || []).map((r: any) => r.tasks).filter(Boolean);
-      list.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       setTasks(list);
     }
   };
@@ -217,10 +233,24 @@ export default function DailiesModule({
       description: 'No se pudo crear la tarea',
       variant: 'destructive'
     });
-    // Map task to current daily
+    
+    // Get the current max order_position for this daily
+    const { data: existingTasks } = await supabase
+      .from('daily_tasks')
+      .select('order_position')
+      .eq('daily_id', dailyId)
+      .order('order_position', { ascending: false })
+      .limit(1);
+    
+    const nextPosition = existingTasks && existingTasks.length > 0 
+      ? (existingTasks[0].order_position || 0) + 1 
+      : 0;
+    
+    // Map task to current daily with order position
     await supabase.from('daily_tasks').upsert({
       daily_id: dailyId,
-      task_id: created.id
+      task_id: created.id,
+      order_position: nextPosition
     } as any, {
       onConflict: 'daily_id,task_id'
     } as any);
@@ -313,9 +343,26 @@ export default function DailiesModule({
       if (existingErr) throw existingErr;
 
       const existingIds = (existingLinks || []).map((r: any) => r.task_id);
+      
+      // Get current max order_position for today
+      const { data: maxOrderData } = await supabase
+        .from('daily_tasks')
+        .select('order_position')
+        .eq('daily_id', todayId)
+        .order('order_position', { ascending: false })
+        .limit(1);
+      
+      const startPosition = maxOrderData && maxOrderData.length > 0 
+        ? (maxOrderData[0].order_position || 0) + 1 
+        : 0;
+      
       const rows = selectedTasksForPersist
         .filter((taskId) => !existingIds.includes(taskId))
-        .map((taskId) => ({ daily_id: todayId, task_id: taskId }));
+        .map((taskId, index) => ({ 
+          daily_id: todayId, 
+          task_id: taskId,
+          order_position: startPosition + index
+        }));
 
       if (rows.length) {
         const { error: insertErr } = await supabase.from('daily_tasks').insert(rows as any);
@@ -449,6 +496,147 @@ export default function DailiesModule({
       </div>
     </TableHead>
   );
+
+  // Drag and drop functionality
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id || !dailyId) return;
+
+    const oldIndex = tasks.findIndex((t) => t.id === active.id);
+    const newIndex = tasks.findIndex((t) => t.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    // Update local state immediately for smooth UX
+    const newTasks = arrayMove(tasks, oldIndex, newIndex);
+    setTasks(newTasks);
+
+    // Update order_position in database
+    try {
+      const updates = newTasks.map((task, index) => ({
+        daily_id: dailyId,
+        task_id: task.id,
+        order_position: index,
+      }));
+
+      const { error } = await supabase
+        .from('daily_tasks')
+        .upsert(updates, { onConflict: 'daily_id,task_id' });
+
+      if (error) {
+        toast({
+          title: 'Error',
+          description: 'No se pudo actualizar el orden',
+          variant: 'destructive',
+        });
+        // Reload tasks to restore correct order
+        loadTasks(date);
+      }
+    } catch (e) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo actualizar el orden',
+        variant: 'destructive',
+      });
+      loadTasks(date);
+    }
+  };
+
+  // Sortable task row component
+  interface SortableTaskRowProps {
+    task: any;
+    person: any;
+    incident: any;
+  }
+
+  const SortableTaskRow = ({ task, person, incident }: SortableTaskRowProps) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: task.id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <TableRow ref={setNodeRef} style={style} className={isDragging ? 'relative z-50' : ''}>
+        <TableCell className="w-8">
+          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
+        </TableCell>
+        <TableCell>
+          <Badge 
+            variant="outline"
+            className={
+              task.status === 'in_progress' 
+                ? 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent'
+                : task.status === 'resolved' 
+                ? 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent'
+                : 'bg-muted text-muted-foreground border-transparent'
+            }
+          >
+            {task.status === 'in_progress' ? 'En curso' : task.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
+          </Badge>
+        </TableCell>
+        <TableCell>
+          <div className="font-medium">{task.title}</div>
+          {typeof task.description === 'string' && (
+            <div className="text-xs text-muted-foreground">
+              {task.description.length > 70 ? `${task.description.slice(0, 70)}...` : task.description}
+            </div>
+          )}
+        </TableCell>
+        <TableCell>
+          {person ? (
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 rounded" style={{ backgroundColor: person.color }} />
+              {person.name}
+            </div>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </TableCell>
+        <TableCell>
+          {incident ? (
+            <Button variant="link" className="px-0" onClick={() => openIncidentDetails(incident.id)}>
+              {getTicketCode(incident)}
+            </Button>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </TableCell>
+        <TableCell className="flex gap-1">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => openDetails(task)} 
+            aria-label="Ver"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => deleteTask(task.id)} aria-label="Eliminar">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </TableCell>
+      </TableRow>
+    );
+  };
   const loadTaskComments = async (taskId: string) => {
     const {
       data
@@ -594,88 +782,50 @@ export default function DailiesModule({
 
             {/* Tasks List */}
             <div className="md:col-span-2">
-              <Table className="mt-0">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Tarea</TableHead>
-                    <TableHead>Persona</TableHead>
-                    <TableHead>Incidencia</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tasks.map((t) => {
-                    const person = people.find((p) => p.id === t.person_id);
-                    const inc = incidents.find((i) => i.id === t.incident_id);
-                    return (
-                      <TableRow key={t.id}>
-                         <TableCell>
-                           <Badge 
-                             variant="outline"
-                             className={
-                               t.status === 'in_progress' 
-                                 ? 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent'
-                                 : t.status === 'resolved' 
-                                 ? 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent'
-                                 : 'bg-muted text-muted-foreground border-transparent'
-                             }
-                           >
-                             {t.status === 'in_progress' ? 'En curso' : t.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
-                           </Badge>
-                         </TableCell>
-                         <TableCell>
-                           <div className="font-medium">{t.title}</div>
-                            {typeof t.description === 'string' && (
-                              <div className="text-xs text-muted-foreground">
-                                {t.description.length > 70 ? `${t.description.slice(0, 70)}...` : t.description}
-                              </div>
-                           )}
-                         </TableCell>
-                        <TableCell>
-                          {person ? (
-                            <div className="flex items-center gap-2">
-                              <span className="h-3 w-3 rounded" style={{ backgroundColor: person.color }} />
-                              {person.name}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                          <TableCell>
-                            {inc ? (
-                              <Button variant="link" className="px-0" onClick={() => openIncidentDetails(inc.id)}>
-                                {getTicketCode(inc)}
-                              </Button>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
-                         <TableCell className="flex gap-1">
-                           <Button 
-                             variant="ghost" 
-                             size="icon" 
-                             onClick={() => openDetails(t)} 
-                             aria-label="Ver"
-                           >
-                             <Eye className="h-4 w-4" />
-                           </Button>
-                           <Button variant="ghost" size="icon" onClick={() => deleteTask(t.id)} aria-label="Eliminar">
-                             <Trash2 className="h-4 w-4" />
-                           </Button>
-                         </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {tasks.length === 0 && (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <Table className="mt-0">
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        Sin tareas para este día
-                      </TableCell>
+                      <TableHead className="w-8"></TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Tarea</TableHead>
+                      <TableHead>Persona</TableHead>
+                      <TableHead>Incidencia</TableHead>
+                      <TableHead></TableHead>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    <SortableContext
+                      items={tasks.map(t => t.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {tasks.map((t) => {
+                        const person = people.find((p) => p.id === t.person_id);
+                        const inc = incidents.find((i) => i.id === t.incident_id);
+                        return (
+                          <SortableTaskRow 
+                            key={t.id}
+                            task={t}
+                            person={person}
+                            incident={inc}
+                          />
+                        );
+                      })}
+                    </SortableContext>
+                    {tasks.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground">
+                          Sin tareas para este día
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </DndContext>
             </div>
           </div>
         </CardContent>

@@ -89,16 +89,19 @@ export type Database = {
         Row: {
           created_at: string
           daily_id: string
+          order_position: number | null
           task_id: string
         }
         Insert: {
           created_at?: string
           daily_id: string
+          order_position?: number | null
           task_id: string
         }
         Update: {
           created_at?: string
           daily_id?: string
+          order_position?: number | null
           task_id?: string
         }
         Relationships: [
