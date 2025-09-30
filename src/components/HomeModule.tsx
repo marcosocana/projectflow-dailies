@@ -5,7 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ProjectButton } from '@/components/ui/project-button';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, Calendar, CheckCircle2, Clock, List, Columns3, FileText, Filter, Check, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { AlertTriangle, Calendar, CheckCircle2, Clock, List, Columns3, FileText, Filter, Check, X, ArrowUpDown, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
+import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -24,12 +25,9 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { toast } from 'sonner';
 
 interface HomeModuleProps {
   projectId: string;
@@ -182,6 +180,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
         .from('incidents')
         .select('*')
         .eq('project_id', projectId)
+        .order('order_position', { ascending: true })
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -249,7 +248,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
     loadNextVacation();
   }, [projectId]);
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEndPipeline = async (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (!over) return;
@@ -297,6 +296,45 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
           inc.id === activeId ? { ...inc, status: activeIncident.status } : inc
         )
       );
+    }
+  };
+
+  const handleDragEndList = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = filteredIncidents.findIndex((inc) => inc.id === active.id);
+    const newIndex = filteredIncidents.findIndex((inc) => inc.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    // Update local state immediately for smooth UX
+    const newIncidents = arrayMove(filteredIncidents, oldIndex, newIndex);
+    setIncidents(newIncidents);
+
+    // Update order_position in database
+    try {
+      const updates = newIncidents.map((incident, index) => ({
+        id: incident.id,
+        order_position: index,
+      }));
+
+      for (const update of updates) {
+        const { error } = await supabase
+          .from('incidents')
+          .update({ order_position: update.order_position })
+          .eq('id', update.id);
+
+        if (error) throw error;
+      }
+
+      toast.success('Orden actualizado correctamente');
+    } catch (error) {
+      console.error('Error updating incident order:', error);
+      toast.error('Error al actualizar el orden');
+      // Reload incidents to restore correct order
+      loadIncidents();
     }
   };
 
@@ -610,6 +648,74 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
     );
   };
 
+  interface SortableIncidentRowProps {
+    incident: Incident;
+    assignedPerson: Person | undefined;
+  }
+
+  const SortableIncidentRow = ({ incident, assignedPerson }: SortableIncidentRowProps) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: incident.id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <TableRow ref={setNodeRef} style={style} className={isDragging ? 'relative z-50' : ''}>
+        <TableCell className="w-8">
+          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
+        </TableCell>
+        <TableCell className="font-medium">#{incident.incident_number}</TableCell>
+        <TableCell>{incident.name}</TableCell>
+        <TableCell>
+          <Badge className={`${getStatusColor(incident.status)}`}>
+            {getStatusLabel(incident.status)}
+          </Badge>
+        </TableCell>
+        <TableCell>
+          <div className="flex items-center gap-1">
+            {getCategoryIcon(incident.category)}
+            <span className="capitalize">{incident.category === 'incident' ? 'Incidencia' : 'Mejora'}</span>
+          </div>
+        </TableCell>
+        <TableCell>
+          {assignedPerson ? (
+            <div 
+              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-medium"
+              style={{ backgroundColor: assignedPerson.color }}
+              title={assignedPerson.name}
+            >
+              {getInitials(assignedPerson.name)}
+            </div>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </TableCell>
+        <TableCell>{new Date(incident.occurred_at).toLocaleDateString()}</TableCell>
+        <TableCell>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => openIncidentDetail(incident.id)}
+          >
+            Ver detalle
+          </Button>
+        </TableCell>
+      </TableRow>
+    );
+  };
+
   const renderListView = () => (
     <Card>
       <CardHeader>
@@ -664,64 +770,43 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
             </div>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Número</TableHead>
-                <TableHead>Nombre</TableHead>
-                <SortableHeader field="status">Estado</SortableHeader>
-                <SortableHeader field="category">Categoría</SortableHeader>
-                <SortableHeader field="assigned_to">Asignado a</SortableHeader>
-                <SortableHeader field="date">Fecha</SortableHeader>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredIncidents.map((incident) => {
-                const assignedPerson = people.find(p => p.id === incident.assigned_to);
-                return (
-                  <TableRow key={incident.id}>
-                    <TableCell className="font-medium">#{incident.incident_number}</TableCell>
-                    <TableCell>{incident.name}</TableCell>
-                    <TableCell>
-                      <Badge className={`${getStatusColor(incident.status)}`}>
-                        {getStatusLabel(incident.status)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {getCategoryIcon(incident.category)}
-                        <span className="capitalize">{incident.category === 'incident' ? 'Incidencia' : 'Mejora'}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {assignedPerson ? (
-                        <div 
-                          className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-medium"
-                          style={{ backgroundColor: assignedPerson.color }}
-                          title={assignedPerson.name}
-                        >
-                          {getInitials(assignedPerson.name)}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{new Date(incident.occurred_at).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => openIncidentDetail(incident.id)}
-                      >
-                        Ver detalle
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <DndContext 
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEndList}
+          >
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8"></TableHead>
+                  <TableHead>Número</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <SortableHeader field="status">Estado</SortableHeader>
+                  <SortableHeader field="category">Categoría</SortableHeader>
+                  <SortableHeader field="assigned_to">Asignado a</SortableHeader>
+                  <SortableHeader field="date">Fecha</SortableHeader>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <SortableContext
+                  items={filteredIncidents.map(inc => inc.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {filteredIncidents.map((incident) => {
+                    const assignedPerson = people.find(p => p.id === incident.assigned_to);
+                    return (
+                      <SortableIncidentRow
+                        key={incident.id}
+                        incident={incident}
+                        assignedPerson={assignedPerson}
+                      />
+                    );
+                  })}
+                </SortableContext>
+              </TableBody>
+            </Table>
+          </DndContext>
         )}
       </CardContent>
     </Card>
@@ -744,7 +829,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
           <DndContext 
             sensors={sensors}
             collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
+            onDragEnd={handleDragEndPipeline}
           >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {(['pending', 'in_progress', 'resolved'] as IncidentStatus[]).map((status) => (

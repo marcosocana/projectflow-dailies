@@ -172,6 +172,7 @@ export type Database = {
           incident_number: number
           name: string
           occurred_at: string
+          order_position: number | null
           project_id: string
           status: Database["public"]["Enums"]["incident_status"]
           updated_at: string
@@ -191,6 +192,7 @@ export type Database = {
           incident_number?: number
           name: string
           occurred_at?: string
+          order_position?: number | null
           project_id: string
           status?: Database["public"]["Enums"]["incident_status"]
           updated_at?: string
@@ -210,6 +212,7 @@ export type Database = {
           incident_number?: number
           name?: string
           occurred_at?: string
+          order_position?: number | null
           project_id?: string
           status?: Database["public"]["Enums"]["incident_status"]
           updated_at?: string
