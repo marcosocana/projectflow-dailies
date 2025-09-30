@@ -172,6 +172,7 @@ export type Database = {
           incident_number: number
           name: string
           occurred_at: string
+          order_position: number | null
           project_id: string
           status: Database["public"]["Enums"]["incident_status"]
           updated_at: string
@@ -191,6 +192,7 @@ export type Database = {
           incident_number?: number
           name: string
           occurred_at?: string
+          order_position?: number | null
           project_id: string
           status?: Database["public"]["Enums"]["incident_status"]
           updated_at?: string
@@ -210,6 +212,7 @@ export type Database = {
           incident_number?: number
           name?: string
           occurred_at?: string
+          order_position?: number | null
           project_id?: string
           status?: Database["public"]["Enums"]["incident_status"]
           updated_at?: string
@@ -606,6 +609,7 @@ export type Database = {
           description: string | null
           id: string
           incident_id: string | null
+          is_auto_linked: boolean | null
           is_completed: boolean
           person_id: string | null
           project_id: string
@@ -620,6 +624,7 @@ export type Database = {
           description?: string | null
           id?: string
           incident_id?: string | null
+          is_auto_linked?: boolean | null
           is_completed?: boolean
           person_id?: string | null
           project_id: string
@@ -634,6 +639,7 @@ export type Database = {
           description?: string | null
           id?: string
           incident_id?: string | null
+          is_auto_linked?: boolean | null
           is_completed?: boolean
           person_id?: string | null
           project_id?: string

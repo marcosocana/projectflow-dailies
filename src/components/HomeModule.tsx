@@ -283,6 +283,16 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
 
       if (error) throw error;
       
+      // Sync auto-linked tasks with the new status (map incident status to task status)
+      const taskStatus = newStatus === 'closed' ? 'resolved' : 
+                        newStatus === 'in_qa' ? 'in_progress' : 
+                        newStatus;
+      await supabase
+        .from('tasks')
+        .update({ status: taskStatus })
+        .eq('incident_id', activeId)
+        .eq('is_auto_linked', true);
+      
       toast.success('Estado actualizado correctamente');
     } catch (error) {
       console.error('Error updating incident:', error);

@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 import { es } from 'date-fns/locale';
 import type { TablesInsert } from '@/integrations/supabase/types';
-import { Trash2, Eye, Pencil, RefreshCcw, List, ChevronUp, ChevronDown, GripVertical } from 'lucide-react';
+import { Trash2, Eye, Pencil, RefreshCcw, List, ChevronUp, ChevronDown, GripVertical, Link } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -131,6 +131,7 @@ export default function DailiesModule({
   
   // New state for task creation mode
   const [creationMode, setCreationMode] = useState<'select' | 'linked' | 'manual'>('select');
+  const [incidentSearchQuery, setIncidentSearchQuery] = useState('');
   const loadBaseData = async () => {
     const [{
       data: ppl
@@ -255,7 +256,8 @@ export default function DailiesModule({
       daily_id: dailyId,
       person_id: taskForm.personIds.length > 0 ? taskForm.personIds[0] : null,
       incident_id: taskForm.incidentId || null,
-      status: taskForm.status ?? 'pending'
+      status: taskForm.status ?? 'pending',
+      is_auto_linked: creationMode === 'linked' // Set to true only for automatically linked tasks
     };
     const {
       data: created,
@@ -267,8 +269,8 @@ export default function DailiesModule({
       variant: 'destructive'
     });
     
-    // If linked to incident, sync status
-    if (taskForm.incidentId) {
+    // If automatically linked to incident, sync status
+    if (taskForm.incidentId && creationMode === 'linked') {
       await supabase
         .from('incidents')
         .update({ status: taskForm.status })
@@ -303,6 +305,7 @@ export default function DailiesModule({
       status: 'pending'
     });
     setCreationMode('select');
+    setIncidentSearchQuery('');
     setCreateTaskOpen(false);
     loadTasks(date);
     loadBaseData(); // Reload to get updated incident status
@@ -717,7 +720,8 @@ export default function DailiesModule({
         </TableCell>
         <TableCell>
           {incident ? (
-            <Button variant="link" className="px-0" onClick={() => openIncidentDetails(incident.id)}>
+            <Button variant="link" className="px-0 flex items-center gap-1" onClick={() => openIncidentDetails(incident.id)}>
+              {task.is_auto_linked && <Link className="h-3 w-3" />}
               {getTicketCode(incident)}
             </Button>
           ) : (
@@ -816,8 +820,8 @@ export default function DailiesModule({
         error
       } = await supabase.from('tasks').update(update).eq('id', selectedTask.id);
       if (!error) {
-        // If task is linked to incident and status changed, sync incident status
-        if (update.incident_id && update.status !== selectedTask.status) {
+        // If task is auto-linked to incident and status changed, sync incident status
+        if (selectedTask.is_auto_linked && update.incident_id && update.status !== selectedTask.status) {
           await supabase
             .from('incidents')
             .update({ status: update.status })
@@ -949,6 +953,7 @@ export default function DailiesModule({
         setCreateTaskOpen(open);
         if (!open) {
           setCreationMode('select');
+          setIncidentSearchQuery('');
           setTaskForm({
             title: '',
             description: '',
@@ -972,41 +977,68 @@ export default function DailiesModule({
             <div className="space-y-4">
               <div>
                 <Label>Vincular con incidencia existente</Label>
-                <ScrollArea className="h-[300px] border rounded-md p-4 mt-2">
+                <Input 
+                  placeholder="Buscar por número o nombre..."
+                  value={incidentSearchQuery}
+                  onChange={(e) => setIncidentSearchQuery(e.target.value)}
+                  className="mt-2 mb-2"
+                />
+                <ScrollArea className="h-[300px] border rounded-md p-3 mt-2">
                   <div className="space-y-2">
-                    {incidents.filter(i => i.status !== 'resolved').map(incident => (
-                      <Button
+                    {incidents
+                      .filter(i => i.status !== 'resolved')
+                      .filter(i => {
+                        if (!incidentSearchQuery.trim()) return true;
+                        const query = incidentSearchQuery.toLowerCase();
+                        const ticketCode = getTicketCode(i)?.toLowerCase() || '';
+                        const name = i.name?.toLowerCase() || '';
+                        return ticketCode.includes(query) || name.includes(query);
+                      })
+                      .map(incident => (
+                      <Card
                         key={incident.id}
-                        variant="outline"
-                        className="w-full justify-start h-auto py-3"
+                        className="cursor-pointer hover:bg-accent transition-colors p-3"
                         onClick={() => handleIncidentSelect(incident.id)}
                       >
-                        <div className="text-left flex-1">
-                          <div className="font-medium flex items-center gap-2">
-                            {getTicketCode(incident)} - {incident.name}
+                        <div className="space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm truncate">
+                                {getTicketCode(incident)}
+                              </div>
+                              <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                                {incident.name}
+                              </div>
+                            </div>
                             <Badge 
                               variant="outline"
-                              className={
+                              className={`text-xs whitespace-nowrap ${
                                 incident.status === 'in_progress' 
                                   ? 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent'
                                   : 'bg-muted text-muted-foreground border-transparent'
-                              }
+                              }`}
                             >
                               {incident.status === 'in_progress' ? 'En curso' : 'Pendiente'}
                             </Badge>
                           </div>
                           {incident.category && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {incident.category === 'incident' ? 'Incidencia' : 
-                               incident.category === 'improvement' ? 'Mejora' : 'Característica'}
+                            <div className="text-xs text-muted-foreground">
+                              {incident.category === 'incident' ? '🔴 Incidencia' : 
+                               incident.category === 'improvement' ? '🔵 Mejora' : 'Característica'}
                             </div>
                           )}
                         </div>
-                      </Button>
+                      </Card>
                     ))}
-                    {incidents.filter(i => i.status !== 'resolved').length === 0 && (
+                    {incidents.filter(i => i.status !== 'resolved').filter(i => {
+                      if (!incidentSearchQuery.trim()) return true;
+                      const query = incidentSearchQuery.toLowerCase();
+                      const ticketCode = getTicketCode(i)?.toLowerCase() || '';
+                      const name = i.name?.toLowerCase() || '';
+                      return ticketCode.includes(query) || name.includes(query);
+                    }).length === 0 && (
                       <div className="text-center text-muted-foreground py-8">
-                        No hay incidencias activas
+                        {incidentSearchQuery.trim() ? 'No se encontraron incidencias' : 'No hay incidencias activas'}
                       </div>
                     )}
                   </div>

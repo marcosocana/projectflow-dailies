@@ -524,6 +524,20 @@ export default function IncidentsModule({
           error
         } = await supabase.from('incidents').update(updatePayload).eq('id', id);
         if (error) throw error;
+        
+        // If status changed, sync auto-linked tasks
+        if (updatePayload.status && updatePayload.status !== incidents.find(i => i.id === id)?.status) {
+          // Map incident status to task status
+          const taskStatus = updatePayload.status === 'closed' ? 'resolved' : 
+                            updatePayload.status === 'in_qa' ? 'in_progress' : 
+                            updatePayload.status;
+          await supabase
+            .from('tasks')
+            .update({ status: taskStatus })
+            .eq('incident_id', id)
+            .eq('is_auto_linked', true);
+        }
+        
         toast({
           title: 'Incidencia actualizada',
           description: 'Cambios guardados'
@@ -680,6 +694,17 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
         updated_at: new Date().toISOString()
       }).eq('id', incidentId);
       if (error) throw error;
+      
+      // Sync auto-linked tasks with the new status (map incident status to task status)
+      const taskStatus = toStatus === 'closed' ? 'resolved' : 
+                        toStatus === 'in_qa' ? 'in_progress' : 
+                        toStatus;
+      await supabase
+        .from('tasks')
+        .update({ status: taskStatus })
+        .eq('incident_id', incidentId)
+        .eq('is_auto_linked', true);
+      
       toast({
         title: 'Estado actualizado',
         description: 'El estado se ha actualizado correctamente'
