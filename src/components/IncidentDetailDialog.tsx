@@ -210,6 +210,19 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         }
       }
       await supabase.from('incidents').update(payload).eq('id', selected.id);
+      
+      // Sync auto-linked tasks if status changed
+      if (payload.status !== selected.status) {
+        const taskStatus = payload.status === 'closed' ? 'resolved' : 
+                          payload.status === 'in_qa' ? 'in_progress' : 
+                          payload.status;
+        await supabase
+          .from('tasks')
+          .update({ status: taskStatus })
+          .eq('incident_id', selected.id)
+          .eq('is_auto_linked', true);
+      }
+      
       setSelected((prev: any) => (prev ? { ...prev, ...payload } : prev));
       onPatched?.(selected.id, payload);
     }, 500);

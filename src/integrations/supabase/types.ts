@@ -613,6 +613,7 @@ export type Database = {
           is_completed: boolean
           person_id: string | null
           project_id: string
+          related_ticket: string | null
           status: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at: string
@@ -628,6 +629,7 @@ export type Database = {
           is_completed?: boolean
           person_id?: string | null
           project_id: string
+          related_ticket?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at?: string
@@ -643,6 +645,7 @@ export type Database = {
           is_completed?: boolean
           person_id?: string | null
           project_id?: string
+          related_ticket?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           title?: string
           updated_at?: string

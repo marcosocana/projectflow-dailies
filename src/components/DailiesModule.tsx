@@ -121,12 +121,14 @@ export default function DailiesModule({
     personIds: string[];
     incidentId: string;
     status: TaskStatus;
+    relatedTicket: string;
   }>({
     title: '',
     description: '',
     personIds: [],
     incidentId: '',
-    status: 'pending'
+    status: 'pending',
+    relatedTicket: ''
   });
   
   // New state for task creation mode
@@ -229,7 +231,8 @@ export default function DailiesModule({
         description: incident.description || '',
         personIds: [],
         incidentId: incident.id,
-        status: incident.status === 'resolved' ? 'resolved' : incident.status === 'in_progress' ? 'in_progress' : 'pending'
+        status: incident.status === 'resolved' ? 'resolved' : incident.status === 'in_progress' ? 'in_progress' : 'pending',
+        relatedTicket: ''
       });
       setCreationMode('linked');
     }
@@ -241,7 +244,8 @@ export default function DailiesModule({
       description: '',
       personIds: [],
       incidentId: '',
-      status: 'pending'
+      status: 'pending',
+      relatedTicket: ''
     });
     setCreationMode('manual');
   };
@@ -257,7 +261,8 @@ export default function DailiesModule({
       person_id: taskForm.personIds.length > 0 ? taskForm.personIds[0] : null,
       incident_id: taskForm.incidentId || null,
       status: taskForm.status ?? 'pending',
-      is_auto_linked: creationMode === 'linked' // Set to true only for automatically linked tasks
+      is_auto_linked: creationMode === 'linked', // Set to true only for automatically linked tasks
+      related_ticket: creationMode === 'manual' ? taskForm.relatedTicket || null : null
     };
     const {
       data: created,
@@ -302,7 +307,8 @@ export default function DailiesModule({
       description: '',
       personIds: [],
       incidentId: '',
-      status: 'pending'
+      status: 'pending',
+      relatedTicket: ''
     });
     setCreationMode('select');
     setIncidentSearchQuery('');
@@ -724,6 +730,8 @@ export default function DailiesModule({
               {task.is_auto_linked && <Link className="h-3 w-3" />}
               {getTicketCode(incident)}
             </Button>
+          ) : task.related_ticket ? (
+            <span className="text-sm text-muted-foreground">{task.related_ticket}</span>
           ) : (
             <span className="text-muted-foreground">—</span>
           )}
@@ -959,7 +967,8 @@ export default function DailiesModule({
             description: '',
             personIds: [],
             incidentId: '',
-            status: 'pending'
+            status: 'pending',
+            relatedTicket: ''
           });
         }
       }}>
@@ -1093,6 +1102,23 @@ export default function DailiesModule({
                   title: e.target.value
                 }))} required />
               </div>
+              
+              {creationMode === 'manual' && (
+                <div className="md:col-span-2">
+                  <Label>Ticket relacionado</Label>
+                  <Input 
+                    placeholder="Ej: T0012" 
+                    value={taskForm.relatedTicket} 
+                    onChange={e => setTaskForm(f => ({
+                      ...f,
+                      relatedTicket: e.target.value
+                    }))} 
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Este ticket no estará vinculado ni sincronizado automáticamente
+                  </p>
+                </div>
+              )}
               <div>
                 <Label>Personas</Label>
                 <Popover>
@@ -1178,7 +1204,8 @@ export default function DailiesModule({
                       description: '',
                       personIds: [],
                       incidentId: '',
-                      status: 'pending'
+                      status: 'pending',
+                      relatedTicket: ''
                     });
                   }}
                 >
