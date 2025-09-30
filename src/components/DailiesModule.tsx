@@ -95,7 +95,7 @@ export default function DailiesModule({
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   
   // Sorting state for daily tasks
-  const [dailySortField, setDailySortField] = useState<'status' | 'person' | null>(null);
+  const [dailySortField, setDailySortField] = useState<'status' | 'person' | null>('person');
   const [dailySortDirection, setDailySortDirection] = useState<'asc' | 'desc'>('asc');
   
   // Sync when parent unlocks via modal
