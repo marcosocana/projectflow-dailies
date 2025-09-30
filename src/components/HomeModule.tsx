@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ProjectButton } from '@/components/ui/project-button';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, Calendar, CheckCircle2, Clock, List, Columns3, FileText, Filter, Check, X } from 'lucide-react';
+import { AlertTriangle, Calendar, CheckCircle2, Clock, List, Columns3, FileText, Filter, Check, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -159,6 +159,10 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
   // Incident detail state
   const [incidentDetailOpen, setIncidentDetailOpen] = useState(false);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  
+  // Sorting state for incidents
+  const [sortField, setSortField] = useState<'status' | 'category' | 'assigned_to' | 'date' | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -324,7 +328,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
       <CheckCircle2 className="h-4 w-4 text-blue-500" />;
   };
 
-  // Filter incidents based on selected filters
+  // Filter and sort incidents based on selected filters
   const filteredIncidents = useMemo(() => {
     let filtered = incidents;
 
@@ -346,8 +350,43 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
       );
     }
 
+    // Apply sorting
+    if (sortField) {
+      filtered = [...filtered].sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+
+        switch (sortField) {
+          case 'status':
+            aValue = a.status;
+            bValue = b.status;
+            break;
+          case 'category':
+            aValue = a.category;
+            bValue = b.category;
+            break;
+          case 'assigned_to':
+            const aPerson = people.find(p => p.id === a.assigned_to);
+            const bPerson = people.find(p => p.id === b.assigned_to);
+            aValue = aPerson?.name || '';
+            bValue = bPerson?.name || '';
+            break;
+          case 'date':
+            aValue = new Date(a.occurred_at).getTime();
+            bValue = new Date(b.occurred_at).getTime();
+            break;
+          default:
+            return 0;
+        }
+
+        if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
     return filtered;
-  }, [incidents, selectedStatuses, selectedCategories, selectedAssignees]);
+  }, [incidents, selectedStatuses, selectedCategories, selectedAssignees, sortField, sortDirection, people]);
 
   const incidentsByStatus = useMemo(() => {
     return {
@@ -532,6 +571,45 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
     );
   };
 
+  const SortableHeader = ({ 
+    field, 
+    children 
+  }: { 
+    field: 'status' | 'category' | 'assigned_to' | 'date'; 
+    children: React.ReactNode;
+  }) => {
+    const isActive = sortField === field;
+    
+    const handleClick = () => {
+      if (isActive) {
+        setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+      } else {
+        setSortField(field);
+        setSortDirection('asc');
+      }
+    };
+
+    return (
+      <TableHead 
+        onClick={handleClick}
+        className="cursor-pointer hover:bg-muted/50 select-none"
+      >
+        <div className="flex items-center gap-1">
+          {children}
+          {isActive ? (
+            sortDirection === 'asc' ? (
+              <ArrowUp className="h-3 w-3" />
+            ) : (
+              <ArrowDown className="h-3 w-3" />
+            )
+          ) : (
+            <ArrowUpDown className="h-3 w-3 opacity-50" />
+          )}
+        </div>
+      </TableHead>
+    );
+  };
+
   const renderListView = () => (
     <Card>
       <CardHeader>
@@ -591,10 +669,10 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
               <TableRow>
                 <TableHead>Número</TableHead>
                 <TableHead>Nombre</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Categoría</TableHead>
-                <TableHead>Asignado a</TableHead>
-                <TableHead>Fecha</TableHead>
+                <SortableHeader field="status">Estado</SortableHeader>
+                <SortableHeader field="category">Categoría</SortableHeader>
+                <SortableHeader field="assigned_to">Asignado a</SortableHeader>
+                <SortableHeader field="date">Fecha</SortableHeader>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
