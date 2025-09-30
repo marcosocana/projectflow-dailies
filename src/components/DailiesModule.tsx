@@ -93,6 +93,11 @@ export default function DailiesModule({
   // Sorting state
   const [sortField, setSortField] = useState<'status' | 'title' | 'person'>('status');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  
+  // Sorting state for daily tasks
+  const [dailySortField, setDailySortField] = useState<'status' | 'person' | null>(null);
+  const [dailySortDirection, setDailySortDirection] = useState<'asc' | 'desc'>('asc');
+  
   // Sync when parent unlocks via modal
   useEffect(() => {
     if (initiallyUnlocked) setUnlocked(true);
@@ -478,6 +483,66 @@ export default function DailiesModule({
     }
   };
 
+  const handleDailySort = (field: 'status' | 'person') => {
+    if (dailySortField === field) {
+      setDailySortDirection(dailySortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setDailySortField(field);
+      setDailySortDirection('asc');
+    }
+  };
+
+  // Sort daily tasks based on current sort settings
+  const sortedTasks = useMemo(() => {
+    if (!dailySortField) return tasks;
+
+    return [...tasks].sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (dailySortField) {
+        case 'status':
+          const statusOrder = { 'in_progress': 0, 'pending': 1, 'resolved': 2 };
+          aValue = statusOrder[a.status as keyof typeof statusOrder] ?? 3;
+          bValue = statusOrder[b.status as keyof typeof statusOrder] ?? 3;
+          break;
+        case 'person':
+          const aPerson = people.find(p => p.id === a.person_id);
+          const bPerson = people.find(p => p.id === b.person_id);
+          aValue = aPerson?.name?.toLowerCase() || 'z';
+          bValue = bPerson?.name?.toLowerCase() || 'z';
+          break;
+        default:
+          aValue = 0;
+          bValue = 0;
+      }
+
+      if (dailySortDirection === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      }
+    });
+  }, [tasks, dailySortField, dailySortDirection, people]);
+
+  const DailySortableHeader = ({ field, children }: { field: 'status' | 'person'; children: React.ReactNode }) => (
+    <TableHead 
+      className="cursor-pointer hover:bg-muted/50 select-none"
+      onClick={() => handleDailySort(field)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        <div className="flex flex-col">
+          <ChevronUp 
+            className={`h-3 w-3 ${dailySortField === field && dailySortDirection === 'asc' ? 'text-primary' : 'text-muted-foreground'}`} 
+          />
+          <ChevronDown 
+            className={`h-3 w-3 -mt-1 ${dailySortField === field && dailySortDirection === 'desc' ? 'text-primary' : 'text-muted-foreground'}`} 
+          />
+        </div>
+      </div>
+    </TableHead>
+  );
+
   const SortableHeader = ({ field, children }: { field: 'status' | 'title' | 'person'; children: React.ReactNode }) => (
     <TableHead 
       className="cursor-pointer hover:bg-muted/50 select-none"
@@ -510,13 +575,13 @@ export default function DailiesModule({
 
     if (!over || active.id === over.id || !dailyId) return;
 
-    const oldIndex = tasks.findIndex((t) => t.id === active.id);
-    const newIndex = tasks.findIndex((t) => t.id === over.id);
+    const oldIndex = sortedTasks.findIndex((t) => t.id === active.id);
+    const newIndex = sortedTasks.findIndex((t) => t.id === over.id);
 
     if (oldIndex === -1 || newIndex === -1) return;
 
     // Update local state immediately for smooth UX
-    const newTasks = arrayMove(tasks, oldIndex, newIndex);
+    const newTasks = arrayMove(sortedTasks, oldIndex, newIndex);
     setTasks(newTasks);
 
     // Update order_position in database
@@ -791,19 +856,19 @@ export default function DailiesModule({
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-8"></TableHead>
-                      <TableHead>Estado</TableHead>
+                      <DailySortableHeader field="status">Estado</DailySortableHeader>
                       <TableHead>Tarea</TableHead>
-                      <TableHead>Persona</TableHead>
+                      <DailySortableHeader field="person">Persona</DailySortableHeader>
                       <TableHead>Incidencia</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     <SortableContext
-                      items={tasks.map(t => t.id)}
+                      items={sortedTasks.map(t => t.id)}
                       strategy={verticalListSortingStrategy}
                     >
-                      {tasks.map((t) => {
+                      {sortedTasks.map((t) => {
                         const person = people.find((p) => p.id === t.person_id);
                         const inc = incidents.find((i) => i.id === t.incident_id);
                         return (
@@ -816,7 +881,7 @@ export default function DailiesModule({
                         );
                       })}
                     </SortableContext>
-                    {tasks.length === 0 && (
+                    {sortedTasks.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={6} className="text-center text-muted-foreground">
                           Sin tareas para este día
