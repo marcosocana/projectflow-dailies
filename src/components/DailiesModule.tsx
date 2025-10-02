@@ -1249,8 +1249,8 @@ export default function DailiesModule({
     }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <div className="flex items-center justify-between">
-              <DialogTitle>Detalle de tarea</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              Detalle de tarea
               {selectedTask && (
                 <Button 
                   variant="ghost" 
@@ -1264,15 +1264,22 @@ export default function DailiesModule({
                       'resolved': 'Resuelta'
                     };
                     
+                    const assignedPeople = people
+                      .filter(p => selectedTask.person_ids?.includes(p.id))
+                      .map(p => p.name)
+                      .join(', ');
+                    
                     const incident = incidents.find(i => i.id === selectedTask.incident_id);
                     const incidentInfo = incident 
-                      ? `\nIncidencia: T${String(incident.incident_number ?? 0).padStart(5, '0')} - ${incident.name}`
+                      ? `Incidencia: T${String(incident.incident_number ?? 0).padStart(5, '0')} - ${incident.name}`
                       : selectedTask.related_ticket 
-                      ? `\nTicket relacionado: ${selectedTask.related_ticket}`
-                      : '';
+                      ? `Ticket relacionado: ${selectedTask.related_ticket}`
+                      : 'Sin incidencia vinculada';
                     
                     const info = `Título: ${selectedTask.title || 'Sin título'}
-Estado: ${statusLabels[selectedTask.status as TaskStatus] || selectedTask.status}${incidentInfo}
+Estado: ${statusLabels[selectedTask.status as TaskStatus] || selectedTask.status}
+Asignación: ${assignedPeople || 'Sin asignar'}
+${incidentInfo}
 Descripción: ${selectedTask.description || 'Sin descripción'}`;
                     
                     navigator.clipboard.writeText(info).then(() => {
@@ -1287,7 +1294,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                   <Copy className="h-4 w-4" />
                 </Button>
               )}
-            </div>
+            </DialogTitle>
             <DialogDescription>Ver información completa y comentarios</DialogDescription>
           </DialogHeader>
 

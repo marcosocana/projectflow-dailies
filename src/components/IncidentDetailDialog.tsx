@@ -270,11 +270,16 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     const status = STATUS_OPTIONS.find(s => s.value === selected.status)?.label || selected.status;
     const category = CATEGORY_OPTIONS.find(c => c.value === selected.category)?.label || selected.category;
     
-    const info = `Fecha: ${new Date(selected.occurred_at).toLocaleDateString()}
-Plataforma: ${selected.device || 'N/A'}
+    const info = `ID: T${String(selected.incident_number ?? 0).padStart(5, '0')}
+Nombre: ${selected.name || 'Sin nombre'}
+Categoría: ${category}
+Estado: ${status}
+Fecha: ${new Date(selected.occurred_at).toLocaleDateString()}
 Entorno: ${selected.environment || 'N/A'}
-Versión: T${String(selected.incident_number ?? 0).padStart(5, '0')}
-Qué incluye: ${selected.description || 'Sin descripción'}`;
+Canal: ${selected.device || 'N/A'}
+Épica: ${selected.epic || 'N/A'}
+Descripción: ${selected.description || 'Sin descripción'}
+Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
 
     navigator.clipboard.writeText(info).then(() => {
       toast({ title: 'Información copiada', description: 'La información ha sido copiada al portapapeles' });
@@ -287,23 +292,19 @@ Qué incluye: ${selected.description || 'Sin descripción'}`;
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <DialogTitle>
-                {selected ? `Detalle T${String(selected.incident_number ?? 0).padStart(5, '0')}` : 'Detalle de incidencia'}
-              </DialogTitle>
-              {selected && (
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" onClick={handleCopyInfo} className="p-1" title="Copiar info">
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive p-1">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
+          <DialogTitle className="flex items-center gap-2">
+            {selected ? `Detalle T${String(selected.incident_number ?? 0).padStart(5, '0')}` : 'Detalle de incidencia'}
+            {selected && (
+              <>
+                <Button variant="ghost" size="sm" onClick={handleCopyInfo} className="p-1" title="Copiar info">
+                  <Copy className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive p-1 ml-auto">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+          </DialogTitle>
           <DialogDescription>
             {selected && (
               <div className="mt-2 text-sm space-y-1">
