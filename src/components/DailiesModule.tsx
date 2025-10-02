@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 import { es } from 'date-fns/locale';
 import type { TablesInsert } from '@/integrations/supabase/types';
-import { Trash2, Eye, Pencil, RefreshCcw, List, ChevronUp, ChevronDown, GripVertical, Link } from 'lucide-react';
+import { Trash2, Eye, Pencil, RefreshCcw, List, ChevronUp, ChevronDown, GripVertical, Link, Copy } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -1249,7 +1249,45 @@ export default function DailiesModule({
     }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Detalle de tarea</DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle>Detalle de tarea</DialogTitle>
+              {selectedTask && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
+                    if (!selectedTask) return;
+                    
+                    const statusLabels = {
+                      'pending': 'Pendiente',
+                      'in_progress': 'En curso',
+                      'resolved': 'Resuelta'
+                    };
+                    
+                    const incident = incidents.find(i => i.id === selectedTask.incident_id);
+                    const incidentInfo = incident 
+                      ? `\nIncidencia: T${String(incident.incident_number ?? 0).padStart(5, '0')} - ${incident.name}`
+                      : selectedTask.related_ticket 
+                      ? `\nTicket relacionado: ${selectedTask.related_ticket}`
+                      : '';
+                    
+                    const info = `Título: ${selectedTask.title || 'Sin título'}
+Estado: ${statusLabels[selectedTask.status as TaskStatus] || selectedTask.status}${incidentInfo}
+Descripción: ${selectedTask.description || 'Sin descripción'}`;
+                    
+                    navigator.clipboard.writeText(info).then(() => {
+                      toast({ title: 'Información copiada', description: 'La información ha sido copiada al portapapeles' });
+                    }).catch(() => {
+                      toast({ title: 'Error', description: 'No se pudo copiar la información', variant: 'destructive' });
+                    });
+                  }} 
+                  className="p-1" 
+                  title="Copiar info"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
             <DialogDescription>Ver información completa y comentarios</DialogDescription>
           </DialogHeader>
 
