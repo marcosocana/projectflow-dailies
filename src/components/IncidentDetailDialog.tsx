@@ -299,7 +299,7 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                 <Button variant="ghost" size="sm" onClick={handleCopyInfo} className="p-1" title="Copiar info">
                   <Copy className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive p-1 ml-auto">
+                <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive p-1" title="Eliminar">
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </>

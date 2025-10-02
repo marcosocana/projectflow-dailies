@@ -1252,47 +1252,63 @@ export default function DailiesModule({
             <DialogTitle className="flex items-center gap-2">
               Detalle de tarea
               {selectedTask && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => {
-                    if (!selectedTask) return;
-                    
-                    const statusLabels = {
-                      'pending': 'Pendiente',
-                      'in_progress': 'En curso',
-                      'resolved': 'Resuelta'
-                    };
-                    
-                    const assignedPeople = people
-                      .filter(p => selectedTask.person_ids?.includes(p.id))
-                      .map(p => p.name)
-                      .join(', ');
-                    
-                    const incident = incidents.find(i => i.id === selectedTask.incident_id);
-                    const incidentInfo = incident 
-                      ? `Incidencia: T${String(incident.incident_number ?? 0).padStart(5, '0')} - ${incident.name}`
-                      : selectedTask.related_ticket 
-                      ? `Ticket relacionado: ${selectedTask.related_ticket}`
-                      : 'Sin incidencia vinculada';
-                    
-                    const info = `Título: ${selectedTask.title || 'Sin título'}
+                <>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => {
+                      if (!selectedTask) return;
+                      
+                      const statusLabels = {
+                        'pending': 'Pendiente',
+                        'in_progress': 'En curso',
+                        'resolved': 'Resuelta'
+                      };
+                      
+                      const assignedPeople = people
+                        .filter(p => selectedTask.person_ids?.includes(p.id))
+                        .map(p => p.name)
+                        .join(', ');
+                      
+                      const incident = incidents.find(i => i.id === selectedTask.incident_id);
+                      const incidentInfo = incident 
+                        ? `Incidencia: T${String(incident.incident_number ?? 0).padStart(5, '0')} - ${incident.name}`
+                        : selectedTask.related_ticket 
+                        ? `Ticket relacionado: ${selectedTask.related_ticket}`
+                        : 'Sin incidencia vinculada';
+                      
+                      const info = `Título: ${selectedTask.title || 'Sin título'}
 Estado: ${statusLabels[selectedTask.status as TaskStatus] || selectedTask.status}
-Asignación: ${assignedPeople || 'Sin asignar'}
 ${incidentInfo}
 Descripción: ${selectedTask.description || 'Sin descripción'}`;
-                    
-                    navigator.clipboard.writeText(info).then(() => {
-                      toast({ title: 'Información copiada', description: 'La información ha sido copiada al portapapeles' });
-                    }).catch(() => {
-                      toast({ title: 'Error', description: 'No se pudo copiar la información', variant: 'destructive' });
-                    });
-                  }} 
-                  className="p-1" 
-                  title="Copiar info"
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
+                      
+                      navigator.clipboard.writeText(info).then(() => {
+                        toast({ title: 'Información copiada', description: 'La información ha sido copiada al portapapeles' });
+                      }).catch(() => {
+                        toast({ title: 'Error', description: 'No se pudo copiar la información', variant: 'destructive' });
+                      });
+                    }} 
+                    className="p-1" 
+                    title="Copiar info"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => {
+                      if (!selectedTask) return;
+                      if (confirm('¿Estás seguro de que quieres eliminar esta tarea?')) {
+                        deleteTask(selectedTask.id);
+                        setDetailsOpen(false);
+                      }
+                    }} 
+                    className="text-destructive hover:text-destructive p-1"
+                    title="Eliminar"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
               )}
             </DialogTitle>
             <DialogDescription>Ver información completa y comentarios</DialogDescription>
