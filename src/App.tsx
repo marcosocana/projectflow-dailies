@@ -11,6 +11,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import AdminProjects from "./pages/AdminProjects";
 import ExternalIncident from "./pages/ExternalIncident";
+import ExternalTaskCreate from "./pages/ExternalTaskCreate";
 
 const queryClient = new QueryClient();
 
@@ -25,6 +26,7 @@ const AppContent = () => {
         <Route path="/*" element={<Index />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="/newincidence" element={<ExternalIncident />} />
+        <Route path="/newtask" element={<ExternalTaskCreate />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="/admin" element={<AdminProjects />} />
       </Routes>
