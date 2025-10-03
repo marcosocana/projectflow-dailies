@@ -23,12 +23,12 @@ const AppContent = () => {
   return (
     <>
       <Routes>
-        <Route path="/*" element={<Index />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="/newincidence" element={<ExternalIncident />} />
         <Route path="/newtask" element={<ExternalTaskCreate />} />
-        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="/admin" element={<AdminProjects />} />
+        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+        <Route path="/*" element={<Index />} />
       </Routes>
       <FloatingChatbot />
     </>
