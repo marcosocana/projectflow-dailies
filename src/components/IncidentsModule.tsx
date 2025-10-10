@@ -390,6 +390,39 @@ export default function IncidentsModule({
     fetchIncidents();
     fetchTeamMembers();
   }, [projectId]);
+
+  // Realtime updates for incidents list (keeps list in sync without reload)
+  useEffect(() => {
+    const channel = supabase
+      .channel(`incidents-realtime-${projectId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'incidents', filter: `project_id=eq.${projectId}` },
+        (payload: any) => {
+          if (payload.eventType === 'DELETE') {
+            const id = payload.old?.id;
+            if (id) {
+              setIncidents(prev => prev.filter(i => i.id !== id));
+            }
+            return;
+          }
+          const row = payload.new;
+          if (!row) return;
+          setIncidents(prev => {
+            const exists = prev.some(i => i.id === row.id);
+            if (exists) {
+              return prev.map(i => (i.id === row.id ? { ...i, ...row } : i));
+            }
+            return [row, ...prev];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [projectId]);
   const fetchTeamMembers = async () => {
     try {
       const {

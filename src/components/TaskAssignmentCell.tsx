@@ -27,11 +27,11 @@ export default function TaskAssignmentCell({ taskId, teamMembers }: TaskAssignme
         .eq('incident_id', taskId);
 
       if (!error && data) {
+        const count = data.length;
         const members = data
           .map(a => teamMembers.find(m => m.id === a.assigned_to))
           .filter(Boolean) as Array<{ id: string; name: string; color: string }>;
-        
-        setAssignedCount(members.length);
+        setAssignedCount(count);
         setAssignedMembers(members);
       }
     };

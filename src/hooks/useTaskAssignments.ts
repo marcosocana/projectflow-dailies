@@ -39,6 +39,18 @@ export const useTaskAssignments = (taskId: string | null) => {
 
   useEffect(() => {
     fetchAssignments();
+    if (!taskId) return;
+    const channel = supabase
+      .channel(`incident-assignments-${taskId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'incident_assignments', filter: `incident_id=eq.${taskId}` },
+        () => fetchAssignments()
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [taskId]);
 
   const addAssignment = async (assignedTo: string, status: IncidentStatus = 'pending') => {
