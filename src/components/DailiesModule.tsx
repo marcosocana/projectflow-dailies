@@ -1739,6 +1739,8 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
         incidentId={selectedIncidentId}
         onPatched={(id, payload) => {
           setIncidents(prev => prev.map(i => i.id === id ? { ...i, ...payload } : i));
+          // Reload daily tasks to reflect assignment/status sync immediately
+          loadTasks(date);
         }}
       />
     </div>);

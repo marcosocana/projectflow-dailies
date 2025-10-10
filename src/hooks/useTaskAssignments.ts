@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 
 type IncidentStatus = Database['public']['Enums']['incident_status'];
+// Map task_status for syncing with daily tasks
+type TaskStatus = Database['public']['Enums']['task_status'];
 
 export interface TaskAssignment {
   id: string;
@@ -78,12 +80,48 @@ export const useTaskAssignments = (taskId: string | null) => {
 
   const updateAssignmentStatus = async (assignmentId: string, status: IncidentStatus) => {
     try {
+      // 1) Actualizar el estado de la asignación
       const { error } = await supabase
         .from('incident_assignments')
         .update({ status: status })
         .eq('id', assignmentId);
 
       if (error) throw error;
+
+      // 2) Buscar la asignación para obtener incidencia y persona
+      const { data: assignmentRow } = await supabase
+        .from('incident_assignments')
+        .select('incident_id, assigned_to')
+        .eq('id', assignmentId)
+        .maybeSingle();
+
+      // 3) Sincronizar la tarea diaria vinculada (si existe) con el mismo usuario
+      if (assignmentRow?.incident_id && assignmentRow?.assigned_to) {
+        // Buscar la tarea diaria más reciente vinculada a la incidencia y a la misma persona
+        const { data: dailyTask } = await supabase
+          .from('tasks')
+          .select('id')
+          .eq('incident_id', assignmentRow.incident_id)
+          .eq('assigned_to', assignmentRow.assigned_to)
+          .not('daily_id', 'is', null)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (dailyTask?.id) {
+          // Map incident assignment status to task status (tasks do not support in_qa/closed)
+          const mapped: TaskStatus = status === 'closed' 
+            ? 'resolved' 
+            : status === 'in_qa' 
+              ? 'in_progress' 
+              : (status as TaskStatus);
+          await supabase
+            .from('tasks')
+            .update({ status: mapped })
+            .eq('id', dailyTask.id);
+        }
+      }
+
       await fetchAssignments();
     } catch (error) {
       console.error('Error updating assignment status:', error);
