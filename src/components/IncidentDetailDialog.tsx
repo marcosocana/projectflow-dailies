@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Trash2, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
+import { syncSingleAssignmentStatus } from '@/hooks/useSyncTaskStatus';
 
 // Options same as IncidentsModule to keep UI identical
 const STATUS_OPTIONS = [
@@ -222,6 +223,9 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           .update({ status: taskStatus })
           .eq('incident_id', selected.id)
           .eq('is_auto_linked', true);
+        
+        // Si solo hay una asignación, sincronizar su estado con el de la tarea
+        await syncSingleAssignmentStatus(selected.id, payload.status);
       }
       
       setSelected((prev: any) => (prev ? { ...prev, ...payload } : prev));
@@ -380,6 +384,11 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                       const { data } = await supabase.from('incidents').select('*').eq('id', selected.id).single();
                       if (data) {
                         setSelected(data);
+                        // Actualizar también el formulario para reflejar el nuevo estado
+                        setDetailForm(prev => ({
+                          ...prev,
+                          status: data.status
+                        }));
                         onPatched?.(selected.id, data);
                       }
                     }

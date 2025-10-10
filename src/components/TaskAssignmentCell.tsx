@@ -37,6 +37,27 @@ export default function TaskAssignmentCell({ taskId, teamMembers }: TaskAssignme
     };
 
     fetchAssignments();
+
+    // Suscribirse a cambios en tiempo real
+    const channel = supabase
+      .channel(`assignments-${taskId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'incident_assignments',
+          filter: `incident_id=eq.${taskId}`
+        },
+        () => {
+          fetchAssignments();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [taskId, teamMembers]);
 
   if (assignedCount === 0) {

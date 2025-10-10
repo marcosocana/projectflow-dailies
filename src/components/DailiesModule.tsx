@@ -280,6 +280,30 @@ export default function DailiesModule({
         .from('incidents')
         .update({ status: taskForm.status })
         .eq('id', taskForm.incidentId);
+      
+      // Si hay una persona asignada, crear asignación en incident_assignments
+      if (taskForm.personIds.length > 0) {
+        const personId = taskForm.personIds[0];
+        
+        // Verificar si ya existe una asignación para esta persona
+        const { data: existingAssignment } = await supabase
+          .from('incident_assignments')
+          .select('id')
+          .eq('incident_id', taskForm.incidentId)
+          .eq('assigned_to', personId)
+          .maybeSingle();
+        
+        // Solo crear si no existe
+        if (!existingAssignment) {
+          await supabase
+            .from('incident_assignments')
+            .insert({
+              incident_id: taskForm.incidentId,
+              assigned_to: personId,
+              status: taskForm.status
+            });
+        }
+      }
     }
     
     // Get the current max order_position for this daily
@@ -855,6 +879,35 @@ export default function DailiesModule({
             .from('incidents')
             .update({ status: update.status })
             .eq('id', update.incident_id);
+          
+          // Si hay una persona asignada, sincronizar también su asignación
+          if (update.person_id) {
+            // Verificar si existe una asignación para esta persona
+            const { data: existingAssignment } = await supabase
+              .from('incident_assignments')
+              .select('id')
+              .eq('incident_id', update.incident_id)
+              .eq('assigned_to', update.person_id)
+              .maybeSingle();
+            
+            if (existingAssignment) {
+              // Actualizar el estado de la asignación existente
+              await supabase
+                .from('incident_assignments')
+                .update({ status: update.status })
+                .eq('id', existingAssignment.id);
+            } else {
+              // Crear una nueva asignación si no existe
+              await supabase
+                .from('incident_assignments')
+                .insert({
+                  incident_id: update.incident_id,
+                  assigned_to: update.person_id,
+                  status: update.status
+                });
+            }
+          }
+          
           loadBaseData(); // Reload incidents to reflect status change
         }
         
