@@ -1180,12 +1180,12 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
 
     {/* Crear/Editar incidencia */}
     <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{editingId ? 'Editar tarea' : 'Crear tarea'}</DialogTitle>
           <DialogDescription>Completa la información de la tarea</DialogDescription>
         </DialogHeader>
-        <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto pr-2">
           <div className="space-y-2">
             <Label>Nombre</Label>
             <Input value={form.name} onChange={e => setForm(f => ({
@@ -1363,7 +1363,10 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                 <TaskAssignmentsManager 
                   taskId={editingId} 
                   teamMembers={teamMembers}
-                  onAssignmentsChange={fetchIncidents}
+                  onAssignmentsChange={async () => {
+                    // Refrescar toda la lista de incidencias
+                    await fetchIncidents();
+                  }}
                 />
               </div>
             )}

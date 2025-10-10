@@ -291,7 +291,7 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {selected ? `Detalle T${String(selected.incident_number ?? 0).padStart(5, '0')}` : 'Detalle de incidencia'}
@@ -316,7 +316,7 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
           </DialogDescription>
         </DialogHeader>
         {selected && (
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto pr-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="md:col-span-2">
                 <Label>Nombre</Label>
@@ -374,9 +374,15 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                 <TaskAssignmentsManager 
                   taskId={selected?.id} 
                   teamMembers={teamMembers}
-                  onAssignmentsChange={() => {
-                    // Trigger refresh if needed
-                    onPatched?.(selected.id, {});
+                  onAssignmentsChange={async () => {
+                    // Refrescar datos de la tarea
+                    if (selected?.id) {
+                      const { data } = await supabase.from('incidents').select('*').eq('id', selected.id).single();
+                      if (data) {
+                        setSelected(data);
+                        onPatched?.(selected.id, data);
+                      }
+                    }
                   }}
                 />
               </div>
