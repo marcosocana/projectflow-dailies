@@ -50,6 +50,10 @@ export default function TaskAssignmentsManager({
     try {
       await addAssignment(selectedMember);
       setSelectedMember('');
+      
+      // Sincronizar el estado general de la tarea
+      await updateTaskStatusFromAssignments(taskId);
+      
       onAssignmentsChange?.();
     } catch (error) {
       console.error('Error adding assignment:', error);
@@ -59,6 +63,12 @@ export default function TaskAssignmentsManager({
   const handleRemoveAssignment = async (assignmentId: string) => {
     try {
       await removeAssignment(assignmentId);
+      
+      // Sincronizar el estado general de la tarea
+      if (taskId) {
+        await updateTaskStatusFromAssignments(taskId);
+      }
+      
       onAssignmentsChange?.();
     } catch (error) {
       console.error('Error removing assignment:', error);
