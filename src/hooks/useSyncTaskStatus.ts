@@ -9,8 +9,7 @@ type IncidentStatus = Database['public']['Enums']['incident_status'];
  * - Si hay 1 sola asignación: estado bidireccional (asignación ↔ tarea)
  * - Si hay más de 1 asignación:
  *   - Si al menos 1 está "En curso" → tarea "En curso" 
- *   - Si todos están "Resuelta" → tarea "Resuelta"
- *   - Si todos están "Pendiente" → tarea "Pendiente"
+ *   - Si todas tienen el mismo estado → tarea tiene ese estado
  */
 export const syncTaskStatus = async (taskId: string): Promise<IncidentStatus | null> => {
   try {
@@ -32,9 +31,13 @@ export const syncTaskStatus = async (taskId: string): Promise<IncidentStatus | n
     const hasInProgress = assignments.some(a => a.status === 'in_progress');
     if (hasInProgress) return 'in_progress';
 
-    const allResolved = assignments.every(a => a.status === 'resolved');
-    if (allResolved) return 'resolved';
+    // Verificar si todas las asignaciones tienen el mismo estado
+    const uniqueStatuses = [...new Set(assignments.map(a => a.status))];
+    if (uniqueStatuses.length === 1) {
+      return uniqueStatuses[0];
+    }
 
+    // Si hay estados mixtos (sin "in_progress"), mantener "pending"
     return 'pending';
   } catch (error) {
     console.error('Error syncing task status:', error);
