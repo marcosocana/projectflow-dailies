@@ -11,6 +11,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Plus, Loader2 } from 'lucide-react';
 import vecturaLogo from '@/assets/vectura-logo.png';
+import TaskAssignmentsInput, { type TaskAssignment } from '@/components/TaskAssignmentsInput';
+import type { Database } from '@/integrations/supabase/types';
+
+type IncidentStatus = Database['public']['Enums']['incident_status'];
 
 const ENV_OPTIONS = ['DEV', 'PRE', 'PRO', 'Otro', 'N/A'] as const;
 const DEVICE_OPTIONS = ['APP', 'Web', 'Otro', 'N/A'] as const;
@@ -41,9 +45,10 @@ export default function ExternalTaskCreate() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
-  const [marcosId, setMarcosId] = useState<string | null>(null);
   const [availableEpics, setAvailableEpics] = useState<string[]>([]);
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [assignments, setAssignments] = useState<TaskAssignment[]>([]);
   
   const [form, setForm] = useState({
     name: '',
@@ -75,19 +80,15 @@ export default function ExternalTaskCreate() {
         const currentProjectId = projects[0].id;
         setProjectId(currentProjectId);
 
-        // Buscar a "Marcos" en el equipo del proyecto
+        // Cargar miembros del equipo
         const { data: people, error: peopleError } = await supabase
           .from('people')
-          .select('id, name')
+          .select('*')
           .eq('project_id', currentProjectId)
-          .ilike('name', '%Marcos%')
-          .limit(1);
+          .order('name', { ascending: true });
 
         if (peopleError) throw peopleError;
-
-        if (people && people.length > 0) {
-          setMarcosId(people[0].id);
-        }
+        setTeamMembers(people || []);
 
         // Obtener épicas disponibles
         const { data: incidents, error: incidentsError } = await supabase
@@ -150,7 +151,7 @@ export default function ExternalTaskCreate() {
         status: form.status,
         category: form.category,
         project_id: projectId,
-        assigned_to: marcosId // Siempre asignado a Marcos
+        assigned_to: null
       };
 
       if (evidenceFile) {
@@ -164,9 +165,23 @@ export default function ExternalTaskCreate() {
 
       if (error) throw error;
 
+      // Create multiple assignments
+      if (assignments.length > 0) {
+        const assignmentsToInsert = assignments.map(a => ({
+          incident_id: id,
+          assigned_to: a.person,
+          status: a.status
+        }));
+        await supabase.from('incident_assignments').insert(assignmentsToInsert);
+        
+        // Sync overall task status based on assignments
+        const { updateTaskStatusFromAssignments } = await import('@/hooks/useSyncTaskStatus');
+        await updateTaskStatusFromAssignments(id);
+      }
+
       toast({
         title: 'Tarea creada',
-        description: `La tarea "${form.name}" se ha creado exitosamente y ha sido asignada a Marcos.`
+        description: `La tarea "${form.name}" se ha creado exitosamente.`
       });
 
       // Reset form
@@ -181,6 +196,7 @@ export default function ExternalTaskCreate() {
         category: 'incident'
       });
       setEvidenceFile(null);
+      setAssignments([]);
     } catch (error: any) {
       console.error('Error creating task:', error);
       toast({
@@ -323,12 +339,12 @@ export default function ExternalTaskCreate() {
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label>Asignado a</Label>
-                <Input 
-                  value="Marcos" 
-                  disabled 
-                  className="bg-muted"
+              <div className="space-y-2 md:col-span-2">
+                <Label>Personas asignadas (opcional)</Label>
+                <TaskAssignmentsInput 
+                  teamMembers={teamMembers}
+                  assignments={assignments}
+                  onAssignmentsChange={setAssignments}
                 />
               </div>
 
