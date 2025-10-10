@@ -7,7 +7,7 @@ import { useTaskAssignments } from '@/hooks/useTaskAssignments';
 import { updateTaskStatusFromAssignments } from '@/hooks/useSyncTaskStatus';
 import type { Database } from '@/integrations/supabase/types';
 
-type TaskStatus = Database['public']['Enums']['task_status'];
+type IncidentStatus = Database['public']['Enums']['incident_status'];
 
 interface TaskAssignmentsManagerProps {
   taskId: string | null;
@@ -15,16 +15,20 @@ interface TaskAssignmentsManagerProps {
   onAssignmentsChange?: () => void;
 }
 
-const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
+const STATUS_OPTIONS: Array<{ value: IncidentStatus; label: string }> = [
   { value: 'pending', label: 'Pendiente' },
   { value: 'in_progress', label: 'En curso' },
-  { value: 'resolved', label: 'Resuelta' }
+  { value: 'in_qa', label: 'En pruebas' },
+  { value: 'resolved', label: 'Resuelta' },
+  { value: 'closed', label: 'Cerrada' }
 ];
 
-const STATUS_COLORS: Record<TaskStatus, string> = {
+const STATUS_COLORS: Record<IncidentStatus, string> = {
   pending: 'bg-muted text-muted-foreground',
   in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
-  resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]'
+  in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]',
+  resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
+  closed: 'bg-destructive text-destructive-foreground'
 };
 
 export default function TaskAssignmentsManager({ 
@@ -61,7 +65,7 @@ export default function TaskAssignmentsManager({
     }
   };
 
-  const handleUpdateStatus = async (assignmentId: string, status: TaskStatus) => {
+  const handleUpdateStatus = async (assignmentId: string, status: IncidentStatus) => {
     try {
       await updateAssignmentStatus(assignmentId, status);
       
@@ -135,7 +139,7 @@ export default function TaskAssignmentsManager({
               
               <Select 
                 value={assignment.status} 
-                onValueChange={(value: TaskStatus) => handleUpdateStatus(assignment.id, value)}
+                onValueChange={(value: IncidentStatus) => handleUpdateStatus(assignment.id, value)}
               >
                 <SelectTrigger className="w-32">
                   <SelectValue />

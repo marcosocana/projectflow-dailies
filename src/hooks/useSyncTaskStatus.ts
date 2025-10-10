@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 
-type TaskStatus = Database['public']['Enums']['task_status'];
+type IncidentStatus = Database['public']['Enums']['incident_status'];
 
 /**
  * Sincroniza el estado de una tarea basándose en los estados de sus asignaciones
@@ -10,13 +10,13 @@ type TaskStatus = Database['public']['Enums']['task_status'];
  * - Si todos están "Resuelta" → tarea "Resuelta"
  * - Si todos están "Pendiente" → tarea "Pendiente"
  */
-export const syncTaskStatus = async (taskId: string): Promise<TaskStatus | null> => {
+export const syncTaskStatus = async (taskId: string): Promise<IncidentStatus | null> => {
   try {
     // Obtener todas las asignaciones
     const { data: assignments, error } = await supabase
-      .from('task_assignments')
+      .from('incident_assignments')
       .select('status')
-      .eq('task_id', taskId);
+      .eq('incident_id', taskId);
 
     if (error) throw error;
     if (!assignments || assignments.length === 0) return null;
@@ -42,15 +42,9 @@ export const updateTaskStatusFromAssignments = async (taskId: string): Promise<v
   const status = await syncTaskStatus(taskId);
   
   if (status) {
-    // Mapear task_status a incident_status
-    const incidentStatus = status === 'pending' ? 'pending' :
-                          status === 'in_progress' ? 'in_progress' :
-                          status === 'resolved' ? 'resolved' : 
-                          'pending';
-    
     await supabase
       .from('incidents')
-      .update({ status: incidentStatus as any })
+      .update({ status: status })
       .eq('id', taskId);
   }
 };

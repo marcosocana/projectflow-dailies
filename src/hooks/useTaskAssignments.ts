@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 
-type TaskStatus = Database['public']['Enums']['task_status'];
+type IncidentStatus = Database['public']['Enums']['incident_status'];
 
 export interface TaskAssignment {
   id: string;
-  task_id: string;
+  incident_id: string;
   assigned_to: string;
-  status: TaskStatus;
+  status: IncidentStatus;
   created_at: string;
   updated_at: string;
 }
@@ -23,9 +23,9 @@ export const useTaskAssignments = (taskId: string | null) => {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from('task_assignments')
+        .from('incident_assignments')
         .select('*')
-        .eq('task_id', taskId)
+        .eq('incident_id', taskId)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -41,16 +41,16 @@ export const useTaskAssignments = (taskId: string | null) => {
     fetchAssignments();
   }, [taskId]);
 
-  const addAssignment = async (assignedTo: string, status: TaskStatus = 'pending') => {
+  const addAssignment = async (assignedTo: string, status: IncidentStatus = 'pending') => {
     if (!taskId) return;
 
     try {
       const { data, error } = await supabase
-        .from('task_assignments')
+        .from('incident_assignments')
         .insert({
-          task_id: taskId,
+          incident_id: taskId,
           assigned_to: assignedTo,
-          status
+          status: status
         })
         .select()
         .single();
@@ -64,11 +64,11 @@ export const useTaskAssignments = (taskId: string | null) => {
     }
   };
 
-  const updateAssignmentStatus = async (assignmentId: string, status: TaskStatus) => {
+  const updateAssignmentStatus = async (assignmentId: string, status: IncidentStatus) => {
     try {
       const { error } = await supabase
-        .from('task_assignments')
-        .update({ status })
+        .from('incident_assignments')
+        .update({ status: status })
         .eq('id', assignmentId);
 
       if (error) throw error;
@@ -82,7 +82,7 @@ export const useTaskAssignments = (taskId: string | null) => {
   const removeAssignment = async (assignmentId: string) => {
     try {
       const { error } = await supabase
-        .from('task_assignments')
+        .from('incident_assignments')
         .delete()
         .eq('id', assignmentId);
 
@@ -95,7 +95,7 @@ export const useTaskAssignments = (taskId: string | null) => {
   };
 
   // Calcular el estado general de la tarea basado en los estados de las asignaciones
-  const getOverallStatus = (): TaskStatus => {
+  const getOverallStatus = (): IncidentStatus => {
     if (assignments.length === 0) return 'pending';
     
     const hasInProgress = assignments.some(a => a.status === 'in_progress');

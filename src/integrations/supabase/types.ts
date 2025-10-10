@@ -121,6 +121,41 @@ export type Database = {
           },
         ]
       }
+      incident_assignments: {
+        Row: {
+          assigned_to: string
+          created_at: string
+          id: string
+          incident_id: string
+          status: Database["public"]["Enums"]["incident_status"]
+          updated_at: string
+        }
+        Insert: {
+          assigned_to: string
+          created_at?: string
+          id?: string
+          incident_id: string
+          status?: Database["public"]["Enums"]["incident_status"]
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string
+          created_at?: string
+          id?: string
+          incident_id?: string
+          status?: Database["public"]["Enums"]["incident_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "incident_assignments_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "incidents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       incident_comments: {
         Row: {
           content: string
@@ -565,41 +600,6 @@ export type Database = {
           note_id?: string
         }
         Relationships: []
-      }
-      task_assignments: {
-        Row: {
-          assigned_to: string
-          created_at: string
-          id: string
-          status: Database["public"]["Enums"]["task_status"]
-          task_id: string
-          updated_at: string
-        }
-        Insert: {
-          assigned_to: string
-          created_at?: string
-          id?: string
-          status?: Database["public"]["Enums"]["task_status"]
-          task_id: string
-          updated_at?: string
-        }
-        Update: {
-          assigned_to?: string
-          created_at?: string
-          id?: string
-          status?: Database["public"]["Enums"]["task_status"]
-          task_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "task_assignments_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       task_comments: {
         Row: {

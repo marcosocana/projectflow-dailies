@@ -504,8 +504,8 @@ export default function IncidentsModule({
         
         // Create initial assignment if someone was assigned
         if (form.assignedTo !== 'unassigned') {
-          await supabase.from('task_assignments').insert({
-            task_id: id,
+          await supabase.from('incident_assignments').insert({
+            incident_id: id,
             assigned_to: form.assignedTo,
             status: form.status as any // Use the same status as the task
           });

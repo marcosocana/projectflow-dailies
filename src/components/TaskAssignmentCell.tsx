@@ -22,9 +22,9 @@ export default function TaskAssignmentCell({ taskId, teamMembers }: TaskAssignme
   useEffect(() => {
     const fetchAssignments = async () => {
       const { data, error } = await supabase
-        .from('task_assignments')
+        .from('incident_assignments')
         .select('assigned_to')
-        .eq('task_id', taskId);
+        .eq('incident_id', taskId);
 
       if (!error && data) {
         const members = data
