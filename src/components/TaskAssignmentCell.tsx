@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { Users } from 'lucide-react';
 
 interface TaskAssignmentCellProps {
   taskId: string;
@@ -83,10 +84,10 @@ export default function TaskAssignmentCell({ taskId, teamMembers }: TaskAssignme
   return (
     <div className="flex items-center justify-center">
       <div 
-        className="w-8 h-8 rounded-full flex items-center justify-center bg-primary text-primary-foreground text-xs font-bold border-2 border-background"
+        className="w-8 h-8 rounded-full flex items-center justify-center bg-white border-2 border-black"
         title={assignedMembers.map(m => m.name).join(', ')}
       >
-        {assignedCount}
+        <Users className="w-4 h-4 text-black" />
       </div>
     </div>
   );
