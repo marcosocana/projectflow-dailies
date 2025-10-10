@@ -261,6 +261,9 @@ export default function IncidentsModule({
   const [createOpen, setCreateOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] = useState<any | null>(null);
+  
+  // Estado para asignaciones múltiples durante creación
+  const [createAssignments, setCreateAssignments] = useState<Array<{person: string, status: IncidentStatus}>>([]);
   const importInputRef = useRef<HTMLInputElement>(null);
 
   // KPIs state
@@ -418,6 +421,7 @@ export default function IncidentsModule({
     });
     setEvidenceFile(null);
     setEditingId(null);
+    setCreateAssignments([]);
   };
 
   const AssigneeFilter = () => {
@@ -502,13 +506,18 @@ export default function IncidentsModule({
         } = await supabase.from('incidents').insert(insertPayload);
         if (error) throw error;
         
-        // Create initial assignment if someone was assigned
-        if (form.assignedTo !== 'unassigned') {
-          await supabase.from('incident_assignments').insert({
+        // Create multiple assignments
+        if (createAssignments.length > 0) {
+          const assignmentsToInsert = createAssignments.map(a => ({
             incident_id: id,
-            assigned_to: form.assignedTo,
-            status: form.status as any // Use the same status as the task
-          });
+            assigned_to: a.person,
+            status: a.status
+          }));
+          await supabase.from('incident_assignments').insert(assignmentsToInsert);
+          
+          // Sync overall task status based on assignments
+          const { updateTaskStatusFromAssignments } = await import('@/hooks/useSyncTaskStatus');
+          await updateTaskStatusFromAssignments(id);
         }
         
         toast({
@@ -1255,37 +1264,109 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                </SelectContent>
              </Select>
            </div>
-           {!editingId ? (
-             <div className="space-y-2">
-               <Label>Asignar a (opcional)</Label>
-               <Select value={form.assignedTo} onValueChange={v => setForm(f => ({
-                ...f,
-                assignedTo: v
-              }))}>
-                 <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Sin asignar</SelectItem>
-                   {teamMembers.map(member => (
-                     <SelectItem key={member.id} value={member.id}>
-                       <div className="flex items-center gap-2">
-                         <span className="w-3 h-3 rounded" style={{ backgroundColor: member.color }} />
-                         {member.name}
-                       </div>
-                     </SelectItem>
-                   ))}
-                 </SelectContent>
-               </Select>
-             </div>
-           ) : (
-             <div className="space-y-2 md:col-span-2">
-               <Label>Personas asignadas</Label>
-               <TaskAssignmentsManager 
-                 taskId={editingId} 
-                 teamMembers={teamMembers}
-                 onAssignmentsChange={fetchIncidents}
-               />
-             </div>
-           )}
+            {!editingId ? (
+              <div className="space-y-4 md:col-span-2">
+                <Label>Personas asignadas (opcional)</Label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Select 
+                      value="" 
+                      onValueChange={(personId) => {
+                        if (personId && !createAssignments.some(a => a.person === personId)) {
+                          setCreateAssignments(prev => [...prev, { person: personId, status: form.status as IncidentStatus }]);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Seleccionar persona..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {teamMembers
+                          .filter(member => !createAssignments.some(a => a.person === member.id))
+                          .map(member => (
+                            <SelectItem key={member.id} value={member.id}>
+                              <div className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: member.color }} />
+                                {member.name}
+                              </div>
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    {createAssignments.map((assignment, index) => {
+                      const member = teamMembers.find(m => m.id === assignment.person);
+                      if (!member) return null;
+
+                      return (
+                        <div key={index} className="flex items-center gap-3 p-3 border rounded-lg">
+                          <div 
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
+                            style={{ backgroundColor: member.color }}
+                            title={member.name}
+                          >
+                            {getInitials(member.name)}
+                          </div>
+                          
+                          <span className="flex-1 font-medium">{member.name}</span>
+                          
+                          <Select 
+                            value={assignment.status} 
+                            onValueChange={(value: IncidentStatus) => {
+                              setCreateAssignments(prev => prev.map((a, i) => 
+                                i === index ? { ...a, status: value } : a
+                              ));
+                            }}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STATUS_OPTIONS.map(opt => (
+                                <SelectItem key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+
+                          <Badge variant="outline" className={`${STATUS_BADGE_CLS[assignment.status]} border-transparent`}>
+                            {STATUS_OPTIONS.find(s => s.value === assignment.status)?.label}
+                          </Badge>
+
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => {
+                              setCreateAssignments(prev => prev.filter((_, i) => i !== index));
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+
+                    {createAssignments.length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No hay personas asignadas
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2 md:col-span-2">
+                <Label>Personas asignadas</Label>
+                <TaskAssignmentsManager 
+                  taskId={editingId} 
+                  teamMembers={teamMembers}
+                  onAssignmentsChange={fetchIncidents}
+                />
+              </div>
+            )}
            {editingId && (
              <div className="space-y-2">
                <Label>Creado por</Label>
