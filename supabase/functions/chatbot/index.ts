@@ -180,7 +180,7 @@ ${improvements.length > 0 ? improvements.map(incident => `
 `).join('\n') : 'No hay mejoras registradas'}
 
 TAREAS ADICIONALES:
-${tasks?.length > 0 ? tasks.map(task => {
+${(tasks && tasks.length > 0) ? tasks.map(task => {
   const assignedPerson = task.assigned_profile?.full_name || task.person?.name || 'Sin asignar';
   const taskType = task.incident_id ? 'Relacionada con incidencia' : 
                    task.daily_id ? 'Tarea diaria' : 'Tarea independiente';
@@ -296,8 +296,9 @@ Si no tienes información suficiente sobre algo específico, díselo al usuario.
 
   } catch (error) {
     console.error('Error in chatbot function:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Error interno del servidor';
     return new Response(JSON.stringify({ 
-      error: error.message || 'Error interno del servidor'
+      error: errorMessage
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
