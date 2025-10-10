@@ -102,7 +102,7 @@ export const useTaskAssignments = (taskId: string | null) => {
           .from('tasks')
           .select('id')
           .eq('incident_id', assignmentRow.incident_id)
-          .eq('assigned_to', assignmentRow.assigned_to)
+          .eq('person_id', assignmentRow.assigned_to)
           .not('daily_id', 'is', null)
           .order('updated_at', { ascending: false })
           .limit(1)
