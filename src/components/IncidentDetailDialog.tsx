@@ -11,6 +11,7 @@ import { Trash2, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 import { syncSingleAssignmentStatus } from '@/hooks/useSyncTaskStatus';
+import { useTaskAssignments } from '@/hooks/useTaskAssignments';
 
 // Options same as IncidentsModule to keep UI identical
 const STATUS_OPTIONS = [
@@ -54,6 +55,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
   const { user } = useAuth();
   const { getUrl } = useSignedUrl('project-files');
   const { toast } = useToast();
+  const { assignments } = useTaskAssignments(incidentId);
 
   const [selected, setSelected] = useState<any | null>(null);
   const [createdByEmail, setCreatedByEmail] = useState<string>('');
@@ -328,12 +330,21 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
               </div>
               <div>
                 <Label>Estado</Label>
-                <Select value={detailForm.status} onValueChange={(v) => setDetailForm((f) => ({ ...f, status: v }))}>
+                <Select 
+                  value={detailForm.status} 
+                  onValueChange={(v) => setDetailForm((f) => ({ ...f, status: v }))}
+                  disabled={assignments.length > 1}
+                >
                   <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
                   <SelectContent>
                     {STATUS_OPTIONS.map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
                   </SelectContent>
                 </Select>
+                {assignments.length > 1 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Estado calculado automáticamente según las asignaciones
+                  </p>
+                )}
               </div>
               <div>
                 <Label>Categoría</Label>
