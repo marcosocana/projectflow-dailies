@@ -24,6 +24,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import TaskAssignmentCell from '@/components/TaskAssignmentCell';
+import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 interface IncidentsModuleProps {
   projectId: string;
 }
@@ -499,6 +501,16 @@ export default function IncidentsModule({
           error
         } = await supabase.from('incidents').insert(insertPayload);
         if (error) throw error;
+        
+        // Create initial assignment if someone was assigned
+        if (form.assignedTo !== 'unassigned') {
+          await supabase.from('task_assignments').insert({
+            task_id: id,
+            assigned_to: form.assignedTo,
+            status: form.status as any // Use the same status as the task
+          });
+        }
+        
         toast({
           title: 'Incidencia creada',
           description: 'Se ha creado correctamente'
@@ -1054,19 +1066,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                       <TableCell>{new Date(i.occurred_at).toLocaleDateString('es-ES')}</TableCell>
                       <TableCell className="w-32"><StatusBadge status={i.status} /></TableCell>
                       <TableCell className="w-16">
-                        {assignedMember ? (
-                          <div className="flex items-center justify-center">
-                            <div 
-                              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
-                              style={{ backgroundColor: assignedMember.color }}
-                              title={assignedMember.name}
-                            >
-                              {getInitials(assignedMember.name)}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
+                        <TaskAssignmentCell taskId={i.id} teamMembers={teamMembers} />
                       </TableCell>
                       <TableCell className="w-24">
                         <div className="flex items-center gap-1">
@@ -1255,26 +1255,37 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                </SelectContent>
              </Select>
            </div>
-           <div className="space-y-2">
-             <Label>Asignar a</Label>
-             <Select value={form.assignedTo} onValueChange={v => setForm(f => ({
-              ...f,
-              assignedTo: v
-            }))}>
-               <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unassigned">Sin asignar</SelectItem>
-                 {teamMembers.map(member => (
-                   <SelectItem key={member.id} value={member.id}>
-                     <div className="flex items-center gap-2">
-                       <span className="w-3 h-3 rounded" style={{ backgroundColor: member.color }} />
-                       {member.name}
-                     </div>
-                   </SelectItem>
-                 ))}
-               </SelectContent>
-             </Select>
-           </div>
+           {!editingId ? (
+             <div className="space-y-2">
+               <Label>Asignar a (opcional)</Label>
+               <Select value={form.assignedTo} onValueChange={v => setForm(f => ({
+                ...f,
+                assignedTo: v
+              }))}>
+                 <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Sin asignar</SelectItem>
+                   {teamMembers.map(member => (
+                     <SelectItem key={member.id} value={member.id}>
+                       <div className="flex items-center gap-2">
+                         <span className="w-3 h-3 rounded" style={{ backgroundColor: member.color }} />
+                         {member.name}
+                       </div>
+                     </SelectItem>
+                   ))}
+                 </SelectContent>
+               </Select>
+             </div>
+           ) : (
+             <div className="space-y-2 md:col-span-2">
+               <Label>Personas asignadas</Label>
+               <TaskAssignmentsManager 
+                 taskId={editingId} 
+                 teamMembers={teamMembers}
+                 onAssignmentsChange={fetchIncidents}
+               />
+             </div>
+           )}
            {editingId && (
              <div className="space-y-2">
                <Label>Creado por</Label>

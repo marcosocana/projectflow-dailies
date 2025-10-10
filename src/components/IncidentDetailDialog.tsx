@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Trash2, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 
 // Options same as IncidentsModule to keep UI identical
 const STATUS_OPTIONS = [
@@ -368,22 +369,16 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Asignar a</Label>
-                <Select value={detailForm.assignedTo} onValueChange={(v) => setDetailForm((f) => ({ ...f, assignedTo: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Sin asignar</SelectItem>
-                    {teamMembers.map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 h-3 rounded" style={{ backgroundColor: member.color }} />
-                          {member.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="md:col-span-2">
+                <Label>Personas asignadas</Label>
+                <TaskAssignmentsManager 
+                  taskId={selected?.id} 
+                  teamMembers={teamMembers}
+                  onAssignmentsChange={() => {
+                    // Trigger refresh if needed
+                    onPatched?.(selected.id, {});
+                  }}
+                />
               </div>
               <div className="md:col-span-2">
                 <Label>Descripción</Label>
