@@ -12,8 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useVacations } from '@/hooks/useVacations';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { format, isWithinInterval, parseISO } from 'date-fns';
+import { Plus, Pencil, Trash2, Copy } from 'lucide-react';
+import { format, isWithinInterval, parseISO, addDays, eachDayOfInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 interface VacationsModuleProps {
@@ -47,6 +47,11 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
     startDate: new Date(),
     endDate: new Date(),
     description: ''
+  });
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
+  const [copyDateRange, setCopyDateRange] = useState({
+    startDate: new Date(),
+    endDate: addDays(new Date(), 7)
   });
 
   // Fetch people from dailies (members)
@@ -199,6 +204,44 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
     }
   };
 
+  const handleCopyInfo = () => {
+    try {
+      const days = eachDayOfInterval({
+        start: copyDateRange.startDate,
+        end: copyDateRange.endDate
+      });
+
+      let text = `Ausencias del ${format(copyDateRange.startDate, 'dd-MM-yyyy')} al ${format(copyDateRange.endDate, 'dd-MM-yyyy')}.\n\n`;
+
+      days.forEach(day => {
+        const dayVacs = getVacationsForDate(day);
+        if (dayVacs.length > 0) {
+          text += `Dia ${format(day, 'dd-MM-yyyy')}\n`;
+          dayVacs.forEach(vacation => {
+            const person = getPersonById(vacation.person_id || '');
+            if (person) {
+              text += `${person.name}\n`;
+            }
+          });
+          text += '\n';
+        }
+      });
+
+      navigator.clipboard.writeText(text);
+      toast({
+        title: 'Copiado',
+        description: 'La información de ausencias ha sido copiada al portapapeles'
+      });
+      setCopyDialogOpen(false);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo copiar la información',
+        variant: 'destructive'
+      });
+    }
+  };
+
   const dayVacations = getVacationsForDate(selectedDate);
 
   return (
@@ -208,6 +251,10 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
           <div className="flex items-center justify-between">
             <CardTitle>Gestión de ausencias</CardTitle>
             <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setCopyDialogOpen(true)}>
+                <Copy className="h-4 w-4 mr-2" />
+                Copiar info
+              </Button>
               <Button variant="secondary" onClick={handleDeleteAllVacations}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 Eliminar todas
@@ -444,6 +491,51 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
               <Button type="submit">Guardar cambios</Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Copy info dialog */}
+      <Dialog open={copyDialogOpen} onOpenChange={setCopyDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Copiar información de ausencias</DialogTitle>
+            <DialogDescription>
+              Selecciona el rango de fechas para copiar
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="copy-start">Fecha de Inicio</Label>
+                <Input
+                  type="date"
+                  value={format(copyDateRange.startDate, 'yyyy-MM-dd')}
+                  onChange={(e) => setCopyDateRange({ ...copyDateRange, startDate: new Date(e.target.value) })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="copy-end">Fecha de Fin</Label>
+                <Input
+                  type="date"
+                  value={format(copyDateRange.endDate, 'yyyy-MM-dd')}
+                  onChange={(e) => setCopyDateRange({ ...copyDateRange, endDate: new Date(e.target.value) })}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setCopyDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleCopyInfo}>
+                <Copy className="h-4 w-4 mr-2" />
+                Copiar
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
