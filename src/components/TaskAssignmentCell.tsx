@@ -28,11 +28,10 @@ export default function TaskAssignmentCell({ taskId, teamMembers }: TaskAssignme
         .eq('incident_id', taskId);
 
       if (!error && data) {
-        const count = data.length;
         const members = data
           .map(a => teamMembers.find(m => m.id === a.assigned_to))
           .filter(Boolean) as Array<{ id: string; name: string; color: string }>;
-        setAssignedCount(count);
+        setAssignedCount(members.length);
         setAssignedMembers(members);
       }
     };
@@ -67,6 +66,9 @@ export default function TaskAssignmentCell({ taskId, teamMembers }: TaskAssignme
 
   if (assignedCount === 1) {
     const member = assignedMembers[0];
+    if (!member) {
+      return <span className="text-muted-foreground">-</span>;
+    }
     return (
       <div className="flex items-center justify-center">
         <div 
