@@ -307,6 +307,39 @@ export type Database = {
           },
         ]
       }
+      monthly_metrics: {
+        Row: {
+          created_at: string
+          id: string
+          month: number
+          person_id: string
+          project_id: string
+          updated_at: string
+          value: number
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: number
+          person_id: string
+          project_id: string
+          updated_at?: string
+          value?: number
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: number
+          person_id?: string
+          project_id?: string
+          updated_at?: string
+          value?: number
+          year?: number
+        }
+        Relationships: []
+      }
       people: {
         Row: {
           color: string
