@@ -6,14 +6,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 
 interface MonthlyMetricsModuleProps {
   projectId: string;
 }
 
 const MONTHS = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+  'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
 ];
 
 export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModuleProps) {
@@ -110,7 +111,7 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Métricas Mensuales por Miembro</CardTitle>
+            <CardTitle>Imputaciones</CardTitle>
             <div className="w-[200px]">
               <Label htmlFor="year-select">Año</Label>
               <Select
@@ -171,10 +172,21 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
                           <TableCell key={month} className="p-2">
                             <Input
                               type="number"
-                              step="0.01"
+                              step="0.1"
+                              min="0"
                               value={getMetricValue(person.id, month)}
-                              onChange={(e) => updateMetric(person.id, month, e.target.value)}
-                              className="w-full text-center"
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === '' || parseFloat(value) >= 0) {
+                                  updateMetric(person.id, month, value);
+                                }
+                              }}
+                              className={cn(
+                                "w-full text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                                getMetricValue(person.id, month) === 0 
+                                  ? "bg-red-50 dark:bg-red-950/20" 
+                                  : "bg-green-50 dark:bg-green-950/20"
+                              )}
                               disabled={loading}
                             />
                           </TableCell>
