@@ -12,6 +12,11 @@ interface MonthlyMetricsModuleProps {
   projectId: string;
 }
 
+interface MetricValues {
+  corr: number;
+  ev: number;
+}
+
 const MONTHS = [
   'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
   'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
@@ -20,7 +25,7 @@ const MONTHS = [
 export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModuleProps) {
   const { toast } = useToast();
   const [people, setPeople] = useState<any[]>([]);
-  const [metrics, setMetrics] = useState<Record<string, number>>({});
+  const [metrics, setMetrics] = useState<Record<string, MetricValues>>({});
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [loading, setLoading] = useState(false);
 
@@ -45,10 +50,13 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
       .eq('year', selectedYear);
 
     if (!error && data) {
-      const metricsMap: Record<string, number> = {};
+      const metricsMap: Record<string, MetricValues> = {};
       data.forEach(metric => {
         const key = `${metric.person_id}-${metric.month}`;
-        metricsMap[key] = typeof metric.value === 'string' ? parseFloat(metric.value) : metric.value;
+        metricsMap[key] = {
+          corr: typeof metric.corr_value === 'string' ? parseFloat(metric.corr_value) : (metric.corr_value || 0),
+          ev: typeof metric.ev_value === 'string' ? parseFloat(metric.ev_value) : (metric.ev_value || 0)
+        };
       });
       setMetrics(metricsMap);
     }
@@ -65,12 +73,22 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
     }
   }, [selectedYear, people]);
 
-  const updateMetric = async (personId: string, month: number, value: string) => {
+  const updateMetric = async (personId: string, month: number, type: 'corr' | 'ev', value: string) => {
     const numericValue = value === '' ? 0 : parseFloat(value);
     const key = `${personId}-${month}`;
 
     // Update local state immediately
-    setMetrics(prev => ({ ...prev, [key]: numericValue }));
+    setMetrics(prev => ({
+      ...prev,
+      [key]: {
+        ...(prev[key] || { corr: 0, ev: 0 }),
+        [type]: numericValue
+      }
+    }));
+
+    // Get current values to preserve the other field
+    const currentMetrics = metrics[key] || { corr: 0, ev: 0 };
+    const updatedMetrics = { ...currentMetrics, [type]: numericValue };
 
     // Update or insert in database
     const { error } = await supabase
@@ -80,7 +98,8 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
         person_id: personId,
         year: selectedYear,
         month: month,
-        value: numericValue
+        corr_value: updatedMetrics.corr,
+        ev_value: updatedMetrics.ev
       }, {
         onConflict: 'project_id,person_id,year,month'
       });
@@ -96,9 +115,9 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
     }
   };
 
-  const getMetricValue = (personId: string, month: number): string => {
+  const getMetricValue = (personId: string, month: number, type: 'corr' | 'ev'): string => {
     const key = `${personId}-${month}`;
-    const value = metrics[key];
+    const value = metrics[key]?.[type];
     return value === undefined || value === 0 ? '' : value.toString();
   };
 
@@ -145,20 +164,32 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="sticky left-0 bg-background z-10 w-[140px]">
+                    <TableHead className="sticky left-0 bg-background z-10 w-[140px] border-r" rowSpan={2}>
                       Miembro
                     </TableHead>
                     {MONTHS.map((month, idx) => (
-                      <TableHead key={idx} className="text-center w-[70px]">
+                      <TableHead key={idx} colSpan={2} className="text-center border-r border-l">
                         {month}
                       </TableHead>
+                    ))}
+                  </TableRow>
+                  <TableRow>
+                    {MONTHS.map((_, idx) => (
+                      <>
+                        <TableHead key={`${idx}-corr`} className="text-center text-xs w-[50px] border-l">
+                          Corr.
+                        </TableHead>
+                        <TableHead key={`${idx}-ev`} className="text-center text-xs w-[50px] border-r">
+                          Ev.
+                        </TableHead>
+                      </>
                     ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {people.map((person) => (
                     <TableRow key={person.id}>
-                      <TableCell className="sticky left-0 bg-background z-10 font-medium w-[140px]">
+                      <TableCell className="sticky left-0 bg-background z-10 font-medium w-[140px] border-r">
                         <div className="flex items-center gap-2">
                           <div 
                             className="w-3 h-3 rounded-full flex-shrink-0" 
@@ -170,27 +201,50 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
                       {MONTHS.map((_, monthIdx) => {
                         const month = monthIdx + 1;
                         return (
-                          <TableCell key={month} className="p-1 w-[70px]">
-                            <Input
-                              type="number"
-                              step="0.1"
-                              min="0"
-                              value={getMetricValue(person.id, month)}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                if (value === '' || parseFloat(value) >= 0) {
-                                  updateMetric(person.id, month, value);
-                                }
-                              }}
-                              className={cn(
-                                "w-full h-8 text-center text-sm px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                                !getMetricValue(person.id, month) || parseFloat(getMetricValue(person.id, month)) === 0
-                                  ? "bg-red-50 dark:bg-red-950/20" 
-                                  : "bg-green-50 dark:bg-green-950/20"
-                              )}
-                              disabled={loading}
-                            />
-                          </TableCell>
+                          <>
+                            <TableCell key={`${month}-corr`} className="p-1 w-[50px] border-l">
+                              <Input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                value={getMetricValue(person.id, month, 'corr')}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  if (value === '' || parseFloat(value) >= 0) {
+                                    updateMetric(person.id, month, 'corr', value);
+                                  }
+                                }}
+                                className={cn(
+                                  "w-full h-8 text-center text-xs px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                                  !getMetricValue(person.id, month, 'corr') || parseFloat(getMetricValue(person.id, month, 'corr')) === 0
+                                    ? "bg-red-50 dark:bg-red-950/20" 
+                                    : "bg-green-50 dark:bg-green-950/20"
+                                )}
+                                disabled={loading}
+                              />
+                            </TableCell>
+                            <TableCell key={`${month}-ev`} className="p-1 w-[50px] border-r">
+                              <Input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                value={getMetricValue(person.id, month, 'ev')}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  if (value === '' || parseFloat(value) >= 0) {
+                                    updateMetric(person.id, month, 'ev', value);
+                                  }
+                                }}
+                                className={cn(
+                                  "w-full h-8 text-center text-xs px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                                  !getMetricValue(person.id, month, 'ev') || parseFloat(getMetricValue(person.id, month, 'ev')) === 0
+                                    ? "bg-red-50 dark:bg-red-950/20" 
+                                    : "bg-green-50 dark:bg-green-950/20"
+                                )}
+                                disabled={loading}
+                              />
+                            </TableCell>
+                          </>
                         );
                       })}
                     </TableRow>

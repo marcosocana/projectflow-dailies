@@ -309,33 +309,36 @@ export type Database = {
       }
       monthly_metrics: {
         Row: {
+          corr_value: number | null
           created_at: string
+          ev_value: number | null
           id: string
           month: number
           person_id: string
           project_id: string
           updated_at: string
-          value: number
           year: number
         }
         Insert: {
+          corr_value?: number | null
           created_at?: string
+          ev_value?: number | null
           id?: string
           month: number
           person_id: string
           project_id: string
           updated_at?: string
-          value?: number
           year: number
         }
         Update: {
+          corr_value?: number | null
           created_at?: string
+          ev_value?: number | null
           id?: string
           month?: number
           person_id?: string
           project_id?: string
           updated_at?: string
-          value?: number
           year?: number
         }
         Relationships: []
