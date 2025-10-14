@@ -66,7 +66,7 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
   }, [selectedYear, people]);
 
   const updateMetric = async (personId: string, month: number, value: string) => {
-    const numericValue = parseFloat(value) || 0;
+    const numericValue = value === '' ? 0 : parseFloat(value);
     const key = `${personId}-${month}`;
 
     // Update local state immediately
@@ -96,9 +96,10 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
     }
   };
 
-  const getMetricValue = (personId: string, month: number): number => {
+  const getMetricValue = (personId: string, month: number): string => {
     const key = `${personId}-${month}`;
-    return metrics[key] || 0;
+    const value = metrics[key];
+    return value === undefined || value === 0 ? '' : value.toString();
   };
 
   const availableYears = [];
@@ -144,11 +145,11 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="sticky left-0 bg-background z-10 min-w-[150px]">
+                    <TableHead className="sticky left-0 bg-background z-10 w-[140px]">
                       Miembro
                     </TableHead>
                     {MONTHS.map((month, idx) => (
-                      <TableHead key={idx} className="text-center min-w-[100px]">
+                      <TableHead key={idx} className="text-center w-[70px]">
                         {month}
                       </TableHead>
                     ))}
@@ -157,19 +158,19 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
                 <TableBody>
                   {people.map((person) => (
                     <TableRow key={person.id}>
-                      <TableCell className="sticky left-0 bg-background z-10 font-medium">
+                      <TableCell className="sticky left-0 bg-background z-10 font-medium w-[140px]">
                         <div className="flex items-center gap-2">
                           <div 
-                            className="w-3 h-3 rounded-full" 
+                            className="w-3 h-3 rounded-full flex-shrink-0" 
                             style={{ backgroundColor: person.color }}
                           />
-                          {person.name}
+                          <span className="truncate text-sm">{person.name}</span>
                         </div>
                       </TableCell>
                       {MONTHS.map((_, monthIdx) => {
                         const month = monthIdx + 1;
                         return (
-                          <TableCell key={month} className="p-2">
+                          <TableCell key={month} className="p-1 w-[70px]">
                             <Input
                               type="number"
                               step="0.1"
@@ -182,8 +183,8 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
                                 }
                               }}
                               className={cn(
-                                "w-full text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                                getMetricValue(person.id, month) === 0 
+                                "w-full h-8 text-center text-sm px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                                !getMetricValue(person.id, month) || parseFloat(getMetricValue(person.id, month)) === 0
                                   ? "bg-red-50 dark:bg-red-950/20" 
                                   : "bg-green-50 dark:bg-green-950/20"
                               )}
