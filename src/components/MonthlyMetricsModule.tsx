@@ -215,7 +215,7 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
                                   }
                                 }}
                                 className={cn(
-                                  "w-full h-8 text-center text-xs px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                                  "w-[56px] h-8 text-center text-xs px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                                   !getMetricValue(person.id, month, 'corr') || parseFloat(getMetricValue(person.id, month, 'corr')) === 0
                                     ? "bg-red-50 dark:bg-red-950/20" 
                                     : "bg-green-50 dark:bg-green-950/20"
@@ -236,7 +236,7 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
                                   }
                                 }}
                                 className={cn(
-                                  "w-full h-8 text-center text-xs px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                                  "w-[56px] h-8 text-center text-xs px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                                   !getMetricValue(person.id, month, 'ev') || parseFloat(getMetricValue(person.id, month, 'ev')) === 0
                                     ? "bg-red-50 dark:bg-red-950/20" 
                                     : "bg-green-50 dark:bg-green-950/20"
