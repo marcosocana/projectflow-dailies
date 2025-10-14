@@ -176,10 +176,10 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
                   <TableRow>
                     {MONTHS.map((_, idx) => (
                       <>
-                        <TableHead key={`${idx}-corr`} className="text-center text-xs w-[50px] border-l">
+                        <TableHead key={`${idx}-corr`} className="text-center text-xs w-[60px] border-l">
                           Corr.
                         </TableHead>
-                        <TableHead key={`${idx}-ev`} className="text-center text-xs w-[50px] border-r">
+                        <TableHead key={`${idx}-ev`} className="text-center text-xs w-[60px] border-r">
                           Ev.
                         </TableHead>
                       </>
@@ -202,7 +202,7 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
                         const month = monthIdx + 1;
                         return (
                           <>
-                            <TableCell key={`${month}-corr`} className="p-1 w-[50px] border-l">
+                            <TableCell key={`${month}-corr`} className="p-1 w-[60px] border-l">
                               <Input
                                 type="number"
                                 step="0.1"
@@ -223,7 +223,7 @@ export default function MonthlyMetricsModule({ projectId }: MonthlyMetricsModule
                                 disabled={loading}
                               />
                             </TableCell>
-                            <TableCell key={`${month}-ev`} className="p-1 w-[50px] border-r">
+                            <TableCell key={`${month}-ev`} className="p-1 w-[60px] border-r">
                               <Input
                                 type="number"
                                 step="0.1"
