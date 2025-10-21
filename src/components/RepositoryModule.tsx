@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Download, Trash2, FileText, Lock } from 'lucide-react';
+import { Plus, Download, Trash2, FileText, Lock, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface RepositoryModuleProps {
@@ -22,6 +22,7 @@ interface RepositoryFile {
   file_size: number | null;
   content_type: string | null;
   password_required: boolean;
+  password_hash: string | null;
   description: string | null;
   created_at: string;
 }
@@ -38,6 +39,12 @@ export default function RepositoryModule({ projectId }: RepositoryModuleProps) {
   const [isDownloadDialogOpen, setIsDownloadDialogOpen] = useState(false);
   const [downloadingFile, setDownloadingFile] = useState<RepositoryFile | null>(null);
   const [downloadPassword, setDownloadPassword] = useState('');
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingFile, setEditingFile] = useState<RepositoryFile | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+  const [editIsPasswordRequired, setEditIsPasswordRequired] = useState(false);
   const { toast } = useToast();
 
   const loadFiles = async () => {
@@ -213,6 +220,70 @@ export default function RepositoryModule({ projectId }: RepositoryModuleProps) {
     setDownloadPassword('');
   };
 
+  const handleEditClick = (file: RepositoryFile) => {
+    setEditingFile(file);
+    setEditName(file.name);
+    setEditDescription(file.description || '');
+    setEditIsPasswordRequired(file.password_required);
+    setEditPassword('');
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!editingFile || !editName.trim()) {
+      toast({
+        title: "Error",
+        description: "El nombre es obligatorio",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Hash password if provided
+      let passwordHash = editingFile.password_hash;
+      if (editIsPasswordRequired && editPassword) {
+        passwordHash = btoa(editPassword);
+      } else if (!editIsPasswordRequired) {
+        passwordHash = null;
+      }
+
+      // Update file metadata in database
+      const { error: dbError } = await supabase
+        .from('repository_files')
+        .update({
+          name: editName.trim(),
+          description: editDescription.trim() || null,
+          password_required: editIsPasswordRequired,
+          password_hash: passwordHash,
+        })
+        .eq('id', editingFile.id);
+
+      if (dbError) throw dbError;
+      
+      await loadFiles();
+      setIsEditDialogOpen(false);
+      setEditingFile(null);
+      setEditName('');
+      setEditDescription('');
+      setEditPassword('');
+      setEditIsPasswordRequired(false);
+      
+      toast({
+        title: "Éxito",
+        description: "Archivo actualizado correctamente",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('¿Estás seguro de que quieres eliminar este archivo?')) {
       return;
@@ -284,6 +355,13 @@ export default function RepositoryModule({ projectId }: RepositoryModuleProps) {
                         {file.name}
                       </CardTitle>
                       <div className="flex gap-1 ml-auto">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditClick(file)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -402,6 +480,70 @@ export default function RepositoryModule({ projectId }: RepositoryModuleProps) {
             
             <Button type="submit" className="w-full" disabled={!selectedFile || !uploadName.trim()}>
               Subir archivo
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Editar archivo</DialogTitle>
+            <DialogDescription>
+              Modifica la información del archivo
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleEditSubmit} className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-name">Nombre</Label>
+              <Input
+                id="edit-name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Nombre del archivo"
+                required
+              />
+            </div>
+            
+            <div className="grid gap-2">
+              <Label htmlFor="edit-description">Descripción</Label>
+              <Textarea
+                id="edit-description"
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                placeholder="Describe el contenido del archivo..."
+                rows={3}
+              />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="edit-password-required"
+                checked={editIsPasswordRequired}
+                onChange={(e) => setEditIsPasswordRequired(e.target.checked)}
+              />
+              <Label htmlFor="edit-password-required">Proteger con contraseña</Label>
+            </div>
+
+            {editIsPasswordRequired && (
+              <div className="grid gap-2">
+                <Label htmlFor="edit-password">Contraseña {editingFile?.password_hash ? '(dejar en blanco para mantener la actual)' : ''}</Label>
+                <Input
+                  id="edit-password"
+                  type="password"
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
+                  placeholder="Nueva contraseña"
+                  required={editIsPasswordRequired && !editingFile?.password_hash}
+                />
+              </div>
+            )}
+            
+            <Button type="submit" className="w-full" disabled={!editName.trim()}>
+              Actualizar archivo
             </Button>
           </form>
         </DialogContent>
