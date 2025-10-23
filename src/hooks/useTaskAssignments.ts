@@ -97,29 +97,20 @@ export const useTaskAssignments = (taskId: string | null) => {
 
       // 3) Sincronizar la tarea diaria vinculada (si existe) con el mismo usuario
       if (assignmentRow?.incident_id && assignmentRow?.assigned_to) {
-        // Buscar la tarea diaria más reciente vinculada a la incidencia y a la misma persona
-        const { data: dailyTask } = await supabase
+        // Map incident assignment status to task status first
+        const mapped: TaskStatus = status === 'closed' 
+          ? 'resolved' 
+          : status === 'in_qa' 
+            ? 'in_progress' 
+            : (status as TaskStatus);
+
+        // Update ALL daily tasks linked to this incident and person
+        await supabase
           .from('tasks')
-          .select('id')
+          .update({ status: mapped })
           .eq('incident_id', assignmentRow.incident_id)
           .eq('person_id', assignmentRow.assigned_to)
-          .not('daily_id', 'is', null)
-          .order('updated_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (dailyTask?.id) {
-          // Map incident assignment status to task status (tasks do not support in_qa/closed)
-          const mapped: TaskStatus = status === 'closed' 
-            ? 'resolved' 
-            : status === 'in_qa' 
-              ? 'in_progress' 
-              : (status as TaskStatus);
-          await supabase
-            .from('tasks')
-            .update({ status: mapped })
-            .eq('id', dailyTask.id);
-        }
+          .not('daily_id', 'is', null);
       }
 
       await fetchAssignments();
