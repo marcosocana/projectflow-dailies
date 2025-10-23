@@ -598,8 +598,8 @@ export default function DailiesModule({
           bValue = statusOrder[b.status as keyof typeof statusOrder] ?? 3;
           break;
         case 'person':
-          const aPerson = people.find(p => p.id === a.person_id);
-          const bPerson = people.find(p => p.id === b.person_id);
+          const aPerson = people.find(p => p.id === (a.person_id || (a as any).assigned_to));
+          const bPerson = people.find(p => p.id === (b.person_id || (b as any).assigned_to));
           aValue = aPerson?.name?.toLowerCase() || 'z';
           bValue = bPerson?.name?.toLowerCase() || 'z';
           break;
