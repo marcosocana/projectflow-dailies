@@ -1002,7 +1002,7 @@ export default function DailiesModule({
                       strategy={verticalListSortingStrategy}
                     >
                       {sortedTasks.map((t) => {
-                        const person = people.find((p) => p.id === t.person_id);
+                        const person = people.find((p) => p.id === (t.person_id || t.assigned_to));
                         const inc = incidents.find((i) => i.id === t.incident_id);
                         return (
                           <SortableTaskRow 
@@ -1529,7 +1529,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
             <ScrollArea className="h-[400px] pr-4">
               <div className="space-y-3">
                 {lastDayTasks.map(task => {
-                const person = people.find(p => p.id === task.person_id);
+                const person = people.find(p => p.id === (task.person_id || task.assigned_to));
                 const isSelected = selectedTasksForPersist.includes(task.id);
                 return <div key={task.id} className="flex items-start gap-3 p-3 border rounded">
                       <Checkbox checked={isSelected} onCheckedChange={checked => {
@@ -1625,7 +1625,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                 </TableHeader>
                 <TableBody>
                   {filteredTasks.map(task => {
-                  const person = people.find(p => p.id === task.person_id);
+                  const person = people.find(p => p.id === (task.person_id || task.assigned_to));
                   return <TableRow key={task.id}>
                         <TableCell>
                           <Badge 

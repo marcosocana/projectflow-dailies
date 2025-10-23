@@ -219,6 +219,7 @@ export default function ExternalTaskCreate() {
                 description: form.description,
                 project_id: projectId,
                 incident_id: id,
+                person_id: a.person,
                 assigned_to: a.person,
                 status: taskStatus,
                 is_auto_linked: true
