@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, Loader2 } from 'lucide-react';
 import vecturaLogo from '@/assets/vectura-logo.png';
 import TaskAssignmentsInput, { type TaskAssignment } from '@/components/TaskAssignmentsInput';
@@ -49,6 +50,7 @@ export default function ExternalTaskCreate() {
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<TaskAssignment[]>([]);
+  const [createDailyTasks, setCreateDailyTasks] = useState(true);
   
   const [form, setForm] = useState({
     name: '',
@@ -177,6 +179,74 @@ export default function ExternalTaskCreate() {
         // Sync overall task status based on assignments
         const { updateTaskStatusFromAssignments } = await import('@/hooks/useSyncTaskStatus');
         await updateTaskStatusFromAssignments(id);
+
+        // Create daily tasks if checkbox is enabled
+        if (createDailyTasks) {
+          const today = new Date().toISOString().split('T')[0];
+          
+          // Get or create today's daily
+          let { data: daily, error: dailyError } = await supabase
+            .from('dailies')
+            .select('id')
+            .eq('project_id', projectId)
+            .eq('date', today)
+            .single();
+
+          if (dailyError && dailyError.code === 'PGRST116') {
+            // Daily doesn't exist, create it
+            const { data: newDaily, error: createError } = await supabase
+              .from('dailies')
+              .insert({ project_id: projectId, date: today, content: {} })
+              .select('id')
+              .single();
+            
+            if (createError) throw createError;
+            daily = newDaily;
+          } else if (dailyError) {
+            throw dailyError;
+          }
+
+          if (daily) {
+            // Create a task in the tasks table for each assignment
+            const tasksToInsert = assignments.map(a => {
+              const taskStatus: 'pending' | 'in_progress' | 'resolved' = 
+                a.status === 'resolved' || a.status === 'closed' ? 'resolved' : 
+                a.status === 'in_progress' || a.status === 'in_qa' ? 'in_progress' : 
+                'pending';
+
+              return {
+                title: form.name,
+                description: form.description,
+                project_id: projectId,
+                incident_id: id,
+                assigned_to: a.person,
+                status: taskStatus,
+                is_auto_linked: true
+              };
+            });
+
+            const { data: createdTasks, error: tasksError } = await supabase
+              .from('tasks')
+              .insert(tasksToInsert)
+              .select('id');
+
+            if (tasksError) throw tasksError;
+
+            // Link tasks with the daily
+            if (createdTasks && createdTasks.length > 0) {
+              const dailyTasksToInsert = createdTasks.map(task => ({
+                daily_id: daily.id,
+                task_id: task.id
+              }));
+
+              const { error: dailyTasksError } = await supabase
+                .from('daily_tasks')
+                .insert(dailyTasksToInsert);
+
+              if (dailyTasksError) throw dailyTasksError;
+            }
+          }
+        }
       }
 
       toast({
@@ -346,6 +416,25 @@ export default function ExternalTaskCreate() {
                   assignments={assignments}
                   onAssignmentsChange={setAssignments}
                 />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="createDailyTasks" 
+                    checked={createDailyTasks}
+                    onCheckedChange={(checked) => setCreateDailyTasks(checked as boolean)}
+                  />
+                  <Label 
+                    htmlFor="createDailyTasks" 
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    Crear tareas en el seguimiento diario
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground ml-6">
+                  Se creará una tarea en el seguimiento interno para cada miembro asignado, vinculada con esta tarea y en el día actual.
+                </p>
               </div>
 
               <div className="space-y-2 md:col-span-2">
