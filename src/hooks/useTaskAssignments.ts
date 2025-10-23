@@ -95,22 +95,45 @@ export const useTaskAssignments = (taskId: string | null) => {
         .eq('id', assignmentId)
         .maybeSingle();
 
-      // 3) Sincronizar la tarea diaria vinculada (si existe) con el mismo usuario
       if (assignmentRow?.incident_id && assignmentRow?.assigned_to) {
-        // Map incident assignment status to task status first
+        // 3) Sincronizar las tareas del seguimiento interno vinculadas con esta persona
         const mapped: TaskStatus = status === 'closed' 
           ? 'resolved' 
           : status === 'in_qa' 
             ? 'in_progress' 
             : (status as TaskStatus);
 
-        // Update ALL tasks linked to this incident and person (including auto-linked dailies)
         await supabase
           .from('tasks')
           .update({ status: mapped })
           .eq('incident_id', assignmentRow.incident_id)
           .or(`person_id.eq.${assignmentRow.assigned_to},assigned_to.eq.${assignmentRow.assigned_to}`);
 
+        // 4) Obtener TODAS las asignaciones de esta incidencia para calcular el estado general
+        const { data: allAssignments } = await supabase
+          .from('incident_assignments')
+          .select('status')
+          .eq('incident_id', assignmentRow.incident_id);
+
+        if (allAssignments && allAssignments.length > 0) {
+          let newIncidentStatus: IncidentStatus = 'pending';
+
+          // Si al menos una está en progreso o en QA, la incidencia está en progreso
+          const hasInProgress = allAssignments.some(a => a.status === 'in_progress' || a.status === 'in_qa');
+          if (hasInProgress) {
+            newIncidentStatus = 'in_progress';
+          } 
+          // Si todas están resueltas o cerradas, la incidencia está resuelta
+          else if (allAssignments.every(a => a.status === 'resolved' || a.status === 'closed')) {
+            newIncidentStatus = 'resolved';
+          }
+
+          // 5) Actualizar el estado general de la incidencia
+          await supabase
+            .from('incidents')
+            .update({ status: newIncidentStatus })
+            .eq('id', assignmentRow.incident_id);
+        }
       }
 
       await fetchAssignments();
