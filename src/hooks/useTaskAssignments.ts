@@ -104,13 +104,13 @@ export const useTaskAssignments = (taskId: string | null) => {
             ? 'in_progress' 
             : (status as TaskStatus);
 
-        // Update ALL daily tasks linked to this incident and person
+        // Update ALL tasks linked to this incident and person (including auto-linked dailies)
         await supabase
           .from('tasks')
           .update({ status: mapped })
           .eq('incident_id', assignmentRow.incident_id)
-          .eq('person_id', assignmentRow.assigned_to)
-          .not('daily_id', 'is', null);
+          .or(`person_id.eq.${assignmentRow.assigned_to},assigned_to.eq.${assignmentRow.assigned_to}`);
+
       }
 
       await fetchAssignments();
