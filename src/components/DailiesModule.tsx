@@ -766,12 +766,25 @@ export default function DailiesModule({
           </Badge>
         </TableCell>
         <TableCell>
-          <div className="font-medium">{task.title}</div>
-          {typeof task.description === 'string' && (
-            <div className="text-xs text-muted-foreground">
-              {task.description.length > 70 ? `${task.description.slice(0, 70)}...` : task.description}
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="icon"
+              className={`h-6 w-6 ${task.is_urgent ? 'bg-red-500 hover:bg-red-600 text-white' : 'hover:bg-muted'}`}
+              onClick={() => toggleUrgent(task.id, task.is_urgent || false)}
+              aria-label={task.is_urgent ? "Marcar como normal" : "Marcar como urgente"}
+            >
+              <AlertTriangle className="h-3 w-3" />
+            </Button>
+            <div className="flex-1">
+              <div className="font-medium">{task.title}</div>
+              {typeof task.description === 'string' && (
+                <div className="text-xs text-muted-foreground">
+                  {task.description.length > 70 ? `${task.description.slice(0, 70)}...` : task.description}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </TableCell>
         <TableCell>
           {person ? (
@@ -803,15 +816,6 @@ export default function DailiesModule({
             aria-label="Ver"
           >
             <Eye className="h-4 w-4" />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => toggleUrgent(task.id, task.is_urgent || false)}
-            className={task.is_urgent ? 'text-red-500 hover:text-red-600' : ''}
-            aria-label={task.is_urgent ? "Marcar como normal" : "Marcar como urgente"}
-          >
-            <AlertTriangle className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="icon" onClick={() => deleteTask(task.id)} aria-label="Eliminar">
             <Trash2 className="h-4 w-4" />
