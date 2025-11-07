@@ -682,6 +682,7 @@ export type Database = {
           incident_id: string | null
           is_auto_linked: boolean | null
           is_completed: boolean
+          is_urgent: boolean
           person_id: string | null
           project_id: string
           related_ticket: string | null
@@ -698,6 +699,7 @@ export type Database = {
           incident_id?: string | null
           is_auto_linked?: boolean | null
           is_completed?: boolean
+          is_urgent?: boolean
           person_id?: string | null
           project_id: string
           related_ticket?: string | null
@@ -714,6 +716,7 @@ export type Database = {
           incident_id?: string | null
           is_auto_linked?: boolean | null
           is_completed?: boolean
+          is_urgent?: boolean
           person_id?: string | null
           project_id?: string
           related_ticket?: string | null
@@ -873,14 +876,8 @@ export type Database = {
         Args: { granted_by_id?: string; project_id: string; user_email: string }
         Returns: Json
       }
-      current_user_is_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      delete_shared_note: {
-        Args: { note_id: string }
-        Returns: undefined
-      }
+      current_user_is_admin: { Args: never; Returns: boolean }
+      delete_shared_note: { Args: { note_id: string }; Returns: undefined }
       find_user_by_email: {
         Args: { user_email: string }
         Returns: {

@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 import { es } from 'date-fns/locale';
 import type { TablesInsert } from '@/integrations/supabase/types';
-import { Trash2, Eye, Pencil, RefreshCcw, List, ChevronUp, ChevronDown, GripVertical, Link, Copy } from 'lucide-react';
+import { Trash2, Eye, Pencil, RefreshCcw, List, ChevronUp, ChevronDown, GripVertical, Link, Copy, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -350,6 +350,20 @@ export default function DailiesModule({
       ...x,
       is_completed: !x.is_completed
     } : x));
+  };
+
+  const toggleUrgent = async (taskId: string, currentUrgent: boolean) => {
+    const {
+      error
+    } = await supabase.from('tasks').update({
+      is_urgent: !currentUrgent
+    }).eq('id', taskId);
+    if (!error) {
+      setTasks(t => t.map(x => x.id === taskId ? {
+        ...x,
+        is_urgent: !currentUrgent
+      } : x));
+    }
   };
   const deleteTask = async (id: string) => {
     const {
@@ -789,6 +803,15 @@ export default function DailiesModule({
             aria-label="Ver"
           >
             <Eye className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => toggleUrgent(task.id, task.is_urgent || false)}
+            className={task.is_urgent ? 'text-red-500 hover:text-red-600' : ''}
+            aria-label={task.is_urgent ? "Marcar como normal" : "Marcar como urgente"}
+          >
+            <AlertTriangle className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="icon" onClick={() => deleteTask(task.id)} aria-label="Eliminar">
             <Trash2 className="h-4 w-4" />
