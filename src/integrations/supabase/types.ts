@@ -958,7 +958,7 @@ export type Database = {
         | "vacations"
         | "settings"
         | "users"
-      task_status: "pending" | "in_progress" | "resolved"
+      task_status: "pending" | "in_progress" | "resolved" | "resolved_yesterday"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1108,7 +1108,7 @@ export const Constants = {
         "settings",
         "users",
       ],
-      task_status: ["pending", "in_progress", "resolved"],
+      task_status: ["pending", "in_progress", "resolved", "resolved_yesterday"],
     },
   },
 } as const

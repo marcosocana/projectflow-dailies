@@ -39,7 +39,13 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-type TaskStatus = 'pending' | 'in_progress' | 'resolved';
+type TaskStatus = 'pending' | 'in_progress' | 'resolved' | 'resolved_yesterday';
+
+// Helper function to map task status to incident status
+const mapTaskStatusToIncidentStatus = (taskStatus: TaskStatus): 'pending' | 'in_progress' | 'resolved' => {
+  if (taskStatus === 'resolved_yesterday') return 'resolved';
+  return taskStatus as 'pending' | 'in_progress' | 'resolved';
+};
 interface DailiesModuleProps {
   projectId: string;
   initiallyUnlocked?: boolean;
@@ -278,7 +284,7 @@ export default function DailiesModule({
     if (taskForm.incidentId && creationMode === 'linked') {
       await supabase
         .from('incidents')
-        .update({ status: taskForm.status })
+        .update({ status: mapTaskStatusToIncidentStatus(taskForm.status) } as any)
         .eq('id', taskForm.incidentId);
       
       // Si hay una persona asignada, crear asignación en incident_assignments
@@ -300,8 +306,8 @@ export default function DailiesModule({
             .insert({
               incident_id: taskForm.incidentId,
               assigned_to: personId,
-              status: taskForm.status
-            });
+              status: mapTaskStatusToIncidentStatus(taskForm.status)
+            } as any);
         }
       }
     }
@@ -478,6 +484,20 @@ export default function DailiesModule({
       if (rows.length) {
         const { error: insertErr } = await supabase.from('daily_tasks').insert(rows as any);
         if (insertErr) throw insertErr;
+        
+        // Update status of resolved tasks to resolved_yesterday
+        const resolvedTaskIds = selectedTasksForPersist.filter(taskId => {
+          const task = lastDayTasks.find((t: any) => t.id === taskId);
+          return task?.status === 'resolved';
+        });
+        
+        if (resolvedTaskIds.length > 0) {
+          const { error: updateErr } = await supabase
+            .from('tasks')
+            .update({ status: 'resolved_yesterday' })
+            .in('id', resolvedTaskIds);
+          if (updateErr) throw updateErr;
+        }
       }
 
       await loadTasks(date);
@@ -759,10 +779,18 @@ export default function DailiesModule({
                 ? 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent'
                 : task.status === 'resolved' 
                 ? 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent'
+                : task.status === 'resolved_yesterday'
+                ? 'bg-[hsl(var(--success)/0.5)] text-[hsl(var(--success-foreground))] border-transparent'
                 : 'bg-muted text-muted-foreground border-transparent'
             }
           >
-            {task.status === 'in_progress' ? 'En curso' : task.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
+            {task.status === 'in_progress' 
+              ? 'En curso' 
+              : task.status === 'resolved' 
+              ? 'Resuelta' 
+              : task.status === 'resolved_yesterday'
+              ? 'Resuelta ayer'
+              : 'Pendiente'}
           </Badge>
         </TableCell>
         <TableCell>
@@ -904,7 +932,7 @@ export default function DailiesModule({
         if (selectedTask.is_auto_linked && update.incident_id && update.status !== selectedTask.status) {
           await supabase
             .from('incidents')
-            .update({ status: update.status })
+            .update({ status: mapTaskStatusToIncidentStatus(update.status) } as any)
             .eq('id', update.incident_id);
           
           // Si hay una persona asignada, sincronizar también su asignación
@@ -921,7 +949,7 @@ export default function DailiesModule({
               // Actualizar el estado de la asignación existente
               await supabase
                 .from('incident_assignments')
-                .update({ status: update.status })
+                .update({ status: mapTaskStatusToIncidentStatus(update.status) } as any)
                 .eq('id', existingAssignment.id);
             } else {
               // Crear una nueva asignación si no existe
@@ -930,8 +958,8 @@ export default function DailiesModule({
                 .insert({
                   incident_id: update.incident_id,
                   assigned_to: update.person_id,
-                  status: update.status
-                });
+                  status: mapTaskStatusToIncidentStatus(update.status)
+                } as any);
             }
           }
           
@@ -1577,10 +1605,18 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                                 ? 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent'
                                 : task.status === 'resolved' 
                                 ? 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent'
+                                : task.status === 'resolved_yesterday'
+                                ? 'bg-[hsl(var(--success)/0.5)] text-[hsl(var(--success-foreground))] border-transparent'
                                 : 'bg-muted text-muted-foreground border-transparent'
                             }
                           >
-                            {task.status === 'in_progress' ? 'En curso' : task.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
+                            {task.status === 'in_progress' 
+                              ? 'En curso' 
+                              : task.status === 'resolved' 
+                              ? 'Resuelta' 
+                              : task.status === 'resolved_yesterday'
+                              ? 'Resuelta ayer'
+                              : 'Pendiente'}
                           </Badge>
                           {person && <div className="flex items-center gap-1">
                               <span className="h-2 w-2 rounded" style={{
@@ -1662,10 +1698,18 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                                 ? 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent'
                                 : task.status === 'resolved' 
                                 ? 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent'
+                                : task.status === 'resolved_yesterday'
+                                ? 'bg-[hsl(var(--success)/0.5)] text-[hsl(var(--success-foreground))] border-transparent'
                                 : 'bg-muted text-muted-foreground border-transparent'
                             }
                           >
-                            {task.status === 'in_progress' ? 'En curso' : task.status === 'resolved' ? 'Resuelta' : 'Pendiente'}
+                            {task.status === 'in_progress' 
+                              ? 'En curso' 
+                              : task.status === 'resolved' 
+                              ? 'Resuelta' 
+                              : task.status === 'resolved_yesterday'
+                              ? 'Resuelta ayer'
+                              : 'Pendiente'}
                           </Badge>
                         </TableCell>
                          <TableCell>
