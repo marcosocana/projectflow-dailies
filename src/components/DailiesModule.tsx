@@ -49,10 +49,12 @@ const mapTaskStatusToIncidentStatus = (taskStatus: TaskStatus): 'pending' | 'in_
 interface DailiesModuleProps {
   projectId: string;
   initiallyUnlocked?: boolean;
+  enableResolvedYesterday?: boolean;
 }
 export default function DailiesModule({
   projectId,
-  initiallyUnlocked = false
+  initiallyUnlocked = false,
+  enableResolvedYesterday = false
 }: DailiesModuleProps) {
   const {
     toast
@@ -485,18 +487,20 @@ export default function DailiesModule({
         const { error: insertErr } = await supabase.from('daily_tasks').insert(rows as any);
         if (insertErr) throw insertErr;
         
-        // Update status of resolved tasks to resolved_yesterday
-        const resolvedTaskIds = selectedTasksForPersist.filter(taskId => {
-          const task = lastDayTasks.find((t: any) => t.id === taskId);
-          return task?.status === 'resolved';
-        });
-        
-        if (resolvedTaskIds.length > 0) {
-          const { error: updateErr } = await supabase
-            .from('tasks')
-            .update({ status: 'resolved_yesterday' })
-            .in('id', resolvedTaskIds);
-          if (updateErr) throw updateErr;
+        // Update status of resolved tasks to resolved_yesterday (only in Internal Config)
+        if (enableResolvedYesterday) {
+          const resolvedTaskIds = selectedTasksForPersist.filter(taskId => {
+            const task = lastDayTasks.find((t: any) => t.id === taskId);
+            return task?.status === 'resolved';
+          });
+          
+          if (resolvedTaskIds.length > 0) {
+            const { error: updateErr } = await supabase
+              .from('tasks')
+              .update({ status: 'resolved_yesterday' })
+              .in('id', resolvedTaskIds);
+            if (updateErr) throw updateErr;
+          }
         }
       }
 
