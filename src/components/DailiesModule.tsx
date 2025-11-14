@@ -1023,69 +1023,67 @@ export default function DailiesModule({
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            {/* Calendar */}
-            <div className="flex justify-center">
-              <div className="w-fit">
-                <h3 className="text-lg font-semibold mb-4 text-center">Calendario</h3>
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={(d) => d && setDate(d)}
-                  locale={es}
-                  className="rounded-md border p-3 pointer-events-auto mx-auto"
-                />
-              </div>
+        <CardContent className="flex flex-col h-[calc(100vh-300px)]">
+          {/* Calendar - Fixed at top */}
+          <div className="flex justify-center pb-6 border-b">
+            <div className="w-fit">
+              <h3 className="text-lg font-semibold mb-4 text-center">Calendario</h3>
+              <Calendar
+                mode="single"
+                selected={date}
+                onSelect={(d) => d && setDate(d)}
+                locale={es}
+                className="rounded-md border p-3 pointer-events-auto mx-auto"
+              />
             </div>
+          </div>
 
-            {/* Tasks List */}
-            <div className="w-full">
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <Table className="mt-0">
-                  <TableHeader>
+          {/* Tasks List - Scrollable */}
+          <div className="flex-1 overflow-auto mt-6">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <Table>
+                <TableHeader className="sticky top-0 bg-background z-10">
+                  <TableRow>
+                    <TableHead className="w-8"></TableHead>
+                    <DailySortableHeader field="status">Estado</DailySortableHeader>
+                    <TableHead>Tarea</TableHead>
+                    <DailySortableHeader field="person">Persona</DailySortableHeader>
+                    <TableHead>Incidencia</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <SortableContext
+                    items={sortedTasks.map(t => t.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {sortedTasks.map((t) => {
+                      const person = people.find((p) => p.id === (t.person_id || t.assigned_to));
+                      const inc = incidents.find((i) => i.id === t.incident_id);
+                      return (
+                        <SortableTaskRow 
+                          key={t.id}
+                          task={t}
+                          person={person}
+                          incident={inc}
+                        />
+                      );
+                    })}
+                  </SortableContext>
+                  {sortedTasks.length === 0 && (
                     <TableRow>
-                      <TableHead className="w-8"></TableHead>
-                      <DailySortableHeader field="status">Estado</DailySortableHeader>
-                      <TableHead>Tarea</TableHead>
-                      <DailySortableHeader field="person">Persona</DailySortableHeader>
-                      <TableHead>Incidencia</TableHead>
-                      <TableHead></TableHead>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground">
+                        Sin tareas para este día
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <SortableContext
-                      items={sortedTasks.map(t => t.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {sortedTasks.map((t) => {
-                        const person = people.find((p) => p.id === (t.person_id || t.assigned_to));
-                        const inc = incidents.find((i) => i.id === t.incident_id);
-                        return (
-                          <SortableTaskRow 
-                            key={t.id}
-                            task={t}
-                            person={person}
-                            incident={inc}
-                          />
-                        );
-                      })}
-                    </SortableContext>
-                    {sortedTasks.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground">
-                          Sin tareas para este día
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </DndContext>
-            </div>
+                  )}
+                </TableBody>
+              </Table>
+            </DndContext>
           </div>
         </CardContent>
       </Card>
