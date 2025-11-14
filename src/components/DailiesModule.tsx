@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
@@ -693,8 +693,14 @@ export default function DailiesModule({
   );
 
   // Drag and drop functionality
+  const scrollPositionRef = useRef<number>(0);
+  
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -709,6 +715,9 @@ export default function DailiesModule({
     const newIndex = sortedTasks.findIndex((t) => t.id === over.id);
 
     if (oldIndex === -1 || newIndex === -1) return;
+
+    // Save scroll position before update
+    scrollPositionRef.current = window.scrollY;
 
     // Update local state immediately for smooth UX
     const newTasks = arrayMove(sortedTasks, oldIndex, newIndex);
@@ -744,6 +753,14 @@ export default function DailiesModule({
       loadTasks(date);
     }
   };
+
+  // Restore scroll position after tasks update
+  useEffect(() => {
+    if (scrollPositionRef.current > 0) {
+      window.scrollTo(0, scrollPositionRef.current);
+      scrollPositionRef.current = 0;
+    }
+  }, [tasks]);
 
   // Sortable task row component
   interface SortableTaskRowProps {
