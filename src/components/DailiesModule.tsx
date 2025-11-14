@@ -1024,21 +1024,23 @@ export default function DailiesModule({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="space-y-6">
             {/* Calendar */}
-            <div>
-              <h3 className="text-lg font-semibold mb-4">Calendario</h3>
-              <Calendar
-                mode="single"
-                selected={date}
-                onSelect={(d) => d && setDate(d)}
-                locale={es}
-                className="rounded-md border p-3 pointer-events-auto w-full mx-auto px-[50px]"
-              />
+            <div className="flex justify-center">
+              <div className="w-fit">
+                <h3 className="text-lg font-semibold mb-4 text-center">Calendario</h3>
+                <Calendar
+                  mode="single"
+                  selected={date}
+                  onSelect={(d) => d && setDate(d)}
+                  locale={es}
+                  className="rounded-md border p-3 pointer-events-auto mx-auto"
+                />
+              </div>
             </div>
 
             {/* Tasks List */}
-            <div className="md:col-span-2">
+            <div className="w-full">
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
