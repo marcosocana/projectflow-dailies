@@ -342,6 +342,34 @@ export default function IncidentsModule({
     return sorted.slice(start, end);
   }, [sorted, currentPage, pageSize]);
   const totalPages = Math.ceil(sorted.length / pageSize);
+  
+  // Helper function to calculate KPIs from incidents array
+  const calculateKPIs = (all: any[]) => {
+    // Incidencias (categoría incident)
+    const onlyIncidents = all.filter(i => i.category === 'incident');
+    setTotalIncidents(onlyIncidents.length);
+    const statusGrouped: Record<string, number> = {};
+    onlyIncidents.forEach(incident => {
+      const status = incident.status;
+      statusGrouped[status] = (statusGrouped[status] || 0) + 1;
+    });
+    setStatusCounts(statusGrouped);
+
+    // Mejoras (categoría improvement)
+    const onlyImprovements = all.filter(i => i.category === 'improvement');
+    setTotalImprovements(onlyImprovements.length);
+    const improvementGrouped: Record<string, number> = {};
+    onlyImprovements.forEach(imp => {
+      const status = imp.status;
+      improvementGrouped[status] = (improvementGrouped[status] || 0) + 1;
+    });
+    setImprovementStatusCounts(improvementGrouped);
+
+    // Update available epics
+    const epics = [...new Set(all.map(i => i.epic).filter(Boolean))].sort();
+    setAvailableEpics(epics);
+  };
+  
   const fetchIncidents = async () => {
     setLoading(true);
     try {
@@ -354,32 +382,8 @@ export default function IncidentsModule({
       if (error) throw error;
       setIncidents(data || []);
 
-      // Extract unique epics from database
-      const epics = [...new Set(data?.map(i => i.epic).filter(Boolean))].sort();
-      setAvailableEpics(epics);
-
-      // Calculate KPIs (siempre con todos los datos, sin filtros de UI)
-      const all = data || [];
-
-      // Incidencias (categoría incident)
-      const onlyIncidents = all.filter(i => i.category === 'incident');
-      setTotalIncidents(onlyIncidents.length);
-      const statusGrouped: Record<string, number> = {};
-      onlyIncidents.forEach(incident => {
-        const status = incident.status;
-        statusGrouped[status] = (statusGrouped[status] || 0) + 1;
-      });
-      setStatusCounts(statusGrouped);
-
-      // Mejoras (categoría improvement)
-      const onlyImprovements = all.filter(i => i.category === 'improvement');
-      setTotalImprovements(onlyImprovements.length);
-      const improvementGrouped: Record<string, number> = {};
-      onlyImprovements.forEach(imp => {
-        const status = imp.status;
-        improvementGrouped[status] = (improvementGrouped[status] || 0) + 1;
-      });
-      setImprovementStatusCounts(improvementGrouped);
+      // Calculate KPIs using helper function
+      calculateKPIs(data || []);
     } catch (e: any) {
       toast({
         title: 'Error',
@@ -406,7 +410,12 @@ export default function IncidentsModule({
           if (payload.eventType === 'DELETE') {
             const id = payload.old?.id;
             if (id) {
-              setIncidents(prev => prev.filter(i => i.id !== id));
+              setIncidents(prev => {
+                const updated = prev.filter(i => i.id !== id);
+                // Recalculate KPIs after delete
+                calculateKPIs(updated);
+                return updated;
+              });
             }
             return;
           }
@@ -414,10 +423,15 @@ export default function IncidentsModule({
           if (!row) return;
           setIncidents(prev => {
             const exists = prev.some(i => i.id === row.id);
+            let updated;
             if (exists) {
-              return prev.map(i => (i.id === row.id ? { ...i, ...row } : i));
+              updated = prev.map(i => (i.id === row.id ? { ...i, ...row } : i));
+            } else {
+              updated = [row, ...prev];
             }
-            return [row, ...prev];
+            // Recalculate KPIs after insert/update
+            calculateKPIs(updated);
+            return updated;
           });
         }
       )
