@@ -281,11 +281,11 @@ export default function BacklogImportDialog({
               <Textarea
                 value={pastedText}
                 onChange={(e) => setPastedText(e.target.value)}
-                placeholder="Épica1    Incidencia    Nombre tarea 1    Descripción de la tarea&#10;Épica2    Mejora        Nombre tarea 2    Descripción de la tarea&#10;..."
+                placeholder="756    Planificación del mantenimiento    Incidencia    WEB/PRO: El filtro de fecha planificada no funciona, lo muestra todo    Descripción detallada&#10;757    Gestión de usuarios    Mejora    Añadir filtros avanzados en el listado    Descripción de la mejora&#10;..."
                 className="min-h-[200px] font-mono text-sm"
               />
               <p className="text-xs text-muted-foreground">
-                Cada fila debe tener 4 columnas separadas por tabulaciones o múltiples espacios
+                Cada fila debe tener 5 columnas separadas por tabulaciones o múltiples espacios
               </p>
             </div>
 
