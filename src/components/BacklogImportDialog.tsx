@@ -281,7 +281,7 @@ export default function BacklogImportDialog({
               <Textarea
                 value={pastedText}
                 onChange={(e) => setPastedText(e.target.value)}
-                placeholder="756    Planificación del mantenimiento    Incidencia    WEB/PRO: El filtro de fecha planificada no funciona, lo muestra todo    Descripción detallada&#10;757    Gestión de usuarios    Mejora    Añadir filtros avanzados en el listado    Descripción de la mejora&#10;..."
+                placeholder="ID Excel | Épica | Categoría | Nombre | Descripción&#10;756    Planificación del mantenimiento    Incidencia    WEB/PRO: El filtro de fecha planificada no funciona, lo muestra todo    Descripción detallada&#10;757    Gestión de usuarios    Mejora    Añadir filtros avanzados en el listado    Descripción de la mejora&#10;..."
                 className="min-h-[200px] font-mono text-sm"
               />
               <p className="text-xs text-muted-foreground">
