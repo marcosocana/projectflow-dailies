@@ -29,6 +29,8 @@ import TaskAssignmentCell from '@/components/TaskAssignmentCell';
 import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 import TaskAssignmentsInput from '@/components/TaskAssignmentsInput';
 import { Checkbox } from '@/components/ui/checkbox';
+import BacklogImportDialog from '@/components/BacklogImportDialog';
+
 interface IncidentsModuleProps {
   projectId: string;
 }
@@ -262,6 +264,7 @@ export default function IncidentsModule({
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const [backlogImportOpen, setBacklogImportOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] = useState<any | null>(null);
   
@@ -1099,6 +1102,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                   <DropdownMenuItem onSelect={downloadTemplate}>Plantilla</DropdownMenuItem>
                   <DropdownMenuItem onSelect={exportCurrent}>Exportar</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => importInputRef.current?.click()}>Importar</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setBacklogImportOpen(true)}>Importar desde Backlog</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
