@@ -345,10 +345,12 @@ export default function DailiesModule({
     setCreationMode('select');
     setIncidentSearchQuery('');
     setCreateTaskOpen(false);
+    preserveScroll();
     loadTasks(date);
     loadBaseData(); // Reload to get updated incident status
   };
   const toggleTask = async (task: any) => {
+    preserveScroll();
     const {
       error
     } = await supabase.from('tasks').update({
@@ -361,6 +363,7 @@ export default function DailiesModule({
   };
 
   const toggleUrgent = async (taskId: string, currentUrgent: boolean) => {
+    preserveScroll();
     const {
       error
     } = await supabase.from('tasks').update({
@@ -374,6 +377,7 @@ export default function DailiesModule({
     }
   };
   const deleteTask = async (id: string) => {
+    preserveScroll();
     const {
       error
     } = await supabase.from('tasks').delete().eq('id', id);
@@ -438,6 +442,7 @@ export default function DailiesModule({
     }
   };
   const persistSelectedTasks = async () => {
+    preserveScroll();
     try {
       if (!date) return;
       const todayId = await ensureDaily(date);
@@ -692,9 +697,17 @@ export default function DailiesModule({
     </TableHead>
   );
 
-  // Drag and drop functionality
+  // Scroll preservation functionality
   const scrollPositionRef = useRef<number>(0);
+  const shouldPreserveScrollRef = useRef<boolean>(false);
+
+  // Save scroll position before any state update
+  const preserveScroll = () => {
+    scrollPositionRef.current = window.scrollY;
+    shouldPreserveScrollRef.current = true;
+  };
   
+  // Drag and drop functionality
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -717,7 +730,7 @@ export default function DailiesModule({
     if (oldIndex === -1 || newIndex === -1) return;
 
     // Save scroll position before update
-    scrollPositionRef.current = window.scrollY;
+    preserveScroll();
 
     // Update local state immediately for smooth UX
     const newTasks = arrayMove(sortedTasks, oldIndex, newIndex);
@@ -742,6 +755,7 @@ export default function DailiesModule({
           variant: 'destructive',
         });
         // Reload tasks to restore correct order
+        preserveScroll();
         loadTasks(date);
       }
     } catch (e) {
@@ -750,15 +764,16 @@ export default function DailiesModule({
         description: 'No se pudo actualizar el orden',
         variant: 'destructive',
       });
+      preserveScroll();
       loadTasks(date);
     }
   };
 
-  // Restore scroll position after tasks update
+  // Restore scroll position after tasks update using layoutEffect to prevent visual jump
   useEffect(() => {
-    if (scrollPositionRef.current > 0) {
+    if (shouldPreserveScrollRef.current) {
       window.scrollTo(0, scrollPositionRef.current);
-      scrollPositionRef.current = 0;
+      shouldPreserveScrollRef.current = false;
     }
   }, [tasks]);
 
@@ -938,6 +953,7 @@ export default function DailiesModule({
   useEffect(() => {
     if (!selectedTask) return;
     const handler = setTimeout(async () => {
+      preserveScroll();
       const update = {
         title: editForm.title,
         description: editForm.description || null,
@@ -1834,6 +1850,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
         onPatched={(id, payload) => {
           setIncidents(prev => prev.map(i => i.id === id ? { ...i, ...payload } : i));
           // Reload daily tasks to reflect assignment/status sync immediately
+          preserveScroll();
           loadTasks(date);
         }}
       />
