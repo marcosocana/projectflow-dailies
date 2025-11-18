@@ -302,8 +302,8 @@ export default function BacklogImportDialog({
           <div className="space-y-4">
             {currentRow && (
               <>
-                <div className="bg-muted p-4 rounded-lg space-y-3">
-                  <div className="grid grid-cols-3 gap-3">
+                <div className="bg-muted p-4 rounded-lg">
+                  <div className="grid grid-cols-5 gap-3">
                     <div>
                       <Label className="text-xs text-muted-foreground">ID Excel</Label>
                       <p className="text-sm font-medium">{currentRow.number || 'Sin ID'}</p>
@@ -314,18 +314,16 @@ export default function BacklogImportDialog({
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">Categoría</Label>
-                      <Badge variant="outline" className="mt-1">
-                        {currentRow.category}
-                      </Badge>
+                      <p className="text-sm font-medium">{currentRow.category}</p>
                     </div>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Nombre</Label>
-                    <p className="text-sm font-medium">{currentRow.name}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Descripción</Label>
-                    <p className="text-sm">{currentRow.description || 'Sin descripción'}</p>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Nombre</Label>
+                      <p className="text-sm font-medium">{currentRow.name}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Descripción</Label>
+                      <p className="text-sm">{currentRow.description || 'Sin descripción'}</p>
+                    </div>
                   </div>
                 </div>
 
