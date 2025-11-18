@@ -14,6 +14,7 @@ import type { Database } from '@/integrations/supabase/types';
 type IncidentCategory = Database['public']['Enums']['incident_category'];
 
 interface ParsedRow {
+  number: string;
   epic: string;
   category: string;
   name: string;
@@ -64,12 +65,17 @@ export default function BacklogImportDialog({
       // Split by tab or multiple spaces
       const columns = line.split(/\t+|\s{2,}/);
       
-      if (columns.length >= 3) {
+      if (columns.length >= 5) {
+        const number = columns[0]?.trim() || '';
+        const name = columns[3]?.trim() || '';
+        const nameWithNumber = number ? `${name} [${number}]` : name;
+        
         rows.push({
-          epic: columns[0]?.trim() || '',
-          category: columns[1]?.trim() || '',
-          name: columns[2]?.trim() || '',
-          description: columns[3]?.trim() || ''
+          number,
+          epic: columns[1]?.trim() || '',
+          category: columns[2]?.trim() || '',
+          name: nameWithNumber,
+          description: columns[4]?.trim() || ''
         });
       }
     }
@@ -77,7 +83,7 @@ export default function BacklogImportDialog({
     if (rows.length === 0) {
       toast({
         title: 'Error al parsear',
-        description: 'No se encontraron filas válidas. Asegúrate de que cada fila tenga al menos 3 columnas separadas por tabulaciones.',
+        description: 'No se encontraron filas válidas. Asegúrate de que cada fila tenga al menos 5 columnas separadas por tabulaciones.',
         variant: 'destructive'
       });
       return;
@@ -263,7 +269,7 @@ export default function BacklogImportDialog({
           </DialogTitle>
           <DialogDescription>
             {step === 'paste' 
-              ? 'Pega la información del backlog con la siguiente estructura: Épica | Categoría | Nombre | Descripción'
+              ? 'Pega la información del backlog con la siguiente estructura: Número | Épica | Categoría | Nombre | Descripción'
               : 'Revisa los datos y asigna personas antes de crear la tarea'}
           </DialogDescription>
         </DialogHeader>
