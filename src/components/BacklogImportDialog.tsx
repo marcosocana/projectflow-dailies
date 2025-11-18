@@ -303,7 +303,11 @@ export default function BacklogImportDialog({
             {currentRow && (
               <>
                 <div className="bg-muted p-4 rounded-lg space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">ID Excel</Label>
+                      <p className="text-sm font-medium">{currentRow.number || 'Sin ID'}</p>
+                    </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">Épica</Label>
                       <p className="text-sm font-medium">{currentRow.epic || 'Sin épica'}</p>
