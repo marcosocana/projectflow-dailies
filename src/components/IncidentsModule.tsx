@@ -1489,6 +1489,15 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
       </DialogContent>
     </Dialog>
 
+    {/* Importar desde Backlog */}
+    <BacklogImportDialog
+      open={backlogImportOpen}
+      onOpenChange={setBacklogImportOpen}
+      projectId={projectId}
+      teamMembers={teamMembers}
+      onImportComplete={fetchIncidents}
+    />
+
     {/* Ver más */}
     <IncidentDetailDialog open={detailsOpen} onOpenChange={setDetailsOpen} incidentId={selected?.id ?? null} onPatched={(id, payload) => {
       setIncidents(prev => prev.map(i => i.id === id ? {
