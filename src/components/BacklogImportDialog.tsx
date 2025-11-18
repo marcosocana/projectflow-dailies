@@ -269,7 +269,7 @@ export default function BacklogImportDialog({
           </DialogTitle>
           <DialogDescription>
             {step === 'paste' 
-              ? 'Pega la información del backlog con la siguiente estructura: Número | Épica | Categoría | Nombre | Descripción'
+              ? 'Pega la información del backlog con la siguiente estructura: ID Excel | Épica | Categoría | Nombre | Descripción'
               : 'Revisa los datos y asigna personas antes de crear la tarea'}
           </DialogDescription>
         </DialogHeader>
