@@ -194,23 +194,34 @@ export default function BacklogImportDialog({
 
           if (taskError) throw taskError;
 
-          // Get max order_position for this daily to append tasks at the end
-          const { data: maxOrderData } = await supabase
-            .from('daily_tasks')
-            .select('order_position')
-            .eq('daily_id', dailyId)
-            .order('order_position', { ascending: false, nullsFirst: false })
-            .limit(1)
-            .maybeSingle();
+          // Get max order_position for each person in this daily
+          const dailyTaskInserts = await Promise.all(
+            createdTasks.map(async (task) => {
+              // Find max order_position for this specific person in this daily
+              const { data: maxOrderData } = await supabase
+                .from('daily_tasks')
+                .select('order_position, task_id')
+                .eq('daily_id', dailyId)
+                .order('order_position', { ascending: false, nullsFirst: false });
 
-          const maxOrder = maxOrderData?.order_position ?? -1;
+              // Filter by person_id on client side
+              const { data: personTasks } = await supabase
+                .from('tasks')
+                .select('id')
+                .eq('person_id', task.person_id)
+                .in('id', maxOrderData?.map(dt => dt.task_id) || []);
 
-          // Link tasks to daily with incremental order positions
-          const dailyTaskInserts = createdTasks.map((task, index) => ({
-            daily_id: dailyId,
-            task_id: task.id,
-            order_position: maxOrder + 1 + index
-          }));
+              const personTaskIds = new Set(personTasks?.map(t => t.id) || []);
+              const personDailyTasks = maxOrderData?.filter(dt => personTaskIds.has(dt.task_id)) || [];
+              const maxOrder = personDailyTasks.length > 0 ? personDailyTasks[0].order_position : -1;
+
+              return {
+                daily_id: dailyId,
+                task_id: task.id,
+                order_position: maxOrder + 1
+              };
+            })
+          );
 
           const { error: dailyTaskError } = await supabase
             .from('daily_tasks')
