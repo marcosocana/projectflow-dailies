@@ -194,10 +194,22 @@ export default function BacklogImportDialog({
 
           if (taskError) throw taskError;
 
-          // Link tasks to daily
-          const dailyTaskInserts = createdTasks.map(task => ({
+          // Get max order_position for this daily to append tasks at the end
+          const { data: maxOrderData } = await supabase
+            .from('daily_tasks')
+            .select('order_position')
+            .eq('daily_id', dailyId)
+            .order('order_position', { ascending: false, nullsFirst: false })
+            .limit(1)
+            .maybeSingle();
+
+          const maxOrder = maxOrderData?.order_position ?? -1;
+
+          // Link tasks to daily with incremental order positions
+          const dailyTaskInserts = createdTasks.map((task, index) => ({
             daily_id: dailyId,
-            task_id: task.id
+            task_id: task.id,
+            order_position: maxOrder + 1 + index
           }));
 
           const { error: dailyTaskError } = await supabase
