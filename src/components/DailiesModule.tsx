@@ -909,6 +909,7 @@ export default function DailiesModule({
   };
 
   const openIncidentDetails = (incidentId: string) => {
+    preserveScroll();
     setSelectedIncidentId(incidentId);
     setIncidentDetailsOpen(true);
   };
@@ -1845,7 +1846,11 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
       {/* Modal detalle de incidencia (desde Seguimiento diario) */}
       <IncidentDetailDialog
         open={incidentDetailsOpen}
-        onOpenChange={(o) => { setIncidentDetailsOpen(o); if (!o) { setSelectedIncidentId(null); } }}
+        onOpenChange={(o) => { 
+          if (!o) preserveScroll();
+          setIncidentDetailsOpen(o); 
+          if (!o) { setSelectedIncidentId(null); } 
+        }}
         incidentId={selectedIncidentId}
         onPatched={(id, payload) => {
           setIncidents(prev => prev.map(i => i.id === id ? { ...i, ...payload } : i));
