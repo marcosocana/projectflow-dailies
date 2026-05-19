@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, ArrowUp, ArrowDown, MoreVertical, RefreshCcw, AlertTriangle, ListChecks, CheckCircle2, Copy, List, Columns3, Clock, Filter, Check, X, Info } from 'lucide-react';
+import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, ArrowUp, ArrowDown, MoreVertical, RefreshCcw, AlertTriangle, ListChecks, CheckCircle2, Copy, List, Columns3, Clock, Filter, Check, X, Info, Asterisk } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -34,6 +34,13 @@ import BacklogImportDialog from '@/components/BacklogImportDialog';
 interface IncidentsModuleProps {
   projectId: string;
 }
+
+const RequiredLabel = ({ children }: { children: React.ReactNode }) => (
+  <Label className="inline-flex items-center gap-1">
+    {children}
+    <Asterisk className="h-3 w-3 text-destructive" />
+  </Label>
+);
 type ViewMode = 'list' | 'pipeline';
 interface SortableIncidentCardProps {
   incident: any;
@@ -49,13 +56,13 @@ const STATUS_OPTIONS = [{
   label: 'Pendiente'
 }, {
   value: 'in_progress',
-  label: 'En curso'
+  label: 'WIP'
 }, {
   value: 'in_qa',
-  label: 'En pruebas'
+  label: 'En QA'
 }, {
   value: 'resolved',
-  label: 'Resuelta'
+  label: 'En PRO'
 }, {
   value: 'closed',
   label: 'Cerrada'
@@ -65,7 +72,10 @@ const CATEGORY_OPTIONS = [{
   label: 'Incidencia'
 }, {
   value: 'improvement',
-  label: 'Mejora'
+  label: 'Evolutivo'
+}, {
+  value: 'corrective_improvement',
+  label: 'Mejora correctiva'
 }];
 const ENV_OPTIONS = ['DEV', 'PRE', 'PRO', 'Otro', 'N/A'] as const;
 const DEVICE_OPTIONS = ['APP', 'Web', 'Otro', 'N/A'] as const;
@@ -75,9 +85,9 @@ const DEVICE_OPTIONS = ['APP', 'Web', 'Otro', 'N/A'] as const;
 const statusOrder = ['pending', 'in_progress', 'in_qa', 'resolved', 'closed'] as const;
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Pendiente',
-  in_progress: 'En curso',
-  in_qa: 'En pruebas',
-  resolved: 'Resuelta',
+  in_progress: 'WIP',
+  in_qa: 'En QA',
+  resolved: 'En PRO',
   closed: 'Cerrada'
 };
 const STATUS_BADGE_CLS: Record<string, string> = {
@@ -92,6 +102,39 @@ const MADRID_TIME_ZONE = 'Europe/Madrid';
 
 const formatManualId = (value: string | number | null | undefined) =>
   String(value ?? '').replace(/\D/g, '').slice(0, 6);
+
+const CORRECTIVE_CATEGORY_MARKER = '[tipo:mejora_correctiva]';
+
+const cleanAdditionalComments = (value: string | null | undefined) =>
+  String(value ?? '').replace(CORRECTIVE_CATEGORY_MARKER, '').trim();
+
+const getDisplayCategory = (incident: { category?: string | null; additional_comments?: string | null }): IncidentCategory => {
+  if (incident.category === 'corrective_improvement' || String(incident.additional_comments ?? '').includes(CORRECTIVE_CATEGORY_MARKER)) {
+    return 'corrective_improvement';
+  }
+  return (incident.category || 'incident') as IncidentCategory;
+};
+
+const serializeCategory = (category: string, additionalComments: string | null | undefined) => {
+  const cleanComments = cleanAdditionalComments(additionalComments);
+  if (category === 'corrective_improvement') {
+    return {
+      category: 'improvement' as IncidentCategory,
+      additional_comments: [CORRECTIVE_CATEGORY_MARKER, cleanComments].filter(Boolean).join('\n')
+    };
+  }
+  return {
+    category: category as IncidentCategory,
+    additional_comments: cleanComments
+  };
+};
+
+const normalizeCategory = (value: string | null | undefined): IncidentCategory => {
+  const normalized = String(value ?? '').toLowerCase().trim();
+  if (normalized.includes('correctiva') || normalized.includes('corrective')) return 'corrective_improvement';
+  if (normalized.includes('evolutivo') || normalized.includes('mejora') || normalized.includes('improvement')) return 'improvement';
+  return 'incident';
+};
 
 const getMadridDateTimeLocal = (value: string | Date = new Date()) => {
   const date = value instanceof Date ? value : new Date(value);
@@ -152,7 +195,10 @@ function CategoryIcon({
   if (category === 'incident') {
     return <span className="inline-grid place-items-center h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">i</span>;
   }
-  return <span className="inline-grid place-items-center h-5 w-5 rounded-sm bg-primary text-primary-foreground text-[10px] font-bold">M</span>;
+  if (category === 'corrective_improvement') {
+    return <span className="inline-grid place-items-center h-5 w-5 rounded-sm bg-purple-600 text-white text-[10px] font-bold">C</span>;
+  }
+  return <span className="inline-grid place-items-center h-5 w-5 rounded-sm bg-primary text-primary-foreground text-[10px] font-bold">E</span>;
 }
 type ImportButtonProps = {
   onFile: (file: File) => void;
@@ -210,7 +256,7 @@ const SortableIncidentCard = ({
   return <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="bg-white p-4 rounded-lg border shadow-sm hover:shadow-md transition-shadow cursor-move">
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
-          <CategoryIcon category={incident.category} />
+          <CategoryIcon category={getDisplayCategory(incident)} />
           <span className="font-medium text-sm">{incident.incident_number ?? 'Sin ID'}</span>
         </div>
         <Badge variant="outline" className={`text-xs ${getStatusColor(incident.status)} border-transparent`}>
@@ -337,6 +383,8 @@ export default function IncidentsModule({
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [totalImprovements, setTotalImprovements] = useState<number>(0);
   const [improvementStatusCounts, setImprovementStatusCounts] = useState<Record<string, number>>({});
+  const [totalCorrectiveImprovements, setTotalCorrectiveImprovements] = useState<number>(0);
+  const [correctiveImprovementStatusCounts, setCorrectiveImprovementStatusCounts] = useState<Record<string, number>>({});
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -349,7 +397,7 @@ export default function IncidentsModule({
       const matchesEnvironment = environmentFilter === 'all' || i.environment === environmentFilter;
       const matchesEpic = epicFilter === 'all' || i.epic === epicFilter;
       const matchesStatus = statusFilter === 'all' || i.status === statusFilter;
-      const matchesCategory = categoryFilter === 'all' || i.category === categoryFilter;
+      const matchesCategory = categoryFilter === 'all' || getDisplayCategory(i) === categoryFilter;
       const matchesAssignee = assigneeFilter === 'all' || 
         (assigneeFilter === 'unassigned' && !i.assigned_to) ||
         (i.assigned_to && assigneeFilter === i.assigned_to);
@@ -408,7 +456,7 @@ export default function IncidentsModule({
   // Helper function to calculate KPIs from incidents array
   const calculateKPIs = (all: any[]) => {
     // Incidencias (categoría incident)
-    const onlyIncidents = all.filter(i => i.category === 'incident');
+    const onlyIncidents = all.filter(i => getDisplayCategory(i) === 'incident');
     setTotalIncidents(onlyIncidents.length);
     const statusGrouped: Record<string, number> = {};
     onlyIncidents.forEach(incident => {
@@ -417,8 +465,8 @@ export default function IncidentsModule({
     });
     setStatusCounts(statusGrouped);
 
-    // Mejoras (categoría improvement)
-    const onlyImprovements = all.filter(i => i.category === 'improvement');
+    // Evolutivos (categoría improvement)
+    const onlyImprovements = all.filter(i => getDisplayCategory(i) === 'improvement');
     setTotalImprovements(onlyImprovements.length);
     const improvementGrouped: Record<string, number> = {};
     onlyImprovements.forEach(imp => {
@@ -426,6 +474,16 @@ export default function IncidentsModule({
       improvementGrouped[status] = (improvementGrouped[status] || 0) + 1;
     });
     setImprovementStatusCounts(improvementGrouped);
+
+    // Mejoras correctivas (categoría corrective_improvement)
+    const onlyCorrectiveImprovements = all.filter(i => getDisplayCategory(i) === 'corrective_improvement');
+    setTotalCorrectiveImprovements(onlyCorrectiveImprovements.length);
+    const correctiveImprovementGrouped: Record<string, number> = {};
+    onlyCorrectiveImprovements.forEach(imp => {
+      const status = imp.status;
+      correctiveImprovementGrouped[status] = (correctiveImprovementGrouped[status] || 0) + 1;
+    });
+    setCorrectiveImprovementStatusCounts(correctiveImprovementGrouped);
 
     // Update available epics
     const epics = [...new Set(all.map(i => i.epic).filter(Boolean))].sort();
@@ -604,6 +662,7 @@ export default function IncidentsModule({
       // Compose environment/device from single-selects
       const environmentValue = form.environment || '';
       const deviceValue = form.device || '';
+      const categoryPayload = serializeCategory(form.category, form.additionalComments);
 
       // If creating, insert with provided id to bind evidence path
       if (!editingId) {
@@ -617,8 +676,8 @@ export default function IncidentsModule({
           epic: form.epic,
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
-          category: form.category,
-          additional_comments: form.additionalComments,
+          category: categoryPayload.category,
+          additional_comments: categoryPayload.additional_comments,
           project_id: projectId,
           created_by: user?.id ?? null,
           assigned_to: form.assignedTo === 'unassigned' ? null : form.assignedTo
@@ -735,7 +794,8 @@ export default function IncidentsModule({
           epic: form.epic,
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
-          category: form.category,
+          category: categoryPayload.category,
+          additional_comments: categoryPayload.additional_comments,
           assigned_to: form.assignedTo === 'unassigned' ? null : form.assignedTo
         };
         if (evidenceFile) {
@@ -802,8 +862,8 @@ export default function IncidentsModule({
       epic: incident.epic || '',
       occurredAt: incident.occurred_at ? new Date(incident.occurred_at).toISOString() : new Date().toISOString(),
       status: incident.status || 'pending',
-      category: incident.category || 'incident',
-      additionalComments: incident.additional_comments || '',
+      category: getDisplayCategory(incident),
+      additionalComments: cleanAdditionalComments(incident.additional_comments),
       createdBy: incident.created_by || '',
       assignedTo: incident.assigned_to || 'unassigned'
     });
@@ -868,9 +928,9 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
       Epic: i.epic,
       OccurredAt: i.occurred_at,
       Status: i.status,
-      Category: i.category,
+      Category: getDisplayCategory(i),
       Evidence: i.evidence,
-      AdditionalComments: i.additional_comments,
+      AdditionalComments: cleanAdditionalComments(i.additional_comments),
       Id: i.id
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -982,21 +1042,27 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
       const wb = XLSX.read(data);
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows: any[] = XLSX.utils.sheet_to_json(ws);
-      const payload = rows.map(r => ({
-        id: crypto.randomUUID(),
-        name: r.Name ?? r.Nombre ?? '',
-        description: r.Description ?? r.Descripción ?? '',
-        environment: r.Environment ?? r.Entorno ?? '',
-        device: r.Device ?? r.Dispositivo ?? '',
-        epic: r.Epic ?? r['Épica'] ?? r.Epica ?? '',
-        occurred_at: r.OccurredAt ?? r.Fecha ?? new Date().toISOString(),
-        status: r.Status ?? 'pending',
-        category: r.Category ?? 'incident',
-        additional_comments: r.AdditionalComments ?? r['Comentarios adicionales'] ?? '',
-        evidence: r.Evidence ?? null,
-        project_id: projectId,
-        created_by: user?.id ?? null
-      }));
+      const payload = rows.map(r => {
+        const categoryPayload = serializeCategory(
+          normalizeCategory(r.Category ?? r.Categoría ?? r.Categoria),
+          r.AdditionalComments ?? r['Comentarios adicionales'] ?? ''
+        );
+        return {
+          id: crypto.randomUUID(),
+          name: r.Name ?? r.Nombre ?? '',
+          description: r.Description ?? r.Descripción ?? '',
+          environment: r.Environment ?? r.Entorno ?? '',
+          device: r.Device ?? r.Dispositivo ?? '',
+          epic: r.Epic ?? r['Épica'] ?? r.Epica ?? '',
+          occurred_at: r.OccurredAt ?? r.Fecha ?? new Date().toISOString(),
+          status: r.Status ?? 'pending',
+          category: categoryPayload.category,
+          additional_comments: categoryPayload.additional_comments,
+          evidence: r.Evidence ?? null,
+          project_id: projectId,
+          created_by: user?.id ?? null
+        };
+      });
       const {
         error
       } = await supabase.from('incidents').insert(payload);
@@ -1022,137 +1088,67 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
 
   return <div className="space-y-6">
     {/* KPIs arriba del todo */}
-      {/* KPIs: dos bloques en una fila: Incidencias y Mejoras */}
+      {/* KPIs: bloques por tipo de tarea */}
       <div className="grid gap-3 md:grid-cols-12">
-        {/* Bloque Incidencias */}
-        <Card className="md:col-span-6">
-          <CardHeader className="p-3">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <ListChecks className="h-3 w-3" /> Incidencias
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3">
-            <div className="flex items-stretch gap-3 flex-wrap md:flex-nowrap">
-              {/* Total como primer KPI */}
-              {(() => {
-                const selected = statusFilter === 'all' && categoryFilter === 'incident';
-                return <div className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                  if (statusFilter === 'all' && categoryFilter === 'incident') {
-                    setStatusFilter('all');
-                    setCategoryFilter('all');
-                  } else {
-                    setStatusFilter('all');
-                    setCategoryFilter('incident');
-                  }
-                  setCurrentPage(1);
-                }} role="button" aria-label="Filtrar incidencias: Total">
-                      <div className="text-xl font-bold">{totalIncidents}</div>
-                      <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">Total</Badge>
-                    </div>;
-              })()}
+        {[
+          { category: 'incident', title: 'Incidencias', total: totalIncidents, counts: statusCounts, className: 'md:col-span-12' },
+          { category: 'improvement', title: 'Evolutivos', total: totalImprovements, counts: improvementStatusCounts, className: 'md:col-span-6' },
+          { category: 'corrective_improvement', title: 'Mejoras correctivas', total: totalCorrectiveImprovements, counts: correctiveImprovementStatusCounts, className: 'md:col-span-6' },
+        ].map((group) => (
+          <Card key={group.category} className={group.className}>
+            <CardHeader className="p-3">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <ListChecks className="h-3 w-3" /> {group.title}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3">
+              <div className={`flex items-stretch gap-3 flex-wrap ${group.category === 'incident' ? 'justify-between' : 'justify-center md:justify-between'}`}>
+                {(() => {
+                  const selected = statusFilter === 'all' && categoryFilter === group.category;
+                  return <div className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
+                    if (statusFilter === 'all' && categoryFilter === group.category) {
+                      setStatusFilter('all');
+                      setCategoryFilter('all');
+                    } else {
+                      setStatusFilter('all');
+                      setCategoryFilter(group.category);
+                    }
+                    setCurrentPage(1);
+                  }} role="button" aria-label={`Filtrar ${group.title}: Total`}>
+                        <div className="text-xl font-bold">{group.total}</div>
+                        <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">Total</Badge>
+                      </div>;
+                })()}
 
-              {/* Estados estándar en orden */}
-              {(statusOrder as readonly string[]).map((key) => {
-                const selected = statusFilter === key && categoryFilter === 'incident';
-                return <div key={key} className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                  if (statusFilter === key && categoryFilter === 'incident') {
-                    setStatusFilter('all');
-                    setCategoryFilter('all');
-                  } else {
-                    setStatusFilter(key);
-                    setCategoryFilter('incident');
-                  }
-                  setCurrentPage(1);
-                }} role="button" aria-label={`Filtrar por estado ${STATUS_LABELS[key] || key}`}>
-                      <div className="text-xl font-bold">{statusCounts[key] || 0}</div>
-                      <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[10px] px-1 py-0.5`}>
-                        {STATUS_LABELS[key] || key}
-                      </Badge>
-                    </div>;
-              })}
+                {(statusOrder as readonly string[]).map((key) => {
+                  const selected = statusFilter === key && categoryFilter === group.category;
+                  return <div key={key} className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
+                    if (statusFilter === key && categoryFilter === group.category) {
+                      setStatusFilter('all');
+                      setCategoryFilter('all');
+                    } else {
+                      setStatusFilter(key);
+                      setCategoryFilter(group.category);
+                    }
+                    setCurrentPage(1);
+                  }} role="button" aria-label={`Filtrar ${group.title} por estado ${STATUS_LABELS[key] || key}`}>
+                        <div className="text-xl font-bold">{group.counts[key] || 0}</div>
+                        <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[10px] px-1 py-0.5`}>
+                          {STATUS_LABELS[key] || key}
+                        </Badge>
+                      </div>;
+                })}
 
-              {/* Cualquier estado desconocido extra */}
-              {Object.keys(statusCounts).filter(k => !(statusOrder as readonly string[]).includes(k)).map(k => {
-              const selected = false; // Remove status-based filtering
-              return <div key={k} className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                // No filtering logic needed
-                setCurrentPage(1);
-              }}>
-                      <div className="text-xl font-bold">{statusCounts[k] || 0}</div>
-                      <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">{k}</Badge>
-                    </div>;
-            })}
-
-              {/* Sin datos */}
-              {Object.keys(statusCounts).length === 0 && <span className="text-muted-foreground text-sm">Sin datos</span>}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Bloque Mejoras */}
-        <Card className="md:col-span-6">
-          <CardHeader className="p-3">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <ListChecks className="h-3 w-3" /> Mejoras
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3">
-            <div className="flex items-stretch gap-3 flex-wrap md:flex-nowrap">
-              {/* Total como primer KPI */}
-              {(() => {
-                const selected = statusFilter === 'all' && categoryFilter === 'improvement';
-                return <div className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                  if (statusFilter === 'all' && categoryFilter === 'improvement') {
-                    setStatusFilter('all');
-                    setCategoryFilter('all');
-                  } else {
-                    setStatusFilter('all');
-                    setCategoryFilter('improvement');
-                  }
-                  setCurrentPage(1);
-                }} role="button" aria-label="Filtrar mejoras: Total">
-                      <div className="text-xl font-bold">{totalImprovements}</div>
-                      <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">Total</Badge>
-                    </div>;
-              })()}
-
-              {/* Estados estándar en orden */}
-              {(statusOrder as readonly string[]).map((key) => {
-                const selected = statusFilter === key && categoryFilter === 'improvement';
-                return <div key={key} className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                  if (statusFilter === key && categoryFilter === 'improvement') {
-                    setStatusFilter('all');
-                    setCategoryFilter('all');
-                  } else {
-                    setStatusFilter(key);
-                    setCategoryFilter('improvement');
-                  }
-                  setCurrentPage(1);
-                }} role="button" aria-label={`Filtrar mejoras por estado ${STATUS_LABELS[key] || key}`}>
-                      <div className="text-xl font-bold">{improvementStatusCounts[key] || 0}</div>
-                      <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[10px] px-1 py-0.5`}>
-                        {STATUS_LABELS[key] || key}
-                      </Badge>
-                    </div>;
-              })}
-
-              {/* Cualquier estado desconocido extra */}
-              {Object.keys(improvementStatusCounts).filter(k => !(statusOrder as readonly string[]).includes(k)).map(k => {
-              const selected = false; // Remove status-based filtering
-              return <div key={k} className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                // No filtering logic needed
-                setCurrentPage(1);
-              }}>
-                      <div className="text-xl font-bold">{improvementStatusCounts[k] || 0}</div>
-                      <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">{k}</Badge>
-                    </div>;
-            })}
-
-              {/* Sin datos */}
-              {Object.keys(improvementStatusCounts).length === 0 && <span className="text-muted-foreground text-sm">Sin datos</span>}
-            </div>
-          </CardContent>
-        </Card>
+                {Object.keys(group.counts).filter(k => !(statusOrder as readonly string[]).includes(k)).map(k => (
+                  <div key={k} className="w-20 text-center cursor-pointer select-none rounded-md p-1 hover:opacity-80" onClick={() => setCurrentPage(1)}>
+                    <div className="text-xl font-bold">{group.counts[k] || 0}</div>
+                    <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">{k}</Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
 
@@ -1278,7 +1274,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                   return (
                     <TableRow key={i.id}>
                       <TableCell className="w-12">
-                        <CategoryIcon category={i.category} />
+                        <CategoryIcon category={getDisplayCategory(i)} />
                       </TableCell>
                       <TableCell className="font-mono w-20">{i.incident_number ?? '—'}</TableCell>
                       <TableCell className="font-medium w-80">
@@ -1404,7 +1400,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
         </DialogHeader>
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto pr-2">
           <div className="space-y-2">
-            <Label>ID</Label>
+            <RequiredLabel>ID</RequiredLabel>
             <Input
               inputMode="numeric"
               pattern="[0-9]*"
@@ -1419,7 +1415,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
             />
           </div>
           <div className="space-y-2">
-            <Label>Nombre</Label>
+            <RequiredLabel>Nombre</RequiredLabel>
             <Input value={form.name} onChange={e => setForm(f => ({
               ...f,
               name: e.target.value

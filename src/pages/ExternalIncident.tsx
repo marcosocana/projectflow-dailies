@@ -23,7 +23,8 @@ const STATUS_OPTIONS = [
 
 const CATEGORY_OPTIONS = [
   { value: 'incident', label: 'Incidencia' },
-  { value: 'improvement', label: 'Mejora' },
+  { value: 'improvement', label: 'Evolutivo' },
+  { value: 'corrective_improvement', label: 'Mejora correctiva' },
 ];
 
 const STATUS_BADGE_CLS = {
@@ -37,6 +38,18 @@ const MADRID_TIME_ZONE = 'Europe/Madrid';
 
 const formatManualId = (value: string | number | null | undefined) =>
   String(value ?? '').replace(/\D/g, '').slice(0, 6);
+
+const CORRECTIVE_CATEGORY_MARKER = '[tipo:mejora_correctiva]';
+
+const serializeCategory = (category: string, additionalComments = '') => {
+  if (category === 'corrective_improvement') {
+    return {
+      category: 'improvement',
+      additional_comments: [CORRECTIVE_CATEGORY_MARKER, additionalComments.trim()].filter(Boolean).join('\n')
+    };
+  }
+  return { category, additional_comments: additionalComments.trim() };
+};
 
 const getMadridDateTimeLocal = (value: string | Date = new Date()) => {
   const date = value instanceof Date ? value : new Date(value);
@@ -163,6 +176,11 @@ export default function ExternalIncident() {
         evidenceUrl = data.path;
       }
 
+      const categoryPayload = serializeCategory(
+        form.category,
+        `${form.additionalComments}\n\nCreado por: ${form.creatorName} (${form.creatorEmail})`
+      );
+
       // Create incident
       const { error } = await supabase.from('incidents').insert({
         project_id: projectId,
@@ -174,8 +192,8 @@ export default function ExternalIncident() {
         epic: form.epic || null,
         occurred_at: form.occurredAt,
         status: form.status as any,
-        category: form.category as any,
-        additional_comments: `${form.additionalComments}\n\nCreado por: ${form.creatorName} (${form.creatorEmail})`,
+        category: categoryPayload.category as any,
+        additional_comments: categoryPayload.additional_comments,
         evidence: evidenceUrl,
         created_by: null, // External submission
       });

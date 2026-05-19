@@ -30,8 +30,21 @@ const STATUS_OPTIONS = [
 
 const CATEGORY_OPTIONS = [
   { value: 'incident', label: 'Incidencia' },
-  { value: 'improvement', label: 'Mejora' }
+  { value: 'improvement', label: 'Evolutivo' },
+  { value: 'corrective_improvement', label: 'Mejora correctiva' }
 ];
+
+const CORRECTIVE_CATEGORY_MARKER = '[tipo:mejora_correctiva]';
+
+const serializeCategory = (category: string, additionalComments = '') => {
+  if (category === 'corrective_improvement') {
+    return {
+      category: 'improvement',
+      additional_comments: [CORRECTIVE_CATEGORY_MARKER, additionalComments.trim()].filter(Boolean).join('\n')
+    };
+  }
+  return { category, additional_comments: additionalComments.trim() };
+};
 
 const STATUS_BADGE_CLS: Record<string, string> = {
   pending: 'bg-muted text-muted-foreground',
@@ -188,6 +201,7 @@ export default function ExternalTaskCreate() {
         return;
       }
 
+      const categoryPayload = serializeCategory(form.category);
       const insertPayload: any = {
         id,
         incident_number: Number(incidentNumber),
@@ -198,7 +212,8 @@ export default function ExternalTaskCreate() {
         epic: form.epic,
         occurred_at: new Date(form.occurredAt).toISOString(),
         status: form.status,
-        category: form.category,
+        category: categoryPayload.category,
+        additional_comments: categoryPayload.additional_comments,
         project_id: projectId,
         assigned_to: null
       };

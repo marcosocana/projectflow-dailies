@@ -939,7 +939,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
-      incident_category: "incident" | "improvement"
+      incident_category: "incident" | "improvement" | "corrective_improvement"
       incident_status:
         | "pending"
         | "in_progress"
@@ -1087,7 +1087,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
-      incident_category: ["incident", "improvement"],
+      incident_category: ["incident", "improvement", "corrective_improvement"],
       incident_status: [
         "pending",
         "in_progress",

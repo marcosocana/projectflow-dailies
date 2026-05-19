@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ProjectButton } from '@/components/ui/project-button';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, Calendar, CheckCircle2, Clock, List, Columns3, FileText, Filter, Check, X } from 'lucide-react';
+import { AlertTriangle, Calendar, CheckCircle2, Clock, List, Columns3, FileText, Filter, Check, X, Wrench } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -15,6 +15,7 @@ import {
   closestCenter, 
   KeyboardSensor, 
   PointerSensor, 
+  useDroppable,
   useSensor, 
   useSensors,
   DragEndEvent
@@ -44,7 +45,8 @@ interface Incident {
   name: string;
   description: string | null;
   status: IncidentStatus;
-  category: 'incident' | 'improvement';
+  category: 'incident' | 'improvement' | 'corrective_improvement';
+  additional_comments?: string | null;
   occurred_at: string;
   created_at: string;
   environment: string | null;
@@ -70,6 +72,18 @@ interface Person {
 interface SortableCardProps {
   incident: Incident;
 }
+
+const PipelineColumn = ({ status, children }: { status: IncidentStatus; children: React.ReactNode }) => {
+  const { setNodeRef, isOver } = useDroppable({ id: `column-${status}` });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`bg-muted/50 rounded-lg p-4 min-h-[400px] transition-colors ${isOver ? 'bg-primary/10 ring-2 ring-primary/30' : ''}`}
+    >
+      {children}
+    </div>
+  );
+};
 
 const SortableCard = ({ incident }: SortableCardProps) => {
   const {
@@ -97,17 +111,30 @@ const SortableCard = ({ incident }: SortableCardProps) => {
   };
 
   const getCategoryIcon = (category: string) => {
-    return category === 'incident' ? 
-      <AlertTriangle className="h-4 w-4 text-red-500" /> : 
-      <CheckCircle2 className="h-4 w-4 text-blue-500" />;
+    if (category === 'incident') return <AlertTriangle className="h-4 w-4 text-red-500" />;
+    if (category === 'corrective_improvement') return <Wrench className="h-4 w-4 text-purple-600" />;
+    return <CheckCircle2 className="h-4 w-4 text-blue-500" />;
+  };
+
+  const getCategoryLabel = (category: string) => {
+    if (category === 'incident') return 'Incidencia';
+    if (category === 'corrective_improvement') return 'Mejora correctiva';
+    return 'Evolutivo';
+  };
+
+  const getDisplayCategory = (incident: Pick<Incident, 'category' | 'additional_comments'>) => {
+    if (incident.category === 'corrective_improvement' || String(incident.additional_comments ?? '').includes('[tipo:mejora_correctiva]')) {
+      return 'corrective_improvement';
+    }
+    return incident.category;
   };
 
   const getStatusLabel = (status: IncidentStatus) => {
     switch (status) {
       case 'pending': return 'Pendiente';
-      case 'in_progress': return 'En curso';
-      case 'resolved': return 'Resuelto';
-      case 'closed': return 'Cerrado';
+      case 'in_progress': return 'WIP';
+      case 'resolved': return 'En PRO';
+      case 'closed': return 'Cerrada';
       case 'in_qa': return 'En QA';
       default: return status;
     }
@@ -123,7 +150,7 @@ const SortableCard = ({ incident }: SortableCardProps) => {
     >
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
-          {getCategoryIcon(incident.category)}
+          {getCategoryIcon(getDisplayCategory(incident))}
           <span className="font-medium text-sm">{incident.incident_number ?? 'Sin ID'}</span>
         </div>
         <Badge className={`text-xs ${getStatusColor(incident.status)}`}>
@@ -309,9 +336,9 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
   const getStatusLabel = (status: IncidentStatus) => {
     switch (status) {
       case 'pending': return 'Pendiente';
-      case 'in_progress': return 'En curso';
-      case 'resolved': return 'Resuelto';
-      case 'closed': return 'Cerrado';
+      case 'in_progress': return 'WIP';
+      case 'resolved': return 'En PRO';
+      case 'closed': return 'Cerrada';
       case 'in_qa': return 'En QA';
       default: return status;
     }
@@ -345,7 +372,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
 
     // Category filter
     if (selectedCategories.length > 0) {
-      filtered = filtered.filter(inc => selectedCategories.includes(inc.category));
+      filtered = filtered.filter(inc => selectedCategories.includes(getDisplayCategory(inc)));
     }
 
     // Assignee filter
@@ -382,15 +409,16 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
 
   const statusOptions = [
     { value: 'pending', label: 'Pendiente' },
-    { value: 'in_progress', label: 'En curso' },
-    { value: 'resolved', label: 'Resuelto' },
-    { value: 'closed', label: 'Cerrado' },
+    { value: 'in_progress', label: 'WIP' },
+    { value: 'resolved', label: 'En PRO' },
+    { value: 'closed', label: 'Cerrada' },
     { value: 'in_qa', label: 'En QA' },
   ];
 
   const categoryOptions = [
     { value: 'incident', label: 'Incidencia' },
-    { value: 'improvement', label: 'Mejora' },
+    { value: 'improvement', label: 'Evolutivo' },
+    { value: 'corrective_improvement', label: 'Mejora correctiva' },
   ];
 
   const MultiSelectFilter = ({ 
@@ -622,8 +650,8 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        {getCategoryIcon(incident.category)}
-                        <span className="capitalize">{incident.category === 'incident' ? 'Incidencia' : 'Mejora'}</span>
+                        {getCategoryIcon(getDisplayCategory(incident))}
+                        <span>{getCategoryLabel(getDisplayCategory(incident))}</span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -659,7 +687,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
     </Card>
   );
 
-  const renderPipelineView = () => (
+const renderPipelineView = () => (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
@@ -680,11 +708,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
           >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {(['pending', 'in_progress', 'resolved'] as IncidentStatus[]).map((status) => (
-                <div 
-                  key={status}
-                  id={`column-${status}`}
-                  className="bg-muted/50 rounded-lg p-4 min-h-[400px]"
-                >
+                <PipelineColumn key={status} status={status}>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold">{getStatusLabel(status)}</h3>
                     <Badge variant="secondary" className="ml-2">
@@ -706,7 +730,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
                       )}
                     </div>
                   </SortableContext>
-                </div>
+                </PipelineColumn>
               ))}
             </div>
           </DndContext>

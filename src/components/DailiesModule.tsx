@@ -16,7 +16,7 @@ import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 import { es } from 'date-fns/locale';
 import { format, isBefore, isWeekend, startOfDay, isWithinInterval, parseISO } from 'date-fns';
 import type { TablesInsert } from '@/integrations/supabase/types';
-import { Trash2, Eye, Pencil, RefreshCcw, List, ChevronUp, ChevronDown, GripVertical, Link, Copy, AlertTriangle } from 'lucide-react';
+import { Trash2, Eye, Pencil, RefreshCcw, List, ChevronUp, ChevronDown, GripVertical, Link, Copy, AlertTriangle, Asterisk } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -42,12 +42,23 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 type TaskStatus = 'pending' | 'in_progress' | 'resolved' | 'resolved_yesterday';
+const NOTE_MARKER = '[tipo:nota_seguimiento]';
 
 // Helper function to map task status to incident status
 const mapTaskStatusToIncidentStatus = (taskStatus: TaskStatus): 'pending' | 'in_progress' | 'resolved' => {
   if (taskStatus === 'resolved_yesterday') return 'resolved';
   return taskStatus as 'pending' | 'in_progress' | 'resolved';
 };
+
+const dateToLocalInputValue = (value: Date) =>
+  `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+
+const RequiredLabel = ({ children }: { children: React.ReactNode }) => (
+  <Label className="inline-flex items-center gap-1">
+    {children}
+    <Asterisk className="h-3 w-3 text-destructive" />
+  </Label>
+);
 interface DailiesModuleProps {
   projectId: string;
   initiallyUnlocked?: boolean;
@@ -147,6 +158,13 @@ export default function DailiesModule({
   // New state for task creation mode
   const [creationMode, setCreationMode] = useState<'select' | 'linked' | 'manual'>('select');
   const [incidentSearchQuery, setIncidentSearchQuery] = useState('');
+  const [selectedPersonFilter, setSelectedPersonFilter] = useState<string>('all');
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteForm, setNoteForm] = useState({
+    comment: '',
+    personId: '',
+    date: '',
+  });
   const loadBaseData = async () => {
     const [{
       data: ppl
@@ -156,7 +174,7 @@ export default function DailiesModule({
       data: vacs
     }] = await Promise.all([supabase.from('people').select('*').eq('project_id', projectId).order('created_at', {
       ascending: true
-    }), supabase.from('incidents').select('id,name,incident_number,status,category').eq('project_id', projectId).order('incident_number', {
+    }), supabase.from('incidents').select('id,name,description,incident_number,status,category,additional_comments').eq('project_id', projectId).order('incident_number', {
       ascending: false
     }), supabase.from('vacations').select('*').eq('project_id', projectId).order('start_date', {
       ascending: true
@@ -271,6 +289,14 @@ export default function DailiesModule({
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!dailyId) return;
+    const relatedTicket = formatTaskManualId(taskForm.relatedTicket);
+    if (!relatedTicket) {
+      return toast({
+        title: 'ID obligatorio',
+        description: 'Completa el ID de la tarea con un número de hasta 6 dígitos.',
+        variant: 'destructive'
+      });
+    }
     const payload: TablesInsert<'tasks'> = {
       title: taskForm.title,
       description: taskForm.description || null,
@@ -280,7 +306,7 @@ export default function DailiesModule({
       incident_id: taskForm.incidentId || null,
       status: taskForm.status ?? 'pending',
       is_auto_linked: creationMode === 'linked', // Set to true only for automatically linked tasks
-      related_ticket: formatTaskManualId(taskForm.relatedTicket) || null
+      related_ticket: relatedTicket
     };
     const {
       data: created,
@@ -359,6 +385,47 @@ export default function DailiesModule({
     loadTasks(date);
     loadBaseData(); // Reload to get updated incident status
   };
+
+  const addNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetDate = noteForm.date ? new Date(`${noteForm.date}T00:00:00`) : date;
+    const targetDailyId = await ensureDaily(targetDate);
+    const comment = noteForm.comment.trim();
+    if (!comment || !noteForm.personId) {
+      return toast({
+        title: 'Campos obligatorios',
+        description: 'Completa el comentario y la persona asignada.',
+        variant: 'destructive',
+      });
+    }
+
+    const { error } = await supabase.from('tasks').insert({
+      title: comment,
+      description: NOTE_MARKER,
+      project_id: projectId,
+      daily_id: targetDailyId,
+      person_id: noteForm.personId,
+      assigned_to: noteForm.personId,
+      status: 'pending',
+      is_auto_linked: false,
+      related_ticket: null,
+    });
+
+    if (error) {
+      return toast({
+        title: 'Error',
+        description: 'No se pudo crear la nota',
+        variant: 'destructive',
+      });
+    }
+
+    setNoteOpen(false);
+    setNoteForm({ comment: '', personId: '', date: dateToLocalInputValue(date) });
+    if (dateToLocalInputValue(targetDate) === dateToLocalInputValue(date)) {
+      loadTasks(date);
+    }
+  };
+
   const toggleTask = async (task: any) => {
     preserveScroll();
     const {
@@ -643,9 +710,13 @@ export default function DailiesModule({
 
   // Sort daily tasks based on current sort settings
   const sortedTasks = useMemo(() => {
-    if (!dailySortField) return tasks;
+    const visibleTasks = selectedPersonFilter === 'all'
+      ? tasks
+      : tasks.filter(task => (task.person_id || task.assigned_to || 'unassigned') === selectedPersonFilter);
 
-    return [...tasks].sort((a, b) => {
+    if (!dailySortField) return visibleTasks;
+
+    return [...visibleTasks].sort((a, b) => {
       let aValue, bValue;
       
       switch (dailySortField) {
@@ -671,7 +742,7 @@ export default function DailiesModule({
         return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
       }
     });
-  }, [tasks, dailySortField, dailySortDirection, people]);
+  }, [tasks, dailySortField, dailySortDirection, people, selectedPersonFilter]);
 
   const DailySortableHeader = ({ field, children }: { field: 'status' | 'person'; children: React.ReactNode }) => (
     <TableHead 
@@ -822,8 +893,10 @@ export default function DailiesModule({
       opacity: isDragging ? 0.5 : 1,
     };
 
+    const isNote = String(task.description || '').includes(NOTE_MARKER);
+
     return (
-      <TableRow ref={setNodeRef} style={style} className={isDragging ? 'relative z-50' : ''}>
+      <TableRow ref={setNodeRef} style={style} className={cn(isDragging && 'relative z-50', isNote && 'bg-yellow-100 hover:bg-yellow-100/90')}>
         <TableCell className="w-8">
           <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
             <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -866,6 +939,9 @@ export default function DailiesModule({
           )}
         </TableCell>
         <TableCell>
+          {renderCategoryIcon(getDisplayCategory(incident))}
+        </TableCell>
+        <TableCell>
           <div className="flex items-center gap-2">
             <Button 
               variant="ghost" 
@@ -878,7 +954,7 @@ export default function DailiesModule({
             </Button>
             <div className="flex-1">
               <div className="font-medium">{task.title}</div>
-              {typeof task.description === 'string' && (
+              {typeof task.description === 'string' && !String(task.description).includes(NOTE_MARKER) && (
                 <div className="text-xs text-muted-foreground">
                   {task.description.length > 70 ? `${task.description.slice(0, 70)}...` : task.description}
                 </div>
@@ -936,6 +1012,34 @@ export default function DailiesModule({
     return String(value ?? '').replace(/\D/g, '').slice(0, 6);
   };
 
+  const getCategoryLabel = (category: string | null | undefined) => {
+    if (category === 'incident') return 'Incidencia';
+    if (category === 'improvement') return 'Evolutivo';
+    if (category === 'corrective_improvement') return 'Mejora correctiva';
+    return 'Sin tipo';
+  };
+
+  const getDisplayCategory = (incident: any) => {
+    if (!incident) return null;
+    if (incident.category === 'corrective_improvement' || String(incident.additional_comments ?? '').includes('[tipo:mejora_correctiva]')) {
+      return 'corrective_improvement';
+    }
+    return incident.category;
+  };
+
+  const renderCategoryIcon = (category: string | null | undefined) => {
+    if (category === 'incident') {
+      return <span title="Incidencia" className="inline-grid place-items-center h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">I</span>;
+    }
+    if (category === 'improvement') {
+      return <span title="Evolutivo" className="inline-grid place-items-center h-5 w-5 rounded-sm bg-primary text-primary-foreground text-[10px] font-bold">E</span>;
+    }
+    if (category === 'corrective_improvement') {
+      return <span title="Mejora correctiva" className="inline-grid place-items-center h-5 w-5 rounded-sm bg-purple-600 text-white text-[10px] font-bold">C</span>;
+    }
+    return <span className="text-muted-foreground">—</span>;
+  };
+
   const isMutedCalendarDay = (day: Date) => {
     return isBefore(startOfDay(day), startOfDay(new Date())) || isWeekend(day);
   };
@@ -970,12 +1074,13 @@ export default function DailiesModule({
   }, [people, selectedDateVacations]);
 
   const taskCountSummary = useMemo(() => {
-    const counts = new Map<string, { name: string; color?: string; count: number }>();
+    const counts = new Map<string, { id: string; name: string; color?: string; count: number }>();
 
     tasks.forEach(task => {
       const person = people.find(p => p.id === (task.person_id || task.assigned_to));
       const key = person?.id || 'unassigned';
       const current = counts.get(key) || {
+        id: key,
         name: person?.name || 'Sin asignar',
         color: person?.color,
         count: 0,
@@ -1039,9 +1144,11 @@ export default function DailiesModule({
     if (!selectedTask) return;
     const handler = setTimeout(async () => {
       preserveScroll();
+      const relatedTicket = formatTaskManualId(editForm.relatedTicket);
+      if (!relatedTicket) return;
       const update = {
         title: editForm.title,
-        related_ticket: formatTaskManualId(editForm.relatedTicket) || null,
+        related_ticket: relatedTicket,
         description: editForm.description || null,
         person_id: editForm.personIds.length > 0 ? editForm.personIds[0] : null,
         incident_id: editForm.incidentId || null,
@@ -1121,21 +1228,15 @@ export default function DailiesModule({
         <CardHeader>
           <div className="flex items-start justify-end gap-4">
             <div className="flex flex-wrap gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  loadBaseData();
-                  loadTasks(date);
-                }}
-                aria-label="Actualizar"
-                title="Actualizar"
-              >
-                <RefreshCcw className="h-4 w-4" />
-              </Button>
-              <Button onClick={() => setCreateTaskOpen(true)} aria-label="Crear tarea" title="Crear tarea">+</Button>
               <Button variant="outline" onClick={openPersistModal}>Persistir</Button>
               <Button variant="outline" onClick={() => { loadAllTasks(); setViewAllTasksOpen(true); }}>Ver todas</Button>
+              <Button
+                variant="outline"
+                onClick={() => window.open('https://cepsacorp-my.sharepoint.com/:x:/g/personal/prminsait18_outsourcing_moeveglobal_com/IQAFEc-JDQ4FQqmgcLy-bYFMAXmhMbJeo93EwHxza2rwSmk?e=BM91hk', '_blank', 'noopener,noreferrer')}
+              >
+                Ver Excel Incidencias
+              </Button>
+              <Button onClick={() => setCreateTaskOpen(true)} aria-label="Crear tarea" title="Crear tarea">+</Button>
             </div>
           </div>
         </CardHeader>
@@ -1144,7 +1245,6 @@ export default function DailiesModule({
             {/* Calendar */}
             <div className="flex justify-center">
               <div className="w-fit">
-                <h3 className="text-lg font-semibold mb-4 text-center">Calendario</h3>
                 <Calendar
                   mode="single"
                   selected={date}
@@ -1158,32 +1258,51 @@ export default function DailiesModule({
                   components={{ DayContent: DayContent as any }}
                 />
                 {selectedDateVacationPeople.length > 0 && (
-                  <div className="mt-3 rounded-md border border-orange-300 bg-orange-100 px-3 py-2 text-sm text-orange-900">
+                  <div className="mt-3 rounded-md border border-red-300 bg-red-100 px-3 py-2 text-sm text-red-900">
                     Ausencias: {selectedDateVacationPeople.join(', ')}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Acciones bajo calendario */}
-            <div className="flex justify-start">
-              <Button
-                variant="outline"
-                onClick={() => window.open('https://cepsacorp-my.sharepoint.com/:x:/g/personal/prminsait18_outsourcing_moeveglobal_com/IQAFEc-JDQ4FQqmgcLy-bYFMAXmhMbJeo93EwHxza2rwSmk?e=BM91hk', '_blank', 'noopener,noreferrer')}
-              >
-                Ver Excel Incidencias
-              </Button>
-            </div>
-
             {/* Tasks List */}
             <div className="w-full">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setNoteForm({ comment: '', personId: '', date: dateToLocalInputValue(date) });
+                    setNoteOpen(true);
+                  }}
+                >
+                  Añadir nota
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    loadBaseData();
+                    loadTasks(date);
+                  }}
+                  aria-label="Actualizar"
+                  title="Actualizar"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                </Button>
+              </div>
               {taskCountSummary.length > 0 && (
                 <div className="mb-3 flex flex-wrap gap-2 text-sm">
                   {taskCountSummary.map(item => (
                     <Badge
-                      key={item.name}
+                      key={item.id}
                       variant="outline"
-                      className="bg-muted/50"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedPersonFilter(current => current === item.id ? 'all' : item.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') setSelectedPersonFilter(current => current === item.id ? 'all' : item.id);
+                      }}
+                      className={cn("cursor-pointer bg-muted/50", selectedPersonFilter === item.id && "bg-primary/10 ring-2 ring-primary")}
                       style={{ borderColor: item.color || undefined }}
                     >
                       {item.name}: {item.count} {item.count === 1 ? 'tarea' : 'tareas'}
@@ -1202,6 +1321,7 @@ export default function DailiesModule({
                       <TableHead className="w-8"></TableHead>
                       <DailySortableHeader field="status">Estado</DailySortableHeader>
                       <TableHead>ID</TableHead>
+                      <TableHead>Tipo</TableHead>
                       <TableHead>Tarea</TableHead>
                       <DailySortableHeader field="person">Persona</DailySortableHeader>
                       <TableHead></TableHead>
@@ -1227,7 +1347,7 @@ export default function DailiesModule({
                     </SortableContext>
                     {sortedTasks.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center text-muted-foreground">
                           Sin tareas para este día
                         </TableCell>
                       </TableRow>
@@ -1317,8 +1437,7 @@ export default function DailiesModule({
                           </div>
                           {incident.category && (
                             <div className="text-xs text-muted-foreground">
-                              {incident.category === 'incident' ? '🔴 Incidencia' : 
-                               incident.category === 'improvement' ? '🔵 Mejora' : 'Característica'}
+                              {getCategoryLabel(getDisplayCategory(incident))}
                             </div>
                           )}
                         </div>
@@ -1381,7 +1500,7 @@ export default function DailiesModule({
               )}
 
               <div className="md:col-span-2">
-                <Label>Título</Label>
+                <RequiredLabel>Título</RequiredLabel>
                 <Input value={taskForm.title} onChange={e => setTaskForm(f => ({
                   ...f,
                   title: e.target.value
@@ -1389,7 +1508,7 @@ export default function DailiesModule({
               </div>
 
               <div>
-                <Label>ID</Label>
+                <RequiredLabel>ID</RequiredLabel>
                 <Input
                   inputMode="numeric"
                   pattern="[0-9]*"
@@ -1400,6 +1519,7 @@ export default function DailiesModule({
                     ...f,
                     relatedTicket: formatTaskManualId(e.target.value)
                   }))}
+                  required
                 />
               </div>
               <div>
@@ -1501,6 +1621,51 @@ export default function DailiesModule({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Añadir nota</DialogTitle>
+            <DialogDescription>La nota aparecerá en Seguimiento diario el día indicado.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={addNote} className="space-y-4">
+            <div className="space-y-2">
+              <RequiredLabel>Comentario</RequiredLabel>
+              <Textarea
+                value={noteForm.comment}
+                onChange={(e) => setNoteForm(f => ({ ...f, comment: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <RequiredLabel>Persona</RequiredLabel>
+              <Select value={noteForm.personId} onValueChange={(value) => setNoteForm(f => ({ ...f, personId: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar persona" />
+                </SelectTrigger>
+                <SelectContent>
+                  {people.map(person => (
+                    <SelectItem key={person.id} value={person.id}>{person.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <RequiredLabel>Día</RequiredLabel>
+              <Input
+                type="date"
+                value={noteForm.date}
+                onChange={(e) => setNoteForm(f => ({ ...f, date: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setNoteOpen(false)}>Cancelar</Button>
+              <Button type="submit">Guardar nota</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal Detalle de Tarea */}
       <Dialog open={detailsOpen} onOpenChange={o => {
         preserveScroll();
@@ -1577,24 +1742,25 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
           {selectedTask && <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="md:col-span-2">
-                  <Label>Título</Label>
+                  <RequiredLabel>Título</RequiredLabel>
                   <Input value={editForm.title} onChange={e => setEditForm(f => ({
                 ...f,
                 title: e.target.value
               }))} required />
                 </div>
                 <div>
-                  <Label>ID</Label>
+                  <RequiredLabel>ID</RequiredLabel>
                   <Input
                     inputMode="numeric"
                     pattern="[0-9]*"
-                    maxLength={6}
-                    placeholder="Máx. 6 dígitos"
-                    value={editForm.relatedTicket}
+                  maxLength={6}
+                  placeholder="Máx. 6 dígitos"
+                  value={editForm.relatedTicket}
                     onChange={e => setEditForm(f => ({
                       ...f,
                       relatedTicket: formatTaskManualId(e.target.value)
                     }))}
+                    required
                   />
                 </div>
                 <div>
@@ -1703,8 +1869,8 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                                <CommandItem
                                  key={i.id}
                                  value={formatIncidentLabel(i)}
-                                 onSelect={() => {
-                                   setEditForm(f => ({ ...f, incidentId: i.id }));
+                 onSelect={() => {
+                                   setEditForm(f => ({ ...f, incidentId: i.id, relatedTicket: formatTaskManualId(i.incident_number) }));
                                  }}
                                >
                                  {formatIncidentLabel(i)}
@@ -1762,7 +1928,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                   }} />
                       <div className="flex-1 min-w-0">
                         <div className="font-medium">{task.title}</div>
-                        {task.description && <div className="text-sm text-muted-foreground mt-1">{task.description}</div>}
+                        {task.description && !String(task.description).includes(NOTE_MARKER) && <div className="text-sm text-muted-foreground mt-1">{task.description}</div>}
                         <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                           <Badge 
                             variant="outline"
@@ -1848,6 +2014,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                     <SortableHeader field="status">Estado</SortableHeader>
                     <SortableHeader field="title">Tarea</SortableHeader>
                     <TableHead>ID</TableHead>
+                    <TableHead>Tipo</TableHead>
                     <SortableHeader field="person">Persona</SortableHeader>
                     <TableHead>Creada</TableHead>
                     <TableHead></TableHead>
@@ -1856,6 +2023,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                 <TableBody>
                   {filteredTasks.map(task => {
                   const person = people.find(p => p.id === (task.person_id || task.assigned_to));
+                  const incident = incidents.find(i => i.id === task.incident_id);
                   return <TableRow key={task.id}>
                         <TableCell>
                           <Badge 
@@ -1886,7 +2054,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                              )}
                              <div className="font-medium">{task.title}</div>
                            </div>
-                           {typeof task.description === 'string' && <div className="text-xs text-muted-foreground">{task.description.length > 150 ? `${task.description.slice(0, 150)}...` : task.description}</div>}
+                           {typeof task.description === 'string' && !String(task.description).includes(NOTE_MARKER) && <div className="text-xs text-muted-foreground">{task.description.length > 150 ? `${task.description.slice(0, 150)}...` : task.description}</div>}
                          </TableCell>
                         <TableCell>
                           {task.related_ticket ? (
@@ -1895,6 +2063,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                             <span className="text-muted-foreground">—</span>
                           )}
                         </TableCell>
+                        <TableCell>{renderCategoryIcon(getDisplayCategory(incident))}</TableCell>
                         <TableCell>
                           {person ? <div className="flex items-center gap-2">
                               <span className="h-3 w-3 rounded" style={{
@@ -1912,7 +2081,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                       </TableRow>;
                 })}
                   {filteredTasks.length === 0 && <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center text-muted-foreground">
                         No se encontraron tareas
                       </TableCell>
                     </TableRow>}

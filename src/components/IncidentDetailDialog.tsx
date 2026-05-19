@@ -24,7 +24,8 @@ const STATUS_OPTIONS = [
 
 const CATEGORY_OPTIONS = [
   { value: 'incident', label: 'Incidencia' },
-  { value: 'improvement', label: 'Mejora' },
+  { value: 'improvement', label: 'Evolutivo' },
+  { value: 'corrective_improvement', label: 'Mejora correctiva' },
 ] as const;
 
 const ENV_OPTIONS = ['DEV','PRE','PRO','Otro'] as const;
@@ -34,6 +35,29 @@ const MADRID_TIME_ZONE = 'Europe/Madrid';
 
 const formatManualId = (value: string | number | null | undefined) =>
   String(value ?? '').replace(/\D/g, '').slice(0, 6);
+
+const CORRECTIVE_CATEGORY_MARKER = '[tipo:mejora_correctiva]';
+
+const cleanAdditionalComments = (value: string | null | undefined) =>
+  String(value ?? '').replace(CORRECTIVE_CATEGORY_MARKER, '').trim();
+
+const getDisplayCategory = (incident: { category?: string | null; additional_comments?: string | null }) => {
+  if (incident.category === 'corrective_improvement' || String(incident.additional_comments ?? '').includes(CORRECTIVE_CATEGORY_MARKER)) {
+    return 'corrective_improvement';
+  }
+  return incident.category || 'incident';
+};
+
+const serializeCategory = (category: string, additionalComments: string | null | undefined) => {
+  const cleanComments = cleanAdditionalComments(additionalComments);
+  if (category === 'corrective_improvement') {
+    return {
+      category: 'improvement',
+      additional_comments: [CORRECTIVE_CATEGORY_MARKER, cleanComments].filter(Boolean).join('\n')
+    };
+  }
+  return { category, additional_comments: cleanComments };
+};
 
 const getMadridDateTimeLocal = (value: string | Date = new Date()) => {
   const date = value instanceof Date ? value : new Date(value);
@@ -198,9 +222,9 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           description: data.description || '',
           occurredAt: data.occurred_at ? new Date(data.occurred_at).toISOString() : new Date().toISOString(),
           status: data.status || 'pending',
-          category: data.category || 'incident',
+          category: getDisplayCategory(data),
           epic: data.epic || '',
-          additionalComments: data.additional_comments || '',
+          additionalComments: cleanAdditionalComments(data.additional_comments),
           env: pick(data.environment || '', ENV_OPTIONS),
           dev: pick(data.device || '', DEVICE_OPTIONS),
           evidenceLink: data.evidence && !String(data.evidence).startsWith('incidents/') ? data.evidence : '',
@@ -229,21 +253,22 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     if (isInitialDetailLoad.current) return;
     const handler = setTimeout(async () => {
       const manualIncidentNumber = formatManualId(detailForm.incidentNumber);
+      if (!manualIncidentNumber) return;
+      const categoryPayload = serializeCategory(detailForm.category, detailForm.additionalComments);
       const payload: any = {
+        incident_number: Number(manualIncidentNumber),
         name: detailForm.name,
         description: detailForm.description,
         environment: detailForm.env,
         device: detailForm.dev,
         occurred_at: new Date(detailForm.occurredAt).toISOString(),
         status: detailForm.status,
-        category: detailForm.category,
+        category: categoryPayload.category,
+        additional_comments: categoryPayload.additional_comments,
         epic: detailForm.epic,
         evidence: selected.evidence,
         assigned_to: detailForm.assignedTo === 'unassigned' ? null : detailForm.assignedTo,
       };
-      if (manualIncidentNumber) {
-        payload.incident_number = Number(manualIncidentNumber);
-      }
       if (detailEvidenceFile) {
         try {
           const path = await handleUploadEvidence(selected.id);
@@ -270,13 +295,11 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         await syncSingleAssignmentStatus(selected.id, payload.status);
       }
 
-      if (manualIncidentNumber) {
-        await supabase
-          .from('tasks')
-          .update({ related_ticket: manualIncidentNumber })
-          .eq('incident_id', selected.id)
-          .eq('is_auto_linked', true);
-      }
+      await supabase
+        .from('tasks')
+        .update({ related_ticket: manualIncidentNumber })
+        .eq('incident_id', selected.id)
+        .eq('is_auto_linked', true);
       
       setSelected((prev: any) => (prev ? { ...prev, ...payload } : prev));
       onPatched?.(selected.id, payload);

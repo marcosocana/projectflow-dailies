@@ -100,10 +100,23 @@ export default function BacklogImportDialog({
     if (normalized.includes('incidencia') || normalized.includes('incident')) {
       return 'incident';
     }
-    if (normalized.includes('mejora') || normalized.includes('improvement')) {
+    if (normalized.includes('correctiva') || normalized.includes('corrective')) {
+      return 'corrective_improvement';
+    }
+    if (normalized.includes('mejora') || normalized.includes('evolutivo') || normalized.includes('improvement')) {
       return 'improvement';
     }
     return 'incident'; // Default
+  };
+
+  const serializeCategory = (category: IncidentCategory) => {
+    if (category === 'corrective_improvement') {
+      return {
+        category: 'improvement' as IncidentCategory,
+        additional_comments: '[tipo:mejora_correctiva]'
+      };
+    }
+    return { category, additional_comments: null };
   };
 
   const handleCreateCurrent = async () => {
@@ -115,6 +128,7 @@ export default function BacklogImportDialog({
     setProcessing(true);
 
     try {
+      const categoryPayload = serializeCategory(mapCategory(current.category));
       // Create incident
       const { data: incident, error: incidentError } = await supabase
         .from('incidents')
@@ -123,7 +137,8 @@ export default function BacklogImportDialog({
           name: current.name,
           description: current.description || null,
           epic: current.epic || null,
-          category: mapCategory(current.category),
+          category: categoryPayload.category,
+          additional_comments: categoryPayload.additional_comments,
           status: 'pending',
           occurred_at: new Date().toISOString()
         })
@@ -304,7 +319,7 @@ export default function BacklogImportDialog({
               <Textarea
                 value={pastedText}
                 onChange={(e) => setPastedText(e.target.value)}
-                placeholder={`ID Excel | Épica | Categoría | Nombre | Descripción\n756    Planificación del mantenimiento    Incidencia    WEB/PRO: El filtro de fecha planificada no funciona, lo muestra todo    Descripción detallada\n757    Gestión de usuarios    Mejora    Añadir filtros avanzados en el listado    Descripción de la mejora\n...`}
+                placeholder={`ID Excel | Épica | Categoría | Nombre | Descripción\n756    Planificación del mantenimiento    Incidencia    WEB/PRO: El filtro de fecha planificada no funciona, lo muestra todo    Descripción detallada\n757    Gestión de usuarios    Evolutivo    Añadir filtros avanzados en el listado    Descripción del evolutivo\n758    Operativa    Mejora correctiva    Ajustar validación de estados    Descripción de la mejora correctiva\n...`}
                 className="min-h-[200px] font-mono text-sm"
               />
               <p className="text-xs text-muted-foreground">
