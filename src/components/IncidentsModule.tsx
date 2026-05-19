@@ -1089,23 +1089,23 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
   return <div className="space-y-6">
     {/* KPIs arriba del todo */}
       {/* KPIs: bloques por tipo de tarea */}
-      <div className="grid gap-3 md:grid-cols-12">
+      <div className="grid gap-2 xl:grid-cols-3">
         {[
-          { category: 'incident', title: 'Incidencias', total: totalIncidents, counts: statusCounts, className: 'md:col-span-12' },
-          { category: 'improvement', title: 'Evolutivos', total: totalImprovements, counts: improvementStatusCounts, className: 'md:col-span-6' },
-          { category: 'corrective_improvement', title: 'Mejoras correctivas', total: totalCorrectiveImprovements, counts: correctiveImprovementStatusCounts, className: 'md:col-span-6' },
+          { category: 'incident', title: 'Incidencias', total: totalIncidents, counts: statusCounts },
+          { category: 'improvement', title: 'Evolutivos', total: totalImprovements, counts: improvementStatusCounts },
+          { category: 'corrective_improvement', title: 'Mejoras correctivas', total: totalCorrectiveImprovements, counts: correctiveImprovementStatusCounts },
         ].map((group) => (
-          <Card key={group.category} className={group.className}>
-            <CardHeader className="p-3">
+          <Card key={group.category}>
+            <CardHeader className="p-2">
               <CardTitle className="flex items-center gap-2 text-sm">
                 <ListChecks className="h-3 w-3" /> {group.title}
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-3">
-              <div className={`flex items-stretch gap-3 flex-wrap ${group.category === 'incident' ? 'justify-between' : 'justify-center md:justify-between'}`}>
+            <CardContent className="p-2 pt-0">
+              <div className="flex items-stretch justify-between gap-1">
                 {(() => {
                   const selected = statusFilter === 'all' && categoryFilter === group.category;
-                  return <div className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
+                  return <div className={`min-w-0 flex-1 text-center cursor-pointer select-none rounded-md px-1 py-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
                     if (statusFilter === 'all' && categoryFilter === group.category) {
                       setStatusFilter('all');
                       setCategoryFilter('all');
@@ -1115,14 +1115,14 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                     }
                     setCurrentPage(1);
                   }} role="button" aria-label={`Filtrar ${group.title}: Total`}>
-                        <div className="text-xl font-bold">{group.total}</div>
-                        <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">Total</Badge>
+                        <div className="text-lg font-bold leading-5">{group.total}</div>
+                        <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[9px] px-1 py-0.5">Total</Badge>
                       </div>;
                 })()}
 
                 {(statusOrder as readonly string[]).map((key) => {
                   const selected = statusFilter === key && categoryFilter === group.category;
-                  return <div key={key} className={`w-20 text-center cursor-pointer select-none rounded-md p-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
+                  return <div key={key} className={`min-w-0 flex-1 text-center cursor-pointer select-none rounded-md px-1 py-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
                     if (statusFilter === key && categoryFilter === group.category) {
                       setStatusFilter('all');
                       setCategoryFilter('all');
@@ -1132,17 +1132,17 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                     }
                     setCurrentPage(1);
                   }} role="button" aria-label={`Filtrar ${group.title} por estado ${STATUS_LABELS[key] || key}`}>
-                        <div className="text-xl font-bold">{group.counts[key] || 0}</div>
-                        <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[10px] px-1 py-0.5`}>
+                        <div className="text-lg font-bold leading-5">{group.counts[key] || 0}</div>
+                        <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[9px] px-1 py-0.5`}>
                           {STATUS_LABELS[key] || key}
                         </Badge>
                       </div>;
                 })}
 
                 {Object.keys(group.counts).filter(k => !(statusOrder as readonly string[]).includes(k)).map(k => (
-                  <div key={k} className="w-20 text-center cursor-pointer select-none rounded-md p-1 hover:opacity-80" onClick={() => setCurrentPage(1)}>
-                    <div className="text-xl font-bold">{group.counts[k] || 0}</div>
-                    <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[10px] px-1 py-0.5">{k}</Badge>
+                  <div key={k} className="min-w-0 flex-1 text-center cursor-pointer select-none rounded-md px-1 py-1 hover:opacity-80" onClick={() => setCurrentPage(1)}>
+                    <div className="text-lg font-bold leading-5">{group.counts[k] || 0}</div>
+                    <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[9px] px-1 py-0.5">{k}</Badge>
                   </div>
                 ))}
               </div>
