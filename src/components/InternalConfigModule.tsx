@@ -1,7 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import DailiesModule from '@/components/DailiesModule';
 import TeamModule from '@/components/TeamModule';
-import MonthlyMetricsModule from '@/components/MonthlyMetricsModule';
 
 interface InternalConfigModuleProps {
   projectId: string;
@@ -19,7 +18,7 @@ export default function InternalConfigModule({ projectId }: InternalConfigModule
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="dailies">Seguimiento diario</TabsTrigger>
           <TabsTrigger value="team">Gestión del Equipo</TabsTrigger>
-          <TabsTrigger value="metrics">Imputaciones</TabsTrigger>
+          <TabsTrigger value="excel">Excel incidencias</TabsTrigger>
         </TabsList>
         
         <TabsContent value="dailies" className="space-y-4">
@@ -30,8 +29,12 @@ export default function InternalConfigModule({ projectId }: InternalConfigModule
           <TeamModule projectId={projectId} />
         </TabsContent>
         
-        <TabsContent value="metrics" className="space-y-4">
-          <MonthlyMetricsModule projectId={projectId} />
+        <TabsContent value="excel" className="space-y-4">
+          <iframe
+            src="seguimiento_incidencias_equipo.xlsx"
+            title="Excel incidencias"
+            className="w-full h-[80vh] border rounded-md"
+          />
         </TabsContent>
       </Tabs>
     </div>
