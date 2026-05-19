@@ -31,7 +31,7 @@ export default function InternalConfigModule({ projectId }: InternalConfigModule
         
         <TabsContent value="excel" className="space-y-4">
           <iframe
-            src="seguimiento_incidencias_equipo.xlsx"
+            src="https://indra365-my.sharepoint.com/:x:/g/personal/mocanat_minsait_com/IQDbk-8YEepOQa7TZDA4LDByARJhccKw9H6r8tcU_btpcY8?e=pgwkiL&action=embedview&wdAllowInteractivity=True"
             title="Excel incidencias"
             className="w-full h-[80vh] border rounded-md"
           />
