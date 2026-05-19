@@ -5,9 +5,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { X, Plus } from 'lucide-react';
 import { useTaskAssignments } from '@/hooks/useTaskAssignments';
 import { updateTaskStatusFromAssignments } from '@/hooks/useSyncTaskStatus';
+import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 
 type IncidentStatus = Database['public']['Enums']['incident_status'];
+type TaskStatus = Database['public']['Enums']['task_status'];
 
 interface TaskAssignmentsManagerProps {
   taskId: string | null;
@@ -31,6 +33,20 @@ const STATUS_COLORS: Record<IncidentStatus, string> = {
   closed: 'bg-destructive text-destructive-foreground'
 };
 
+const formatManualId = (value: string | number | null | undefined) =>
+  String(value ?? '').replace(/\D/g, '').slice(0, 6);
+
+const getTodayDate = () => {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+};
+
+const mapIncidentStatusToTaskStatus = (status: IncidentStatus): TaskStatus => {
+  if (status === 'closed' || status === 'resolved') return 'resolved';
+  if (status === 'in_progress' || status === 'in_qa') return 'in_progress';
+  return 'pending';
+};
+
 export default function TaskAssignmentsManager({ 
   taskId, 
   teamMembers,
@@ -48,8 +64,10 @@ export default function TaskAssignmentsManager({
     }
 
     try {
+      const memberId = selectedMember;
       await addAssignment(selectedMember);
       setSelectedMember('');
+      await syncDailyTaskForAssignment(taskId, memberId);
       
       // Sincronizar el estado general de la tarea
       await updateTaskStatusFromAssignments(taskId);
@@ -57,6 +75,105 @@ export default function TaskAssignmentsManager({
       onAssignmentsChange?.();
     } catch (error) {
       console.error('Error adding assignment:', error);
+    }
+  };
+
+  const syncDailyTaskForAssignment = async (incidentId: string, personId: string) => {
+    const { data: incident, error: incidentError } = await supabase
+      .from('incidents')
+      .select('id, project_id, incident_number, name, description, status')
+      .eq('id', incidentId)
+      .maybeSingle();
+
+    if (incidentError || !incident) {
+      if (incidentError) throw incidentError;
+      return;
+    }
+
+    const today = getTodayDate();
+    let { data: daily, error: dailyError } = await supabase
+      .from('dailies')
+      .select('id')
+      .eq('project_id', incident.project_id)
+      .eq('date', today)
+      .maybeSingle();
+
+    if (dailyError) throw dailyError;
+
+    if (!daily) {
+      const { data: createdDaily, error: createDailyError } = await supabase
+        .from('dailies')
+        .insert({ project_id: incident.project_id, date: today, content: {} })
+        .select('id')
+        .single();
+
+      if (createDailyError) throw createDailyError;
+      daily = createdDaily;
+    }
+
+    const relatedTicket = formatManualId(incident.incident_number) || null;
+    const taskStatus = mapIncidentStatusToTaskStatus(incident.status as IncidentStatus);
+
+    const { data: existingTask, error: existingTaskError } = await supabase
+      .from('tasks')
+      .select('id')
+      .eq('project_id', incident.project_id)
+      .eq('incident_id', incidentId)
+      .or(`person_id.eq.${personId},assigned_to.eq.${personId}`)
+      .maybeSingle();
+
+    if (existingTaskError) throw existingTaskError;
+
+    let taskIdToLink = existingTask?.id;
+
+    if (taskIdToLink) {
+      const { error: updateTaskError } = await supabase
+        .from('tasks')
+        .update({
+          related_ticket: relatedTicket,
+          title: incident.name,
+          description: incident.description,
+          person_id: personId,
+          assigned_to: personId,
+          status: taskStatus,
+          is_auto_linked: true,
+        })
+        .eq('id', taskIdToLink);
+
+      if (updateTaskError) throw updateTaskError;
+    } else {
+      const { data: createdTask, error: createTaskError } = await supabase
+        .from('tasks')
+        .insert({
+          title: incident.name,
+          description: incident.description,
+          project_id: incident.project_id,
+          daily_id: daily.id,
+          incident_id: incidentId,
+          person_id: personId,
+          assigned_to: personId,
+          status: taskStatus,
+          is_auto_linked: true,
+          related_ticket: relatedTicket,
+        })
+        .select('id')
+        .single();
+
+      if (createTaskError) throw createTaskError;
+      taskIdToLink = createdTask.id;
+    }
+
+    if (taskIdToLink) {
+      const { error: linkError } = await supabase
+        .from('daily_tasks')
+        .upsert({
+          daily_id: daily.id,
+          task_id: taskIdToLink,
+        }, {
+          onConflict: 'daily_id,task_id',
+        });
+
+      if (linkError) throw linkError;
     }
   };
 

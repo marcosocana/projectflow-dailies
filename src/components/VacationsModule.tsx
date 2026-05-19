@@ -13,7 +13,7 @@ import { useVacations } from '@/hooks/useVacations';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Pencil, Trash2, Copy } from 'lucide-react';
-import { format, isWithinInterval, parseISO, addDays, eachDayOfInterval } from 'date-fns';
+import { format, isWithinInterval, parseISO, addDays, eachDayOfInterval, isBefore, isWeekend, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 interface VacationsModuleProps {
@@ -103,15 +103,20 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
     const { date } = props;
     const day = format(date, 'd');
     const colors = getColorsForDate(date);
+    const today = startOfDay(new Date());
+    const isPastDay = isBefore(startOfDay(date), today);
+    const isWeekendDay = isWeekend(date);
+    const isGrayedOut = isPastDay || isWeekendDay;
+    
     return (
-      <div className="flex flex-col items-center justify-center">
+      <div className={cn("flex flex-col items-center justify-center", isGrayedOut && "opacity-40")}>
         <span>{day}</span>
         {colors.length > 0 && (
           <div className="mt-0.5 flex gap-1">
             {colors.map((c, idx) => (
               <span
                 key={idx}
-                className="inline-block w-1.5 h-1.5 rounded-full"
+                className={cn("inline-block w-1.5 h-1.5 rounded-full", isGrayedOut && "opacity-50")}
                 style={{ backgroundColor: c }}
               />
             ))}
@@ -243,6 +248,9 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
   };
 
   const dayVacations = getVacationsForDate(selectedDate);
+  const isMutedCalendarDay = (day: Date) => {
+    return isBefore(startOfDay(day), startOfDay(new Date())) || isWeekend(day);
+  };
 
   return (
     <div className="space-y-6">
@@ -278,6 +286,10 @@ export default function VacationsModule({ projectId }: VacationsModuleProps) {
                 locale={es}
                 className="rounded-md border p-3 pointer-events-auto w-full mx-auto px-[50px]"
                 components={{ DayContent: DayContent as any }}
+                modifiers={{ mutedDay: isMutedCalendarDay }}
+                modifiersClassNames={{
+                  mutedDay: "bg-muted/50 text-muted-foreground hover:bg-muted/60"
+                }}
               />
             </div>
 

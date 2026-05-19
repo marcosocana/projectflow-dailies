@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { useProjectAccess } from '@/hooks/useProjectAccess';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 import { es } from 'date-fns/locale';
+import { format, isBefore, isWeekend, startOfDay, isWithinInterval, parseISO } from 'date-fns';
 import type { TablesInsert } from '@/integrations/supabase/types';
 import { Trash2, Eye, Pencil, RefreshCcw, List, ChevronUp, ChevronDown, GripVertical, Link, Copy, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -22,6 +23,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import {
   DndContext,
   closestCenter,
@@ -76,12 +78,14 @@ export default function DailiesModule({
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<{
     title: string;
+    relatedTicket: string;
     description: string;
     personIds: string[];
     incidentId: string;
     status: TaskStatus;
   }>({
     title: '',
+    relatedTicket: '',
     description: '',
     personIds: [],
     incidentId: '',
@@ -115,6 +119,7 @@ export default function DailiesModule({
   const [people, setPeople] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [incidents, setIncidents] = useState<any[]>([]);
+  const [vacations, setVacations] = useState<any[]>([]);
   // Estado para modal de detalle de incidencia
   const [incidentDetailsOpen, setIncidentDetailsOpen] = useState(false);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
@@ -147,13 +152,18 @@ export default function DailiesModule({
       data: ppl
     }, {
       data: incs
+    }, {
+      data: vacs
     }] = await Promise.all([supabase.from('people').select('*').eq('project_id', projectId).order('created_at', {
       ascending: true
     }), supabase.from('incidents').select('id,name,incident_number,status,category').eq('project_id', projectId).order('incident_number', {
       ascending: false
+    }), supabase.from('vacations').select('*').eq('project_id', projectId).order('start_date', {
+      ascending: true
     })]);
     setPeople(ppl || []);
     setIncidents(incs || []);
+    setVacations(vacs || []);
   };
   const ensureDaily = async (d: Date) => {
     const isoDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -240,7 +250,7 @@ export default function DailiesModule({
         personIds: [],
         incidentId: incident.id,
         status: incident.status === 'resolved' ? 'resolved' : incident.status === 'in_progress' ? 'in_progress' : 'pending',
-        relatedTicket: ''
+        relatedTicket: formatTaskManualId(incident.incident_number)
       });
       setCreationMode('linked');
     }
@@ -270,7 +280,7 @@ export default function DailiesModule({
       incident_id: taskForm.incidentId || null,
       status: taskForm.status ?? 'pending',
       is_auto_linked: creationMode === 'linked', // Set to true only for automatically linked tasks
-      related_ticket: creationMode === 'manual' ? taskForm.relatedTicket || null : null
+      related_ticket: formatTaskManualId(taskForm.relatedTicket) || null
     };
     const {
       data: created,
@@ -571,7 +581,11 @@ export default function DailiesModule({
     // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(task => task.title?.toLowerCase().includes(query) || task.description?.toLowerCase().includes(query));
+      filtered = filtered.filter(task =>
+        task.title?.toLowerCase().includes(query) ||
+        task.description?.toLowerCase().includes(query) ||
+        task.related_ticket?.toLowerCase().includes(query)
+      );
     }
 
     // Sort
@@ -706,6 +720,17 @@ export default function DailiesModule({
     scrollPositionRef.current = window.scrollY;
     shouldPreserveScrollRef.current = true;
   };
+
+  const restorePreservedScroll = () => {
+    if (!shouldPreserveScrollRef.current) return;
+
+    const scrollY = scrollPositionRef.current;
+    window.scrollTo(0, scrollY);
+    window.requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY);
+    });
+    shouldPreserveScrollRef.current = false;
+  };
   
   // Drag and drop functionality
   const sensors = useSensors(
@@ -769,13 +794,10 @@ export default function DailiesModule({
     }
   };
 
-  // Restore scroll position after tasks update using layoutEffect to prevent visual jump
-  useEffect(() => {
-    if (shouldPreserveScrollRef.current) {
-      window.scrollTo(0, scrollPositionRef.current);
-      shouldPreserveScrollRef.current = false;
-    }
-  }, [tasks]);
+  // Restore scroll position after UI updates that can move focus or rerender the list.
+  useLayoutEffect(() => {
+    restorePreservedScroll();
+  }, [tasks, detailsOpen, incidentDetailsOpen]);
 
   // Sortable task row component
   interface SortableTaskRowProps {
@@ -830,6 +852,20 @@ export default function DailiesModule({
           </Badge>
         </TableCell>
         <TableCell>
+          {task.related_ticket ? (
+            incident ? (
+              <Button variant="link" className="px-0 flex items-center gap-1" onClick={() => openIncidentDetails(incident.id)}>
+                {task.is_auto_linked && <Link className="h-3 w-3" />}
+                {task.related_ticket}
+              </Button>
+            ) : (
+              <span className="text-sm text-muted-foreground">{task.related_ticket}</span>
+            )
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </TableCell>
+        <TableCell>
           <div className="flex items-center gap-2">
             <Button 
               variant="ghost" 
@@ -856,18 +892,6 @@ export default function DailiesModule({
               <span className="h-3 w-3 rounded" style={{ backgroundColor: person.color }} />
               {person.name}
             </div>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </TableCell>
-        <TableCell>
-          {incident ? (
-            <Button variant="link" className="px-0 flex items-center gap-1" onClick={() => openIncidentDetails(incident.id)}>
-              {task.is_auto_linked && <Link className="h-3 w-3" />}
-              {getTicketCode(incident)}
-            </Button>
-          ) : task.related_ticket ? (
-            <span className="text-sm text-muted-foreground">{task.related_ticket}</span>
           ) : (
             <span className="text-muted-foreground">—</span>
           )}
@@ -901,12 +925,70 @@ export default function DailiesModule({
   const getTicketCode = (incident: any) => {
     const num = incident?.incident_number ?? null;
     if (num === null || num === undefined) return null;
-    return `T${String(num).padStart(4, '0')}`;
+    return String(num);
   };
   const formatIncidentLabel = (incident: any) => {
     const code = getTicketCode(incident);
     return code ? `${code} - ${incident.name}` : incident.name;
   };
+
+  const formatTaskManualId = (value: string | number | null | undefined) => {
+    return String(value ?? '').replace(/\D/g, '').slice(0, 6);
+  };
+
+  const isMutedCalendarDay = (day: Date) => {
+    return isBefore(startOfDay(day), startOfDay(new Date())) || isWeekend(day);
+  };
+
+  const DayContent = (props: any) => {
+    const { date: dayDate } = props;
+    const day = format(dayDate, 'd');
+    const isGrayedOut = isMutedCalendarDay(dayDate);
+
+    return (
+      <div className={cn("flex flex-col items-center justify-center", isGrayedOut && "opacity-40")}>
+        <span>{day}</span>
+      </div>
+    );
+  };
+
+  const selectedDateVacations = useMemo(() => {
+    const selectedDay = startOfDay(date);
+    return vacations.filter(vacation => {
+      const startDate = startOfDay(parseISO(vacation.start_date));
+      const endDate = startOfDay(parseISO(vacation.end_date));
+      return isWithinInterval(selectedDay, { start: startDate, end: endDate });
+    });
+  }, [date, vacations]);
+
+  const selectedDateVacationPeople = useMemo(() => {
+    const names = selectedDateVacations
+      .map(vacation => people.find(person => person.id === vacation.person_id)?.name)
+      .filter(Boolean) as string[];
+
+    return Array.from(new Set(names));
+  }, [people, selectedDateVacations]);
+
+  const taskCountSummary = useMemo(() => {
+    const counts = new Map<string, { name: string; color?: string; count: number }>();
+
+    tasks.forEach(task => {
+      const person = people.find(p => p.id === (task.person_id || task.assigned_to));
+      const key = person?.id || 'unassigned';
+      const current = counts.get(key) || {
+        name: person?.name || 'Sin asignar',
+        color: person?.color,
+        count: 0,
+      };
+      counts.set(key, {
+        ...current,
+        color: person?.color || current.color,
+        count: current.count + 1,
+      });
+    });
+
+    return Array.from(counts.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [people, tasks]);
 
   const openIncidentDetails = (incidentId: string) => {
     preserveScroll();
@@ -916,9 +998,11 @@ export default function DailiesModule({
 
 
   const openDetails = async (task: any) => {
+    preserveScroll();
     setSelectedTask(task);
     setEditForm({
       title: task.title || '',
+      relatedTicket: formatTaskManualId(task.related_ticket),
       description: task.description || '',
       personIds: task.person_id ? [task.person_id] : [],
       incidentId: task.incident_id || '',
@@ -957,6 +1041,7 @@ export default function DailiesModule({
       preserveScroll();
       const update = {
         title: editForm.title,
+        related_ticket: formatTaskManualId(editForm.relatedTicket) || null,
         description: editForm.description || null,
         person_id: editForm.personIds.length > 0 ? editForm.personIds[0] : null,
         incident_id: editForm.incidentId || null,
@@ -1034,10 +1119,7 @@ export default function DailiesModule({
     <div className="grid gap-6 md:grid-cols-1">
       <Card>
         <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <CardTitle>Seguimiento diario</CardTitle>
-            </div>
+          <div className="flex items-start justify-end gap-4">
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="ghost"
@@ -1069,7 +1151,17 @@ export default function DailiesModule({
                   onSelect={(d) => d && setDate(d)}
                   locale={es}
                   className="rounded-md border p-3 pointer-events-auto mx-auto"
+                  modifiers={{ mutedDay: isMutedCalendarDay }}
+                  modifiersClassNames={{
+                    mutedDay: "bg-muted/50 text-muted-foreground hover:bg-muted/60"
+                  }}
+                  components={{ DayContent: DayContent as any }}
                 />
+                {selectedDateVacationPeople.length > 0 && (
+                  <div className="mt-3 rounded-md border border-orange-300 bg-orange-100 px-3 py-2 text-sm text-orange-900">
+                    Ausencias: {selectedDateVacationPeople.join(', ')}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1085,6 +1177,20 @@ export default function DailiesModule({
 
             {/* Tasks List */}
             <div className="w-full">
+              {taskCountSummary.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-2 text-sm">
+                  {taskCountSummary.map(item => (
+                    <Badge
+                      key={item.name}
+                      variant="outline"
+                      className="bg-muted/50"
+                      style={{ borderColor: item.color || undefined }}
+                    >
+                      {item.name}: {item.count} {item.count === 1 ? 'tarea' : 'tareas'}
+                    </Badge>
+                  ))}
+                </div>
+              )}
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
@@ -1095,9 +1201,9 @@ export default function DailiesModule({
                     <TableRow>
                       <TableHead className="w-8"></TableHead>
                       <DailySortableHeader field="status">Estado</DailySortableHeader>
+                      <TableHead>ID</TableHead>
                       <TableHead>Tarea</TableHead>
                       <DailySortableHeader field="person">Persona</DailySortableHeader>
-                      <TableHead>Incidencia</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1281,23 +1387,21 @@ export default function DailiesModule({
                   title: e.target.value
                 }))} required />
               </div>
-              
-              {creationMode === 'manual' && (
-                <div className="md:col-span-2">
-                  <Label>Ticket relacionado</Label>
-                  <Input 
-                    placeholder="Ej: T0012" 
-                    value={taskForm.relatedTicket} 
-                    onChange={e => setTaskForm(f => ({
-                      ...f,
-                      relatedTicket: e.target.value
-                    }))} 
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Este ticket no estará vinculado ni sincronizado automáticamente
-                  </p>
-                </div>
-              )}
+
+              <div>
+                <Label>ID</Label>
+                <Input
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="Máx. 6 dígitos"
+                  value={taskForm.relatedTicket}
+                  onChange={e => setTaskForm(f => ({
+                    ...f,
+                    relatedTicket: formatTaskManualId(e.target.value)
+                  }))}
+                />
+              </div>
               <div>
                 <Label>Personas</Label>
                 <Popover>
@@ -1399,12 +1503,13 @@ export default function DailiesModule({
 
       {/* Modal Detalle de Tarea */}
       <Dialog open={detailsOpen} onOpenChange={o => {
-      setDetailsOpen(o);
-      if (!o) {
-        setSelectedTask(null);
-        setEditing(false);
-      }
-    }}>
+        preserveScroll();
+        setDetailsOpen(o);
+        if (!o) {
+          setSelectedTask(null);
+          setEditing(false);
+        }
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1428,16 +1533,13 @@ export default function DailiesModule({
                         .map(p => p.name)
                         .join(', ');
                       
-                      const incident = incidents.find(i => i.id === selectedTask.incident_id);
-                      const incidentInfo = incident 
-                        ? `Incidencia: T${String(incident.incident_number ?? 0).padStart(5, '0')} - ${incident.name}`
-                        : selectedTask.related_ticket 
-                        ? `Ticket relacionado: ${selectedTask.related_ticket}`
-                        : 'Sin incidencia vinculada';
+                      const taskIdInfo = selectedTask.related_ticket
+                        ? `ID: ${selectedTask.related_ticket}`
+                        : 'ID: Sin completar';
                       
                       const info = `Título: ${selectedTask.title || 'Sin título'}
 Estado: ${statusLabels[selectedTask.status as TaskStatus] || selectedTask.status}
-${incidentInfo}
+${taskIdInfo}
 Descripción: ${selectedTask.description || 'Sin descripción'}`;
                       
                       navigator.clipboard.writeText(info).then(() => {
@@ -1480,6 +1582,20 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                 ...f,
                 title: e.target.value
               }))} required />
+                </div>
+                <div>
+                  <Label>ID</Label>
+                  <Input
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    placeholder="Máx. 6 dígitos"
+                    value={editForm.relatedTicket}
+                    onChange={e => setEditForm(f => ({
+                      ...f,
+                      relatedTicket: formatTaskManualId(e.target.value)
+                    }))}
+                  />
                 </div>
                 <div>
                   <Label>Personas</Label>
@@ -1731,6 +1847,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                   <TableRow>
                     <SortableHeader field="status">Estado</SortableHeader>
                     <SortableHeader field="title">Tarea</SortableHeader>
+                    <TableHead>ID</TableHead>
                     <SortableHeader field="person">Persona</SortableHeader>
                     <TableHead>Creada</TableHead>
                     <TableHead></TableHead>
@@ -1772,6 +1889,13 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                            {typeof task.description === 'string' && <div className="text-xs text-muted-foreground">{task.description.length > 150 ? `${task.description.slice(0, 150)}...` : task.description}</div>}
                          </TableCell>
                         <TableCell>
+                          {task.related_ticket ? (
+                            <span className="text-sm text-muted-foreground">{task.related_ticket}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           {person ? <div className="flex items-center gap-2">
                               <span className="h-3 w-3 rounded" style={{
                           backgroundColor: person.color
@@ -1788,7 +1912,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                       </TableRow>;
                 })}
                   {filteredTasks.length === 0 && <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center text-muted-foreground">
                         No se encontraron tareas
                       </TableCell>
                     </TableRow>}

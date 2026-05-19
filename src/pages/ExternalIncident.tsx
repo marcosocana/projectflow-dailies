@@ -33,6 +33,40 @@ const STATUS_BADGE_CLS = {
   closed: 'bg-destructive text-destructive-foreground',
 } as const;
 
+const MADRID_TIME_ZONE = 'Europe/Madrid';
+
+const formatManualId = (value: string | number | null | undefined) =>
+  String(value ?? '').replace(/\D/g, '').slice(0, 6);
+
+const getMadridDateTimeLocal = (value: string | Date = new Date()) => {
+  const date = value instanceof Date ? value : new Date(value);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: MADRID_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const get = (type: string) => parts.find(part => part.type === type)?.value ?? '00';
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+};
+
+const madridDateTimeLocalToIso = (value: string) => {
+  const [datePart, timePart = '00:00'] = value.split('T');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute] = timePart.split(':').map(Number);
+  const targetMadridMinutes = Date.UTC(year, month - 1, day, hour, minute) / 60000;
+  const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  const madridGuess = getMadridDateTimeLocal(utcGuess);
+  const [guessDate, guessTime] = madridGuess.split('T');
+  const [guessYear, guessMonth, guessDay] = guessDate.split('-').map(Number);
+  const [guessHour, guessMinute] = guessTime.split(':').map(Number);
+  const guessMadridMinutes = Date.UTC(guessYear, guessMonth - 1, guessDay, guessHour, guessMinute) / 60000;
+  return new Date(utcGuess.getTime() + (targetMadridMinutes - guessMadridMinutes) * 60000).toISOString();
+};
+
 export default function ExternalIncident() {
   const projectId = new URLSearchParams(window.location.search).get('project');
   const navigate = useNavigate();
@@ -42,6 +76,7 @@ export default function ExternalIncident() {
   const [availableEpics, setAvailableEpics] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
+    incidentNumber: '',
     name: '',
     description: '',
     environment: '',
@@ -103,6 +138,18 @@ export default function ExternalIncident() {
 
     setLoading(true);
     try {
+      const incidentNumber = formatManualId(form.incidentNumber);
+
+      if (!incidentNumber) {
+        toast({
+          title: 'ID obligatorio',
+          description: 'Completa el ID de la tarea con un número de hasta 6 dígitos.',
+          variant: 'destructive'
+        });
+        setLoading(false);
+        return;
+      }
+
       let evidenceUrl = null;
       
       // Upload evidence file if present
@@ -119,6 +166,7 @@ export default function ExternalIncident() {
       // Create incident
       const { error } = await supabase.from('incidents').insert({
         project_id: projectId,
+        incident_number: Number(incidentNumber),
         name: form.name,
         description: form.description,
         environment: form.environment,
@@ -220,6 +268,18 @@ export default function ExternalIncident() {
                 />
               </div>
               <div className="space-y-2">
+                <Label>ID *</Label>
+                <Input
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="Máx. 6 dígitos"
+                  value={form.incidentNumber}
+                  onChange={(e) => setForm((f) => ({ ...f, incidentNumber: formatManualId(e.target.value) }))}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
                 <Label>Nombre de la incidencia *</Label>
                 <Input 
                   value={form.name} 
@@ -265,15 +325,9 @@ export default function ExternalIncident() {
                 <Label>Fecha (España)</Label>
                 <Input 
                   type="datetime-local" 
-                  value={(() => {
-                    const date = new Date(form.occurredAt);
-                    const spainDate = new Date(date.getTime() + (date.getTimezoneOffset() * 60000) + (2 * 3600000));
-                    return spainDate.toISOString().slice(0,16);
-                  })()} 
+                  value={getMadridDateTimeLocal(form.occurredAt)} 
                   onChange={(e) => {
-                    const localDate = new Date(e.target.value);
-                    const utcDate = new Date(localDate.getTime() - (2 * 3600000));
-                    setForm((f) => ({ ...f, occurredAt: utcDate.toISOString() }));
+                    setForm((f) => ({ ...f, occurredAt: madridDateTimeLocalToIso(e.target.value) }));
                   }} 
                 />
               </div>

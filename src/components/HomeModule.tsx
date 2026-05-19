@@ -124,7 +124,7 @@ const SortableCard = ({ incident }: SortableCardProps) => {
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           {getCategoryIcon(incident.category)}
-          <span className="font-medium text-sm">#{incident.incident_number}</span>
+          <span className="font-medium text-sm">{incident.incident_number ?? 'Sin ID'}</span>
         </div>
         <Badge className={`text-xs ${getStatusColor(incident.status)}`}>
           {getStatusLabel(incident.status)}
@@ -613,7 +613,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
                 const assignedPerson = people.find(p => p.id === incident.assigned_to);
                 return (
                   <TableRow key={incident.id}>
-                    <TableCell className="font-medium">#{incident.incident_number}</TableCell>
+                    <TableCell className="font-medium">{incident.incident_number ?? '—'}</TableCell>
                     <TableCell>{incident.name}</TableCell>
                     <TableCell>
                       <Badge className={`${getStatusColor(incident.status)}`}>

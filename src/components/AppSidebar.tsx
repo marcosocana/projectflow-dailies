@@ -14,7 +14,7 @@ import {
   FileText,
   Info,
   Home,
-  Settings,
+  BarChart3,
   Rocket,
   Link,
   Users,
@@ -32,6 +32,12 @@ const menuItems = [
     url: "tasks", 
     icon: Home,
     description: "Gestión de incidencias y mejoras" 
+  },
+  { 
+    title: "", 
+    url: "config", 
+    icon: BarChart3,
+    description: "Seguimiento diario y gestión del equipo" 
   },
   { 
     title: "Releases", 
@@ -68,12 +74,6 @@ const menuItems = [
     url: "links", 
     icon: Link,
     description: "Enlaces de interés del proyecto" 
-  },
-  { 
-    title: "Seguimiento", 
-    url: "config", 
-    icon: Settings,
-    description: "Seguimiento diario y gestión del equipo" 
   },
 ];
 
@@ -112,7 +112,7 @@ export function AppSidebar({ currentProject }: AppSidebarProps) {
                     </TooltipTrigger>
                     <TooltipContent side="right" className="ml-2">
                       <div className="flex flex-col">
-                        <p className="font-medium">{item.title}</p>
+                        {item.title && <p className="font-medium">{item.title}</p>}
                         <p className="text-xs text-muted-foreground">{item.description}</p>
                       </div>
                     </TooltipContent>

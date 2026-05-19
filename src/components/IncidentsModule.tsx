@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, ArrowUp, ArrowDown, MoreVertical, RefreshCcw, AlertTriangle, ListChecks, CheckCircle2, Copy, List, Columns3, Clock, Filter, Check, X, Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -86,6 +86,42 @@ const STATUS_BADGE_CLS: Record<string, string> = {
   in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]',
   resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
   closed: 'bg-destructive text-destructive-foreground'
+};
+
+const MADRID_TIME_ZONE = 'Europe/Madrid';
+
+const formatManualId = (value: string | number | null | undefined) =>
+  String(value ?? '').replace(/\D/g, '').slice(0, 6);
+
+const getMadridDateTimeLocal = (value: string | Date = new Date()) => {
+  const date = value instanceof Date ? value : new Date(value);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: MADRID_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const get = (type: string) => parts.find(part => part.type === type)?.value ?? '00';
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+};
+
+const getMadridDate = (value: string | Date = new Date()) => getMadridDateTimeLocal(value).split('T')[0];
+
+const madridDateTimeLocalToIso = (value: string) => {
+  const [datePart, timePart = '00:00'] = value.split('T');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute] = timePart.split(':').map(Number);
+  const targetMadridMinutes = Date.UTC(year, month - 1, day, hour, minute) / 60000;
+  const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  const madridGuess = getMadridDateTimeLocal(utcGuess);
+  const [guessDate, guessTime] = madridGuess.split('T');
+  const [guessYear, guessMonth, guessDay] = guessDate.split('-').map(Number);
+  const [guessHour, guessMinute] = guessTime.split(':').map(Number);
+  const guessMadridMinutes = Date.UTC(guessYear, guessMonth - 1, guessDay, guessHour, guessMinute) / 60000;
+  return new Date(utcGuess.getTime() + (targetMadridMinutes - guessMadridMinutes) * 60000).toISOString();
 };
 
 /* UI helpers */
@@ -175,7 +211,7 @@ const SortableIncidentCard = ({
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           <CategoryIcon category={incident.category} />
-          <span className="font-medium text-sm">T{String(incident.incident_number ?? 0).padStart(5, '0')}</span>
+          <span className="font-medium text-sm">{incident.incident_number ?? 'Sin ID'}</span>
         </div>
         <Badge variant="outline" className={`text-xs ${getStatusColor(incident.status)} border-transparent`}>
           {STATUS_LABELS[incident.status]}
@@ -193,6 +229,28 @@ const SortableIncidentCard = ({
       </div>
     </div>;
 };
+
+const DroppablePipelineColumn = ({
+  status,
+  children,
+}: {
+  status: IncidentStatus;
+  children: React.ReactNode;
+}) => {
+  const { isOver, setNodeRef } = useDroppable({
+    id: `column-${status}`,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`bg-muted/50 rounded-lg p-4 min-h-[400px] w-80 flex-shrink-0 transition-colors ${isOver ? 'bg-muted' : ''}`}
+    >
+      {children}
+    </div>
+  );
+};
+
 export default function IncidentsModule({
   projectId
 }: IncidentsModuleProps) {
@@ -248,6 +306,7 @@ export default function IncidentsModule({
   };
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
+    incidentNumber: '',
     name: '',
     description: '',
     evidenceLink: '',
@@ -298,7 +357,7 @@ export default function IncidentsModule({
       // Search term
       const matchesSearch = !term || [
         i.id, 
-        `T${String(i.incident_number ?? 0).padStart(5, '0')}`, 
+        i.incident_number, 
         i.name, 
         i.description, 
         i.environment, 
@@ -460,6 +519,7 @@ export default function IncidentsModule({
   };
   const resetForm = () => {
     setForm({
+      incidentNumber: '',
       name: '',
       description: '',
       evidenceLink: '',
@@ -527,8 +587,19 @@ export default function IncidentsModule({
   };
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    let savedSuccessfully = false;
     try {
       let id = editingId ?? crypto.randomUUID();
+      const incidentNumber = formatManualId(form.incidentNumber);
+
+      if (!incidentNumber) {
+        toast({
+          title: 'ID obligatorio',
+          description: 'Completa el ID de la tarea con un número de hasta 6 dígitos.',
+          variant: 'destructive'
+        });
+        return;
+      }
 
       // Compose environment/device from single-selects
       const environmentValue = form.environment || '';
@@ -538,6 +609,7 @@ export default function IncidentsModule({
       if (!editingId) {
         const insertPayload: any = {
           id,
+          incident_number: Number(incidentNumber),
           name: form.name,
           description: form.description,
           environment: environmentValue,
@@ -567,7 +639,11 @@ export default function IncidentsModule({
             assigned_to: a.person,
             status: a.status
           }));
-          await supabase.from('incident_assignments').insert(assignmentsToInsert);
+          const { error: assignmentsError } = await supabase
+            .from('incident_assignments')
+            .insert(assignmentsToInsert);
+
+          if (assignmentsError) throw assignmentsError;
           
           // Sync overall task status based on assignments
           const { updateTaskStatusFromAssignments } = await import('@/hooks/useSyncTaskStatus');
@@ -575,7 +651,7 @@ export default function IncidentsModule({
 
           // Create daily tasks if checkbox is enabled
           if (createDailyTasks) {
-            const today = new Date().toISOString().split('T')[0];
+            const today = getMadridDate();
             
             // Get or create today's daily
             let { data: daily, error: dailyError } = await supabase
@@ -615,7 +691,8 @@ export default function IncidentsModule({
                   person_id: a.person,
                   assigned_to: a.person,
                   status: taskStatus,
-                  is_auto_linked: true
+                  is_auto_linked: true,
+                  related_ticket: incidentNumber
                 };
               });
 
@@ -650,6 +727,7 @@ export default function IncidentsModule({
       } else {
         // Update
         const updatePayload: any = {
+          incident_number: Number(incidentNumber),
           name: form.name,
           description: form.description,
           environment: environmentValue,
@@ -681,6 +759,12 @@ export default function IncidentsModule({
             .eq('incident_id', id)
             .eq('is_auto_linked', true);
         }
+
+        await supabase
+          .from('tasks')
+          .update({ related_ticket: incidentNumber })
+          .eq('incident_id', id)
+          .eq('is_auto_linked', true);
         
         toast({
           title: 'Incidencia actualizada',
@@ -689,21 +773,27 @@ export default function IncidentsModule({
       }
       resetForm();
       fetchIncidents();
+      savedSuccessfully = true;
     } catch (err: any) {
       console.error(err);
+      const isDuplicateId = err?.code === '23505' && String(err?.message || '').includes('incident_number');
       toast({
-        title: 'Error',
-        description: 'No se pudo guardar la incidencia',
+        title: isDuplicateId ? 'ID duplicado' : 'Error',
+        description: isDuplicateId
+          ? 'Ya existe una tarea con ese ID en este proyecto. Usa otro ID.'
+          : err?.message || 'No se pudo guardar la incidencia',
         variant: 'destructive'
       });
     } finally {
-      // Close modal after create/update
-      setCreateOpen(false);
+      if (savedSuccessfully) {
+        setCreateOpen(false);
+      }
     }
   };
   const onEdit = (incident: any) => {
     setEditingId(incident.id);
     setForm({
+      incidentNumber: formatManualId(incident.incident_number),
       name: incident.name || '',
       description: incident.description || '',
       evidenceLink: incident.evidence && !incident.evidence.startsWith('incidents/') ? incident.evidence : '',
@@ -720,7 +810,7 @@ export default function IncidentsModule({
     setEvidenceFile(null);
   };
   const copyToClipboard = async (incident: any) => {
-    const basicInfo = `ID: T${String(incident.incident_number ?? 0).padStart(5, '0')}
+    const basicInfo = `ID: ${incident.incident_number ?? 'Sin ID'}
 Nombre: ${incident.name}
 Descripción: ${incident.description || 'Sin descripción'}
 Épica: ${incident.epic || 'No asignada'}
@@ -742,6 +832,9 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
   };
   const onDelete = async (id: string) => {
     try {
+      const { error: linkedTasksError } = await supabase.from('tasks').delete().eq('incident_id', id);
+      if (linkedTasksError) throw linkedTasksError;
+
       const {
         error
       } = await supabase.from('incidents').delete().eq('id', id);
@@ -1187,7 +1280,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                       <TableCell className="w-12">
                         <CategoryIcon category={i.category} />
                       </TableCell>
-                      <TableCell className="font-mono w-20">T{String(i.incident_number ?? 0).padStart(5, '0')}</TableCell>
+                      <TableCell className="font-mono w-20">{i.incident_number ?? '—'}</TableCell>
                       <TableCell className="font-medium w-80">
                         <div className="max-w-[320px] break-words hyphens-auto leading-tight">
                           {i.name}
@@ -1274,7 +1367,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
           </> : <div className="overflow-x-auto">
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <div className="flex gap-6 min-w-max pb-4">
-                {statusOrder.map(status => <div key={status} id={`column-${status}`} className="bg-muted/50 rounded-lg p-4 min-h-[400px] w-80 flex-shrink-0">
+                {statusOrder.map(status => <DroppablePipelineColumn key={status} status={status}>
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-semibold">{STATUS_LABELS[status]}</h3>
                       <Badge variant="secondary" className="ml-2">
@@ -1295,7 +1388,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                           </div>}
                       </div>
                     </SortableContext>
-                  </div>)}
+                  </DroppablePipelineColumn>)}
               </div>
             </DndContext>
           </div>}
@@ -1310,6 +1403,21 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
           <DialogDescription>Completa la información de la tarea</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto pr-2">
+          <div className="space-y-2">
+            <Label>ID</Label>
+            <Input
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={6}
+              placeholder="Máx. 6 dígitos"
+              value={form.incidentNumber}
+              onChange={e => setForm(f => ({
+                ...f,
+                incidentNumber: formatManualId(e.target.value)
+              }))}
+              required
+            />
+          </div>
           <div className="space-y-2">
             <Label>Nombre</Label>
             <Input value={form.name} onChange={e => setForm(f => ({
@@ -1355,18 +1463,10 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
           </div>
           <div className="space-y-2">
             <Label>Fecha (España)</Label>
-            <Input type="datetime-local" value={(() => {
-              const date = new Date(form.occurredAt);
-              // Convert to Spain timezone
-              const spainDate = new Date(date.getTime() + date.getTimezoneOffset() * 60000 + 2 * 3600000); // UTC+2 for Spain
-              return spainDate.toISOString().slice(0, 16);
-            })()} onChange={e => {
-              const localDate = new Date(e.target.value);
-              // Convert from Spain timezone to UTC
-              const utcDate = new Date(localDate.getTime() - 2 * 3600000); // Convert from UTC+2 to UTC
+            <Input type="datetime-local" value={getMadridDateTimeLocal(form.occurredAt)} onChange={e => {
               setForm(f => ({
                 ...f,
-                occurredAt: utcDate.toISOString()
+                occurredAt: madridDateTimeLocalToIso(e.target.value)
               }));
             }} />
           </div>

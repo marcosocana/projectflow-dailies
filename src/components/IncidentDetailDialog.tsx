@@ -30,6 +30,40 @@ const CATEGORY_OPTIONS = [
 const ENV_OPTIONS = ['DEV','PRE','PRO','Otro'] as const;
 const DEVICE_OPTIONS = ['Web','APP','Otro'] as const;
 
+const MADRID_TIME_ZONE = 'Europe/Madrid';
+
+const formatManualId = (value: string | number | null | undefined) =>
+  String(value ?? '').replace(/\D/g, '').slice(0, 6);
+
+const getMadridDateTimeLocal = (value: string | Date = new Date()) => {
+  const date = value instanceof Date ? value : new Date(value);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: MADRID_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const get = (type: string) => parts.find(part => part.type === type)?.value ?? '00';
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+};
+
+const madridDateTimeLocalToIso = (value: string) => {
+  const [datePart, timePart = '00:00'] = value.split('T');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute] = timePart.split(':').map(Number);
+  const targetMadridMinutes = Date.UTC(year, month - 1, day, hour, minute) / 60000;
+  const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  const madridGuess = getMadridDateTimeLocal(utcGuess);
+  const [guessDate, guessTime] = madridGuess.split('T');
+  const [guessYear, guessMonth, guessDay] = guessDate.split('-').map(Number);
+  const [guessHour, guessMinute] = guessTime.split(':').map(Number);
+  const guessMadridMinutes = Date.UTC(guessYear, guessMonth - 1, guessDay, guessHour, guessMinute) / 60000;
+  return new Date(utcGuess.getTime() + (targetMadridMinutes - guessMadridMinutes) * 60000).toISOString();
+};
+
 function useSignedUrl(bucket: string) {
   const cache = useRef(new Map<string, string>());
   const getUrl = async (path: string | null | undefined) => {
@@ -66,6 +100,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const isInitialDetailLoad = useRef(true);
   const [detailForm, setDetailForm] = useState({
+    incidentNumber: '',
     name: '',
     description: '',
     occurredAt: new Date().toISOString(),
@@ -109,7 +144,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     setDetailEvidenceFile(null);
     isInitialDetailLoad.current = true;
     setDetailForm({
-      name: '', description: '', occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', epic: '', additionalComments: '', env: '', dev: '', evidenceLink: '', assignedTo: 'unassigned'
+      incidentNumber: '', name: '', description: '', occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', epic: '', additionalComments: '', env: '', dev: '', evidenceLink: '', assignedTo: 'unassigned'
     });
   };
 
@@ -158,6 +193,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         const pick = (raw: string, allowed: readonly string[]) =>
           (raw || '').split(',').map((s) => s.trim()).find((v) => (allowed as readonly string[]).includes(v)) || '';
         setDetailForm({
+          incidentNumber: formatManualId(data.incident_number),
           name: data.name || '',
           description: data.description || '',
           occurredAt: data.occurred_at ? new Date(data.occurred_at).toISOString() : new Date().toISOString(),
@@ -192,6 +228,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     if (!open || !selected) return;
     if (isInitialDetailLoad.current) return;
     const handler = setTimeout(async () => {
+      const manualIncidentNumber = formatManualId(detailForm.incidentNumber);
       const payload: any = {
         name: detailForm.name,
         description: detailForm.description,
@@ -204,6 +241,9 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         evidence: selected.evidence,
         assigned_to: detailForm.assignedTo === 'unassigned' ? null : detailForm.assignedTo,
       };
+      if (manualIncidentNumber) {
+        payload.incident_number = Number(manualIncidentNumber);
+      }
       if (detailEvidenceFile) {
         try {
           const path = await handleUploadEvidence(selected.id);
@@ -229,6 +269,14 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         // Si solo hay una asignación, sincronizar su estado con el de la tarea
         await syncSingleAssignmentStatus(selected.id, payload.status);
       }
+
+      if (manualIncidentNumber) {
+        await supabase
+          .from('tasks')
+          .update({ related_ticket: manualIncidentNumber })
+          .eq('incident_id', selected.id)
+          .eq('is_auto_linked', true);
+      }
       
       setSelected((prev: any) => (prev ? { ...prev, ...payload } : prev));
       onPatched?.(selected.id, payload);
@@ -250,11 +298,18 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
   const handleDelete = async () => {
     if (!selected || !selected.id) return;
     
-    if (!confirm(`¿Estás seguro de que quieres eliminar la tarea T${String(selected.incident_number ?? 0).padStart(5, '0')}?`)) {
+    if (!confirm(`¿Estás seguro de que quieres eliminar la tarea ${selected.incident_number ?? 'sin ID'}?`)) {
       return;
     }
     
     try {
+      const { error: linkedTasksError } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('incident_id', selected.id);
+
+      if (linkedTasksError) throw linkedTasksError;
+
       const { error } = await supabase
         .from('incidents')
         .delete()
@@ -277,7 +332,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     const status = STATUS_OPTIONS.find(s => s.value === selected.status)?.label || selected.status;
     const category = CATEGORY_OPTIONS.find(c => c.value === selected.category)?.label || selected.category;
     
-    const info = `ID: T${String(selected.incident_number ?? 0).padStart(5, '0')}
+    const info = `ID: ${selected.incident_number ?? 'Sin ID'}
 Nombre: ${selected.name || 'Sin nombre'}
 Categoría: ${category}
 Estado: ${status}
@@ -300,7 +355,7 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {selected ? `Detalle T${String(selected.incident_number ?? 0).padStart(5, '0')}` : 'Detalle de incidencia'}
+            {selected ? `Detalle ${selected.incident_number ?? 'sin ID'}` : 'Detalle de incidencia'}
             {selected && (
               <>
                 <Button variant="ghost" size="sm" onClick={handleCopyInfo} className="p-1" title="Copiar info">
@@ -327,6 +382,18 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
               <div className="md:col-span-2">
                 <Label>Nombre</Label>
                 <Input value={detailForm.name} onChange={(e) => setDetailForm((f) => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div>
+                <Label>ID</Label>
+                <Input
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="Máx. 6 dígitos"
+                  value={detailForm.incidentNumber}
+                  onChange={(e) => setDetailForm((f) => ({ ...f, incidentNumber: formatManualId(e.target.value) }))}
+                  required
+                />
               </div>
               <div>
                 <Label>Estado</Label>
@@ -364,7 +431,7 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
               </div>
               <div>
                 <Label>Fecha</Label>
-                <Input type="datetime-local" value={new Date(new Date(detailForm.occurredAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0,16)} onChange={(e) => setDetailForm((f) => ({ ...f, occurredAt: new Date(e.target.value).toISOString() }))} />
+                <Input type="datetime-local" value={getMadridDateTimeLocal(detailForm.occurredAt)} onChange={(e) => setDetailForm((f) => ({ ...f, occurredAt: madridDateTimeLocalToIso(e.target.value) }))} />
               </div>
               <div>
                 <Label>Entorno</Label>
