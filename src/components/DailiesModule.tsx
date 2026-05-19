@@ -1073,6 +1073,16 @@ export default function DailiesModule({
               </div>
             </div>
 
+            {/* Acciones bajo calendario */}
+            <div className="flex justify-start">
+              <Button
+                variant="outline"
+                onClick={() => window.open('https://cepsacorp-my.sharepoint.com/:x:/g/personal/prminsait18_outsourcing_moeveglobal_com/IQAFEc-JDQ4FQqmgcLy-bYFMAXmhMbJeo93EwHxza2rwSmk?e=BM91hk', '_blank', 'noopener,noreferrer')}
+              >
+                Ver Excel Incidencias
+              </Button>
+            </div>
+
             {/* Tasks List */}
             <div className="w-full">
               <DndContext
