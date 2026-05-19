@@ -144,7 +144,7 @@ const Dashboard = () => {
                     <a href="/links">Enlaces de interés</a>
                   </Button>
                   <Button asChild variant="ghost" className="justify-start">
-                    <a href="/config">Configuración interna</a>
+                    <a href="/config">Seguimiento</a>
                   </Button>
                 </nav>
               </SheetContent>

@@ -70,7 +70,7 @@ const menuItems = [
     description: "Enlaces de interés del proyecto" 
   },
   { 
-    title: "Configuración interna", 
+    title: "Seguimiento", 
     url: "config", 
     icon: Settings,
     description: "Seguimiento diario y gestión del equipo" 
