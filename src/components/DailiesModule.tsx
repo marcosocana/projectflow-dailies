@@ -19,11 +19,13 @@ import type { TablesInsert } from '@/integrations/supabase/types';
 import { Trash2, Eye, Pencil, RefreshCcw, List, ChevronUp, ChevronDown, GripVertical, Link, Copy, AlertTriangle, Asterisk } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import {
   DndContext,
   closestCenter,
@@ -43,12 +45,53 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 type TaskStatus = 'pending' | 'in_progress' | 'resolved' | 'resolved_yesterday';
 type IncidentCategory = 'incident' | 'improvement' | 'corrective_improvement';
+type TaskEnvironment = 'DEV' | 'PRE' | 'PRO';
 const NOTE_MARKER = '[tipo:nota_seguimiento]';
+const CORRECTIVE_CATEGORY_MARKER = '[tipo:mejora_correctiva]';
 
 // Helper function to map task status to incident status
 const mapTaskStatusToIncidentStatus = (taskStatus: TaskStatus): 'pending' | 'in_progress' | 'resolved' => {
   if (taskStatus === 'resolved_yesterday') return 'resolved';
   return taskStatus as 'pending' | 'in_progress' | 'resolved';
+};
+
+const getTaskStatusLabel = (status: TaskStatus) => {
+  if (status === 'in_progress') return 'WIP';
+  if (status === 'resolved') return 'Resuelta';
+  if (status === 'resolved_yesterday') return 'Resuelta ayer';
+  return 'Pendiente';
+};
+
+const getTaskStatusTone = (status: TaskStatus) => {
+  if (status === 'in_progress') {
+    return 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent';
+  }
+  if (status === 'resolved') {
+    return 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent';
+  }
+  if (status === 'resolved_yesterday') {
+    return 'bg-[hsl(var(--success)/0.5)] text-[hsl(var(--success-foreground))] border-transparent';
+  }
+  return 'bg-muted text-muted-foreground border-transparent';
+};
+
+const isResolvedTask = (status: TaskStatus) => status === 'resolved' || status === 'resolved_yesterday';
+const normalizeTaskEnvironment = (status: TaskStatus, environment: TaskEnvironment | '') => {
+  return isResolvedTask(status) ? environment : '';
+};
+
+const cleanAdditionalComments = (value: string | null | undefined) =>
+  String(value ?? '').replace(CORRECTIVE_CATEGORY_MARKER, '').trim();
+
+const serializeCategory = (category: IncidentCategory, additionalComments: string | null | undefined) => {
+  const cleanComments = cleanAdditionalComments(additionalComments);
+  if (category === 'corrective_improvement') {
+    return {
+      category: 'corrective_improvement' as const,
+      additional_comments: [CORRECTIVE_CATEGORY_MARKER, cleanComments].filter(Boolean).join('\n'),
+    };
+  }
+  return { category, additional_comments: cleanComments };
 };
 
 const dateToLocalInputValue = (value: Date) =>
@@ -95,13 +138,17 @@ export default function DailiesModule({
     personIds: string[];
     incidentId: string;
     status: TaskStatus;
+    environment: TaskEnvironment | '';
+    category: IncidentCategory;
   }>({
     title: '',
     relatedTicket: '',
     description: '',
     personIds: [],
     incidentId: '',
-    status: 'pending'
+    status: 'pending',
+    environment: '',
+    category: 'incident'
   });
 
   // New states for persist modal and view all tasks
@@ -129,6 +176,7 @@ export default function DailiesModule({
   const [date, setDate] = useState<Date>(new Date());
   const [dailyId, setDailyId] = useState<string | null>(null);
   const [people, setPeople] = useState<any[]>([]);
+  const [linkedProfiles, setLinkedProfiles] = useState<Record<string, { full_name: string; email: string | null }>>({});
   const [tasks, setTasks] = useState<any[]>([]);
   const [incidents, setIncidents] = useState<any[]>([]);
   const [vacations, setVacations] = useState<any[]>([]);
@@ -146,6 +194,7 @@ export default function DailiesModule({
     personIds: string[];
     incidentId: string;
     status: TaskStatus;
+    environment: TaskEnvironment | '';
     relatedTicket: string;
     category: IncidentCategory;
   }>({
@@ -154,6 +203,7 @@ export default function DailiesModule({
     personIds: [],
     incidentId: '',
     status: 'pending',
+    environment: '',
     relatedTicket: '',
     category: 'incident'
   });
@@ -162,6 +212,7 @@ export default function DailiesModule({
   const [creationMode, setCreationMode] = useState<'select' | 'linked' | 'manual'>('select');
   const [incidentSearchQuery, setIncidentSearchQuery] = useState('');
   const [incidentCategoryFilter, setIncidentCategoryFilter] = useState<'all' | IncidentCategory>('all');
+  const [manualTaskIdEnabled, setManualTaskIdEnabled] = useState(true);
   const [selectedPersonFilter, setSelectedPersonFilter] = useState<string>('all');
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteForm, setNoteForm] = useState({
@@ -178,7 +229,7 @@ export default function DailiesModule({
       data: vacs
     }] = await Promise.all([supabase.from('people').select('*').eq('project_id', projectId).order('created_at', {
       ascending: true
-    }), supabase.from('incidents').select('id,name,description,incident_number,status,category,additional_comments').eq('project_id', projectId).order('incident_number', {
+    }), supabase.from('incidents').select('id,name,description,incident_number,status,category,additional_comments,environment').eq('project_id', projectId).order('incident_number', {
       ascending: false
     }), supabase.from('vacations').select('*').eq('project_id', projectId).order('start_date', {
       ascending: true
@@ -186,6 +237,22 @@ export default function DailiesModule({
     setPeople(ppl || []);
     setIncidents(incs || []);
     setVacations(vacs || []);
+
+    const userIds = Array.from(new Set((ppl || []).map((person: any) => person.user_id).filter(Boolean)));
+    if (userIds.length > 0) {
+      const { data: profileRows } = await supabase
+        .from('profiles')
+        .select('user_id, full_name, email')
+        .in('user_id', userIds as string[]);
+
+      const map = (profileRows || []).reduce((acc: Record<string, { full_name: string; email: string | null }>, profile: any) => {
+        acc[profile.user_id] = { full_name: profile.full_name, email: profile.email };
+        return acc;
+      }, {});
+      setLinkedProfiles(map);
+    } else {
+      setLinkedProfiles({});
+    }
   };
   const ensureDaily = async (d: Date) => {
     const isoDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -266,12 +333,14 @@ export default function DailiesModule({
   const handleIncidentSelect = (incidentId: string) => {
     const incident = incidents.find(i => i.id === incidentId);
     if (incident) {
+      setManualTaskIdEnabled(true);
       setTaskForm({
         title: incident.name || '',
         description: incident.description || '',
         personIds: [],
         incidentId: incident.id,
         status: incident.status === 'resolved' ? 'resolved' : incident.status === 'in_progress' ? 'in_progress' : 'pending',
+        environment: incident.status === 'resolved' ? (incident.environment || '') : '',
         relatedTicket: formatTaskManualId(incident.incident_number),
         category: getDisplayCategory(incident) || 'incident'
       });
@@ -280,12 +349,14 @@ export default function DailiesModule({
   };
 
   const handleCreateWithoutLink = () => {
+    setManualTaskIdEnabled(true);
     setTaskForm({
       title: '',
       description: '',
       personIds: [],
       incidentId: '',
       status: 'pending',
+      environment: '',
       relatedTicket: '',
       category: 'incident'
     });
@@ -295,24 +366,47 @@ export default function DailiesModule({
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!dailyId) return;
-    const relatedTicket = formatTaskManualId(taskForm.relatedTicket);
+    let relatedTicket = taskForm.relatedTicket.trim();
+    if (manualTaskIdEnabled) {
+      relatedTicket = formatTaskManualId(relatedTicket);
+      if (!relatedTicket) {
+        return toast({
+          title: 'ID obligatorio',
+          description: 'Completa el ID de la tarea con un número de hasta 6 dígitos.',
+          variant: 'destructive'
+        });
+      }
+    } else if (!relatedTicket) {
+      relatedTicket = await loadNextAutoTaskId();
+      setTaskForm(f => ({ ...f, relatedTicket }));
+    }
+
     if (!relatedTicket) {
       return toast({
         title: 'ID obligatorio',
-        description: 'Completa el ID de la tarea con un número de hasta 6 dígitos.',
+        description: 'No se pudo generar el ID automático.',
         variant: 'destructive'
       });
     }
+    if (isResolvedTask(taskForm.status) && !taskForm.environment) {
+      return toast({
+        title: 'Entorno obligatorio',
+        description: 'Selecciona DEV, PRE o PRO para las tareas resueltas.',
+        variant: 'destructive',
+      });
+    }
     let incidentIdToLink = taskForm.incidentId || null;
+    const taskEnvironment = normalizeTaskEnvironment(taskForm.status, taskForm.environment);
 
     if (creationMode === 'manual') {
       const newIncidentId = crypto.randomUUID();
+      const incidentNumber = manualTaskIdEnabled ? Number(relatedTicket) : await loadNextIncidentNumber();
       const { error: incidentError } = await supabase.from('incidents').insert({
         id: newIncidentId,
-        incident_number: Number(relatedTicket),
+        incident_number: incidentNumber,
         name: taskForm.title,
         description: taskForm.description || null,
-        environment: '',
+        environment: taskEnvironment || null,
         device: '',
         occurred_at: date.toISOString(),
         status: mapTaskStatusToIncidentStatus(taskForm.status),
@@ -353,6 +447,7 @@ export default function DailiesModule({
       person_id: taskForm.personIds.length > 0 ? taskForm.personIds[0] : null,
       incident_id: incidentIdToLink,
       status: taskForm.status ?? 'pending',
+      environment: taskEnvironment || null,
       is_auto_linked: creationMode === 'linked' || creationMode === 'manual',
       related_ticket: relatedTicket
     };
@@ -368,10 +463,31 @@ export default function DailiesModule({
     
     // If automatically linked to incident, sync status
     if (incidentIdToLink && creationMode === 'linked') {
+      const { data: currentIncident } = await supabase
+        .from('incidents')
+        .select('status, incident_number, name, category')
+        .eq('id', incidentIdToLink)
+        .maybeSingle();
+
       await supabase
         .from('incidents')
-        .update({ status: mapTaskStatusToIncidentStatus(taskForm.status) } as any)
+        .update({
+          status: mapTaskStatusToIncidentStatus(taskForm.status),
+          environment: taskEnvironment || null,
+        } as any)
         .eq('id', incidentIdToLink);
+
+      if (currentIncident && currentIncident.status !== mapTaskStatusToIncidentStatus(taskForm.status)) {
+        await recordIncidentStatusChange({
+          projectId,
+          incidentId: incidentIdToLink,
+          incidentNumber: Number(currentIncident.incident_number),
+          incidentName: currentIncident.name,
+          incidentCategory: currentIncident.category,
+          fromStatus: currentIncident.status,
+          toStatus: mapTaskStatusToIncidentStatus(taskForm.status),
+        });
+      }
       
       // Si hay una persona asignada, crear asignación en incident_assignments
       if (taskForm.personIds.length > 0) {
@@ -424,9 +540,11 @@ export default function DailiesModule({
       personIds: [],
       incidentId: '',
       status: 'pending',
+      environment: '',
       relatedTicket: '',
       category: 'incident'
     });
+    setManualTaskIdEnabled(true);
     setCreationMode('select');
     setIncidentSearchQuery('');
     setIncidentCategoryFilter('all');
@@ -905,8 +1023,9 @@ export default function DailiesModule({
     // Save scroll position before update
     preserveScroll();
 
-    // Update local state immediately for smooth UX
-    const newTasks = arrayMove(sortedTasks, oldIndex, newIndex);
+    const newVisibleTasks = arrayMove(sortedTasks, oldIndex, newIndex);
+    const visibleTaskMap = new Map(newVisibleTasks.map(task => [task.id, task]));
+    const newTasks = tasks.map(task => visibleTaskMap.get(task.id) ?? task);
     setTasks(newTasks);
 
     // Update order_position in database
@@ -982,24 +1101,19 @@ export default function DailiesModule({
         <TableCell>
           <Badge 
             variant="outline"
-            className={
-              task.status === 'in_progress' 
-                ? 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent'
-                : task.status === 'resolved' 
-                ? 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent'
-                : task.status === 'resolved_yesterday'
-                ? 'bg-[hsl(var(--success)/0.5)] text-[hsl(var(--success-foreground))] border-transparent'
-                : 'bg-muted text-muted-foreground border-transparent'
-            }
+            className={getTaskStatusTone(task.status)}
           >
-            {task.status === 'in_progress' 
-              ? 'En curso' 
-              : task.status === 'resolved' 
-              ? 'Resuelta' 
-              : task.status === 'resolved_yesterday'
-              ? 'Resuelta ayer'
-              : 'Pendiente'}
+            {getTaskStatusLabel(task.status)}
           </Badge>
+        </TableCell>
+        <TableCell>
+          {task.environment ? (
+            <Badge variant="outline" className="bg-muted/50 border-transparent">
+              {task.environment}
+            </Badge>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
         </TableCell>
         <TableCell>
           {task.related_ticket ? (
@@ -1089,6 +1203,38 @@ export default function DailiesModule({
     return String(value ?? '').replace(/\D/g, '').slice(0, 6);
   };
 
+  const getNextSequentialId = (values: Array<string | number | null | undefined>, prefix = '') => {
+    const max = values.reduce((currentMax, value) => {
+      const text = String(value ?? '').trim();
+      if (!text) return currentMax;
+      const match = text.match(new RegExp(`^${prefix}?(\\d+)$`, 'i'));
+      if (!match) return currentMax;
+      const parsed = Number(match[1]);
+      return Number.isFinite(parsed) ? Math.max(currentMax, parsed) : currentMax;
+    }, 0);
+    return `${prefix}${max + 1}`;
+  };
+
+  const loadNextAutoTaskId = async () => {
+    const { data } = await supabase
+      .from('tasks')
+      .select('related_ticket')
+      .eq('project_id', projectId);
+    return getNextSequentialId(data?.map(row => row.related_ticket) || [], 'INT');
+  };
+
+  const loadNextIncidentNumber = async () => {
+    const { data } = await supabase
+      .from('incidents')
+      .select('incident_number')
+      .eq('project_id', projectId);
+    const max = (data || []).reduce((currentMax, row: any) => {
+      const value = Number(row?.incident_number);
+      return Number.isFinite(value) ? Math.max(currentMax, value) : currentMax;
+    }, 0);
+    return max + 1;
+  };
+
   const getCategoryLabel = (category: string | null | undefined) => {
     if (category === 'incident') return 'Incidencia';
     if (category === 'improvement') return 'Evolutivo';
@@ -1151,7 +1297,14 @@ export default function DailiesModule({
   }, [people, selectedDateVacations]);
 
   const taskCountSummary = useMemo(() => {
-    const counts = new Map<string, { id: string; name: string; color?: string; count: number }>();
+    const counts = new Map<string, {
+      id: string;
+      name: string;
+      color?: string;
+      pending: number;
+      inProgress: number;
+      resolved: number;
+    }>();
 
     tasks.forEach(task => {
       const person = people.find(p => p.id === (task.person_id || task.assigned_to));
@@ -1160,12 +1313,17 @@ export default function DailiesModule({
         id: key,
         name: person?.name || 'Sin asignar',
         color: person?.color,
-        count: 0,
+        pending: 0,
+        inProgress: 0,
+        resolved: 0,
       };
+      const next = { ...current };
+      if (task.status === 'in_progress') next.inProgress += 1;
+      else if (isResolvedTask(task.status)) next.resolved += 1;
+      else next.pending += 1;
       counts.set(key, {
-        ...current,
         color: person?.color || current.color,
-        count: current.count + 1,
+        ...next,
       });
     });
 
@@ -1202,7 +1360,9 @@ export default function DailiesModule({
       description: task.description || '',
       personIds: task.person_id ? [task.person_id] : [],
       incidentId: task.incident_id || '',
-      status: task.status as TaskStatus || 'pending'
+      status: task.status as TaskStatus || 'pending',
+      environment: task.environment || '',
+      category: getDisplayCategory(incidents.find(i => i.id === task.incident_id)) || 'incident'
     });
     setEditing(false);
     setDetailsOpen(true);
@@ -1235,32 +1395,60 @@ export default function DailiesModule({
     if (!selectedTask) return;
     const handler = setTimeout(async () => {
       preserveScroll();
-      const relatedTicket = formatTaskManualId(editForm.relatedTicket);
-      if (!relatedTicket) return;
+      const relatedTicket = editForm.relatedTicket.trim() ? formatTaskManualId(editForm.relatedTicket) : '';
+      const taskEnvironment = normalizeTaskEnvironment(editForm.status, editForm.environment);
+      if (isResolvedTask(editForm.status) && !taskEnvironment) {
+        return;
+      }
       const update = {
         title: editForm.title,
-        related_ticket: relatedTicket,
+        related_ticket: relatedTicket || null,
         description: editForm.description || null,
         person_id: editForm.personIds.length > 0 ? editForm.personIds[0] : null,
         incident_id: editForm.incidentId || null,
-        status: editForm.status
+        status: editForm.status,
+        environment: taskEnvironment || null,
+        is_auto_linked: Boolean(editForm.incidentId || selectedTask.is_auto_linked),
       };
       const {
         error
       } = await supabase.from('tasks').update(update).eq('id', selectedTask.id);
       if (!error) {
         // If task is linked to Home, keep the incident in sync with daily edits.
-        if (selectedTask.is_auto_linked && update.incident_id) {
+        if (update.incident_id && relatedTicket) {
+          const { data: currentIncident } = await supabase
+            .from('incidents')
+            .select('status, incident_number, name, category, additional_comments')
+            .eq('id', update.incident_id)
+            .maybeSingle();
+
+          const nextIncidentStatus = mapTaskStatusToIncidentStatus(update.status);
+          const nextCategory = serializeCategory(editForm.category, currentIncident?.additional_comments);
           await supabase
             .from('incidents')
             .update({
               incident_number: Number(relatedTicket),
               name: update.title,
               description: update.description,
-              status: mapTaskStatusToIncidentStatus(update.status),
+              status: nextIncidentStatus,
               assigned_to: update.person_id,
+              environment: taskEnvironment || null,
+              category: nextCategory.category,
+              additional_comments: nextCategory.additional_comments,
             } as any)
             .eq('id', update.incident_id);
+
+          if (currentIncident && currentIncident.status !== nextIncidentStatus) {
+            await recordIncidentStatusChange({
+              projectId,
+              incidentId: update.incident_id,
+              incidentNumber: Number(relatedTicket),
+              incidentName: update.title,
+              incidentCategory: currentIncident.category,
+              fromStatus: currentIncident.status,
+              toStatus: nextIncidentStatus,
+            });
+          }
           
           // Si hay una persona asignada, sincronizar también su asignación
           if (update.person_id) {
@@ -1402,7 +1590,27 @@ export default function DailiesModule({
                       className={cn("cursor-pointer bg-muted/50", selectedPersonFilter === item.id && "bg-primary/10 ring-2 ring-primary")}
                       style={{ borderColor: item.color || undefined }}
                     >
-                      {item.name}: {item.count} {item.count === 1 ? 'tarea' : 'tareas'}
+                      <span className="mr-2">{item.name}</span>
+                      <span className="flex items-center gap-1">
+                        <span
+                          className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground"
+                          title={`Pendientes: ${item.pending}`}
+                        >
+                          {item.pending}
+                        </span>
+                        <span
+                          className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[hsl(var(--warning))] text-[10px] font-semibold text-[hsl(var(--warning-foreground))]"
+                          title={`WIP: ${item.inProgress}`}
+                        >
+                          {item.inProgress}
+                        </span>
+                        <span
+                          className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[hsl(var(--success))] text-[10px] font-semibold text-[hsl(var(--success-foreground))]"
+                          title={`Resueltas: ${item.resolved}`}
+                        >
+                          {item.resolved}
+                        </span>
+                      </span>
                     </Badge>
                   ))}
                 </div>
@@ -1417,6 +1625,7 @@ export default function DailiesModule({
                     <TableRow>
                       <TableHead className="w-8"></TableHead>
                       <DailySortableHeader field="status">Estado</DailySortableHeader>
+                      <TableHead>Entorno</TableHead>
                       <TableHead>ID</TableHead>
                       <TableHead>Tipo</TableHead>
                       <TableHead>Tarea</TableHead>
@@ -1442,9 +1651,9 @@ export default function DailiesModule({
                         );
                       })}
                     </SortableContext>
-                    {sortedTasks.length === 0 && (
+                      {sortedTasks.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground">
+                        <TableCell colSpan={8} className="text-center text-muted-foreground">
                           Sin tareas para este día
                         </TableCell>
                       </TableRow>
@@ -1465,12 +1674,14 @@ export default function DailiesModule({
           setCreationMode('select');
           setIncidentSearchQuery('');
           setIncidentCategoryFilter('all');
+          setManualTaskIdEnabled(true);
           setTaskForm({
             title: '',
             description: '',
             personIds: [],
             incidentId: '',
             status: 'pending',
+            environment: '',
             relatedTicket: '',
             category: 'incident'
           });
@@ -1534,7 +1745,7 @@ export default function DailiesModule({
                                   : 'bg-muted text-muted-foreground border-transparent'
                               }`}
                             >
-                              {incident.status === 'in_progress' ? 'En curso' : 'Pendiente'}
+                              {incident.status === 'in_progress' ? 'WIP' : 'Pendiente'}
                             </Badge>
                           </div>
                           {incident.category && (
@@ -1604,18 +1815,37 @@ export default function DailiesModule({
               </div>
 
               <div>
-                <RequiredLabel>ID</RequiredLabel>
+                <div className="flex items-center justify-between gap-3">
+                  <RequiredLabel>ID</RequiredLabel>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="manual-task-id" className="text-xs text-muted-foreground">Manual</Label>
+                    <Switch
+                      id="manual-task-id"
+                      checked={manualTaskIdEnabled}
+                      onCheckedChange={async (checked) => {
+                        setManualTaskIdEnabled(checked);
+                        if (!checked) {
+                          const autoId = await loadNextAutoTaskId();
+                          setTaskForm(f => ({ ...f, relatedTicket: autoId }));
+                        } else {
+                          setTaskForm(f => ({ ...f, relatedTicket: formatTaskManualId(f.relatedTicket) }));
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
                 <Input
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={6}
-                  placeholder="Máx. 6 dígitos"
+                  inputMode={manualTaskIdEnabled ? 'numeric' : 'text'}
+                  pattern={manualTaskIdEnabled ? '[0-9]*' : undefined}
+                  maxLength={manualTaskIdEnabled ? 6 : undefined}
+                  placeholder={manualTaskIdEnabled ? 'Máx. 6 dígitos' : 'INT1'}
                   value={taskForm.relatedTicket}
                   onChange={e => setTaskForm(f => ({
                     ...f,
-                    relatedTicket: formatTaskManualId(e.target.value)
+                    relatedTicket: manualTaskIdEnabled ? formatTaskManualId(e.target.value) : e.target.value
                   }))}
-                  required
+                  readOnly={!manualTaskIdEnabled}
+                  required={manualTaskIdEnabled}
                 />
               </div>
               {creationMode === 'manual' && (
@@ -1688,18 +1918,40 @@ export default function DailiesModule({
               </div>
               <div>
                 <Label>Estado</Label>
-                <Select value={taskForm.status} onValueChange={v => setTaskForm(f => ({
-                  ...f,
-                  status: v as TaskStatus
-                }))}>
+                <Select
+                  value={taskForm.status}
+                  onValueChange={v => setTaskForm(f => {
+                    const nextStatus = v as TaskStatus;
+                    return {
+                      ...f,
+                      status: nextStatus,
+                      environment: normalizeTaskEnvironment(nextStatus, f.environment),
+                    };
+                  })}
+                >
                   <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="pending">Pendiente</SelectItem>
-                    <SelectItem value="in_progress">En curso</SelectItem>
+                    <SelectItem value="in_progress">WIP</SelectItem>
                     <SelectItem value="resolved">Resuelta</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              {isResolvedTask(taskForm.status) && (
+                <div>
+                  <RequiredLabel>Entorno</RequiredLabel>
+                  <Select value={taskForm.environment} onValueChange={value => setTaskForm(f => ({ ...f, environment: value as TaskEnvironment }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar entorno" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DEV">DEV</SelectItem>
+                      <SelectItem value="PRE">PRE</SelectItem>
+                      <SelectItem value="PRO">PRO</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="md:col-span-2">
                 <Label>Descripción</Label>
                 <Textarea value={taskForm.description} onChange={e => setTaskForm(f => ({
@@ -1715,12 +1967,14 @@ export default function DailiesModule({
                   onClick={() => {
                     setCreationMode('select');
                     setIncidentCategoryFilter('all');
+                    setManualTaskIdEnabled(true);
                     setTaskForm({
                       title: '',
                       description: '',
                       personIds: [],
                       incidentId: '',
                       status: 'pending',
+                      environment: '',
                       relatedTicket: '',
                       category: 'incident'
                     });
@@ -1801,23 +2055,13 @@ export default function DailiesModule({
                     onClick={() => {
                       if (!selectedTask) return;
                       
-                      const statusLabels = {
-                        'pending': 'Pendiente',
-                        'in_progress': 'En curso',
-                        'resolved': 'Resuelta'
-                      };
-                      
-                      const assignedPeople = people
-                        .filter(p => selectedTask.person_ids?.includes(p.id))
-                        .map(p => p.name)
-                        .join(', ');
-                      
                       const taskIdInfo = selectedTask.related_ticket
                         ? `ID: ${selectedTask.related_ticket}`
                         : 'ID: Sin completar';
                       
                       const info = `Título: ${selectedTask.title || 'Sin título'}
-Estado: ${statusLabels[selectedTask.status as TaskStatus] || selectedTask.status}
+Estado: ${getTaskStatusLabel(selectedTask.status as TaskStatus)}
+Entorno: ${selectedTask.environment || 'Sin definir'}
 ${taskIdInfo}
 Descripción: ${selectedTask.description || 'Sin descripción'}`;
                       
@@ -1931,18 +2175,40 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                 </div>
                  <div>
                    <Label>Estado</Label>
-                   <Select value={editForm.status} onValueChange={v => setEditForm(f => ({
-                 ...f,
-                 status: v as TaskStatus
-               }))}>
+                   <Select
+                     value={editForm.status}
+                     onValueChange={v => setEditForm(f => {
+                       const nextStatus = v as TaskStatus;
+                       return {
+                         ...f,
+                         status: nextStatus,
+                         environment: normalizeTaskEnvironment(nextStatus, f.environment),
+                       };
+                     })}
+                   >
                      <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
                      <SelectContent>
                        <SelectItem value="pending">Pendiente</SelectItem>
-                       <SelectItem value="in_progress">En curso</SelectItem>
+                       <SelectItem value="in_progress">WIP</SelectItem>
                        <SelectItem value="resolved">Resuelta</SelectItem>
                      </SelectContent>
                    </Select>
                  </div>
+                 {isResolvedTask(editForm.status) && (
+                   <div>
+                     <RequiredLabel>Entorno</RequiredLabel>
+                     <Select value={editForm.environment} onValueChange={value => setEditForm(f => ({ ...f, environment: value as TaskEnvironment }))}>
+                       <SelectTrigger>
+                         <SelectValue placeholder="Seleccionar entorno" />
+                       </SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="DEV">DEV</SelectItem>
+                         <SelectItem value="PRE">PRE</SelectItem>
+                         <SelectItem value="PRO">PRO</SelectItem>
+                       </SelectContent>
+                     </Select>
+                   </div>
+                 )}
                  <div className="md:col-span-2">
                    <Label>Descripción</Label>
                    <Textarea value={editForm.description} onChange={e => setEditForm(f => ({
@@ -1959,16 +2225,17 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                         role="combobox"
                         className="w-full justify-between"
                       >
-                        {editForm.incidentId ? 
-                          formatIncidentLabel(incidents.find(i => i.id === editForm.incidentId)!) : 
-                          "Ninguna"
-                        }
+                        <span className="block max-w-full truncate text-left">
+                          {editForm.incidentId
+                            ? formatIncidentLabel(incidents.find(i => i.id === editForm.incidentId) || { name: 'Ninguna', incident_number: null })
+                            : 'Ninguna'}
+                        </span>
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[400px] p-0">
+                    <PopoverContent className="w-[420px] max-h-[360px] p-0 overflow-hidden">
                       <Command>
                         <CommandInput placeholder="Buscar incidencia..." />
-                        <CommandList>
+                        <CommandList className="max-h-[280px]">
                           <CommandEmpty>No se encontraron incidencias.</CommandEmpty>
                           <CommandGroup>
                             <CommandItem
@@ -1987,7 +2254,9 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                                    setEditForm(f => ({ ...f, incidentId: i.id, relatedTicket: formatTaskManualId(i.incident_number) }));
                                  }}
                                >
-                                 {formatIncidentLabel(i)}
+                                 <span className="block max-w-full truncate" title={formatIncidentLabel(i)}>
+                                   {formatIncidentLabel(i)}
+                                 </span>
                                </CommandItem>
                              ))}
                           </CommandGroup>
@@ -1995,6 +2264,23 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                       </Command>
                     </PopoverContent>
                   </Popover>
+                </div>
+                <div>
+                  <Label>Tipo</Label>
+                  <Select
+                    value={editForm.category}
+                    onValueChange={value => setEditForm(f => ({ ...f, category: value as IncidentCategory }))}
+                    disabled={!editForm.incidentId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="incident">Incidencia</SelectItem>
+                      <SelectItem value="improvement">Evolutivo</SelectItem>
+                      <SelectItem value="corrective_improvement">Mejora correctora</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -2057,7 +2343,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                             }
                           >
                             {task.status === 'in_progress' 
-                              ? 'En curso' 
+                              ? 'WIP' 
                               : task.status === 'resolved' 
                               ? 'Resuelta' 
                               : task.status === 'resolved_yesterday'
@@ -2114,7 +2400,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los estados</SelectItem>
-                  <SelectItem value="in_progress">En curso</SelectItem>
+                  <SelectItem value="in_progress">WIP</SelectItem>
                   <SelectItem value="pending">Pendiente</SelectItem>
                   <SelectItem value="resolved">Resuelta</SelectItem>
                 </SelectContent>
@@ -2153,7 +2439,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                             }
                           >
                             {task.status === 'in_progress' 
-                              ? 'En curso' 
+                              ? 'WIP' 
                               : task.status === 'resolved' 
                               ? 'Resuelta' 
                               : task.status === 'resolved_yesterday'
@@ -2240,20 +2526,35 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
             </form>
 
             <div className="mt-2 space-y-2">
-              {people.map(p => <div key={p.id} className="flex items-center justify-between rounded border p-2">
-                  <div className="flex items-center gap-2">
-                    <span className="h-4 w-4 rounded" style={{
-                  backgroundColor: p.color
-                }} />
-                    <div>
-                      <div className="font-medium">{p.name}</div>
-                      <div className="text-xs text-muted-foreground">{p.role}</div>
+              <div className="grid grid-cols-[1.2fr_1fr_1fr_auto] gap-3 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <span>Miembro</span>
+                <span>Usuario</span>
+                <span>Email</span>
+                <span />
+              </div>
+              {people.map(p => {
+                const linkedProfile = p.user_id ? linkedProfiles[p.user_id] : null;
+                return (
+                  <div key={p.id} className="grid grid-cols-[1.2fr_1fr_1fr_auto] items-center gap-3 rounded border p-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="h-4 w-4 rounded shrink-0" style={{ backgroundColor: p.color }} />
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{p.name}</div>
+                        <div className="text-xs text-muted-foreground truncate">{p.role}</div>
+                      </div>
                     </div>
+                    <div className="min-w-0 text-sm truncate">
+                      {p.user_id ? (linkedProfile?.full_name || 'Vinculado') : 'Sin vincular'}
+                    </div>
+                    <div className="min-w-0 text-sm truncate text-muted-foreground">
+                      {p.user_id ? (linkedProfile?.email || 'Sin email') : '—'}
+                    </div>
+                    <Button variant="destructive" size="icon" onClick={() => deletePerson(p.id)} aria-label="Eliminar">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Button variant="destructive" size="icon" onClick={() => deletePerson(p.id)} aria-label="Eliminar">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>)}
+                );
+              })}
               {people.length === 0 && <div className="text-sm text-muted-foreground">Sin personas aún</div>}
             </div>
           </div>

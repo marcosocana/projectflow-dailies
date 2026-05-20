@@ -351,6 +351,7 @@ export type Database = {
           name: string
           project_id: string
           role: string
+          user_id: string | null
           updated_at: string
         }
         Insert: {
@@ -360,6 +361,7 @@ export type Database = {
           name: string
           project_id: string
           role: string
+          user_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -369,11 +371,72 @@ export type Database = {
           name?: string
           project_id?: string
           role?: string
+          user_id?: string | null
           updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "people_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      incident_activity_logs: {
+        Row: {
+          actor_color: string
+          actor_name: string
+          actor_user_id: string | null
+          created_at: string
+          from_status: string
+          id: string
+          incident_category: string
+          incident_id: string
+          incident_name: string
+          incident_number: number
+          project_id: string
+          to_status: string
+        }
+        Insert: {
+          actor_color?: string
+          actor_name: string
+          actor_user_id?: string | null
+          created_at?: string
+          from_status: string
+          id?: string
+          incident_category: string
+          incident_id: string
+          incident_name: string
+          incident_number: number
+          project_id: string
+          to_status: string
+        }
+        Update: {
+          actor_color?: string
+          actor_name?: string
+          actor_user_id?: string | null
+          created_at?: string
+          from_status?: string
+          id?: string
+          incident_category?: string
+          incident_id?: string
+          incident_name?: string
+          incident_number?: number
+          project_id?: string
+          to_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "incident_activity_logs_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "incidents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incident_activity_logs_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -681,6 +744,7 @@ export type Database = {
           created_at: string
           daily_id: string | null
           description: string | null
+          environment: string | null
           id: string
           incident_id: string | null
           is_auto_linked: boolean | null
@@ -698,6 +762,7 @@ export type Database = {
           created_at?: string
           daily_id?: string | null
           description?: string | null
+          environment?: string | null
           id?: string
           incident_id?: string | null
           is_auto_linked?: boolean | null
@@ -715,6 +780,7 @@ export type Database = {
           created_at?: string
           daily_id?: string | null
           description?: string | null
+          environment?: string | null
           id?: string
           incident_id?: string | null
           is_auto_linked?: boolean | null

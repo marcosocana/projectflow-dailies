@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Trash2, Copy } from 'lucide-react';
@@ -12,15 +13,24 @@ import { useToast } from '@/hooks/use-toast';
 import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 import { syncSingleAssignmentStatus } from '@/hooks/useSyncTaskStatus';
 import { useTaskAssignments } from '@/hooks/useTaskAssignments';
+import { recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 
 // Options same as IncidentsModule to keep UI identical
 const STATUS_OPTIONS = [
-  { value: 'in_progress', label: 'En curso' },
   { value: 'pending', label: 'Pendiente' },
-  { value: 'in_qa', label: 'En pruebas' },
-  { value: 'resolved', label: 'Resuelta' },
+  { value: 'in_progress', label: 'WIP' },
+  { value: 'in_qa', label: 'En QA' },
+  { value: 'resolved', label: 'En PRO' },
   { value: 'closed', label: 'Cerrada' },
 ] as const;
+
+const STATUS_BADGE_CLS: Record<string, string> = {
+  pending: 'bg-muted text-muted-foreground',
+  in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
+  in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]',
+  resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
+  closed: 'bg-destructive text-destructive-foreground',
+};
 
 const CATEGORY_OPTIONS = [
   { value: 'incident', label: 'Incidencia' },
@@ -186,27 +196,19 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
       if (data) {
         setSelected(data);
         
-        // Get creator email if available
+        // Get creator name and email if available
         if (data.created_by) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('user_id')
+            .select('full_name, email')
             .eq('user_id', data.created_by)
-            .single();
+            .maybeSingle();
           
           if (profile) {
-            const { data: userAuth } = await supabase.auth.getUser();
-            if (userAuth.user?.id === data.created_by) {
-              setCreatedByEmail(userAuth.user.email || 'Desconocido');
-            } else {
-              // For other users, we can't get email due to privacy, so show profile info
-              const { data: profileData } = await supabase
-                .from('profiles')
-                .select('full_name')
-                .eq('user_id', data.created_by)
-                .single();
-              setCreatedByEmail(profileData?.full_name || 'Usuario registrado');
-            }
+            const name = profile.full_name || 'Usuario registrado';
+            setCreatedByEmail(profile.email ? `${name} (${profile.email})` : name);
+          } else {
+            setCreatedByEmail('Usuario registrado');
           }
         }
         
@@ -284,7 +286,19 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           console.error('Error uploading file:', e);
         }
       }
+      const previousStatus = selected.status;
       await supabase.from('incidents').update(payload).eq('id', selected.id);
+      if (previousStatus !== payload.status) {
+        await recordIncidentStatusChange({
+          projectId: selected.project_id,
+          incidentId: selected.id,
+          incidentNumber: Number(payload.incident_number),
+          incidentName: payload.name,
+          incidentCategory: payload.category,
+          fromStatus: previousStatus,
+          toStatus: payload.status,
+        });
+      }
       
       // Sync single-person assignment state if the incident status changed.
       if (payload.status !== selected.status) {
@@ -430,7 +444,15 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                 >
                   <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
                   <SelectContent>
-                    {STATUS_OPTIONS.map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
+                    {STATUS_OPTIONS.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className={`${STATUS_BADGE_CLS[s.value] || 'bg-accent text-accent-foreground'} border-transparent text-[10px] px-1 py-0.5`}>
+                            {s.label}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 {assignments.length > 1 && (

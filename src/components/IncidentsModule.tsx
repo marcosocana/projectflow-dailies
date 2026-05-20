@@ -29,7 +29,9 @@ import TaskAssignmentCell from '@/components/TaskAssignmentCell';
 import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 import TaskAssignmentsInput from '@/components/TaskAssignmentsInput';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import BacklogImportDialog from '@/components/BacklogImportDialog';
+import { recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 
 interface IncidentsModuleProps {
   projectId: string;
@@ -107,6 +109,14 @@ const MADRID_TIME_ZONE = 'Europe/Madrid';
 
 const formatManualId = (value: string | number | null | undefined) =>
   String(value ?? '').replace(/\D/g, '').slice(0, 6);
+
+const getNextIncidentNumberFromRows = (rows: Array<{ incident_number: number | null | undefined }>) => {
+  const max = rows.reduce((currentMax, row) => {
+    const value = Number(row?.incident_number);
+    return Number.isFinite(value) ? Math.max(currentMax, value) : currentMax;
+  }, 0);
+  return max + 1;
+};
 
 const CORRECTIVE_CATEGORY_MARKER = '[tipo:mejora_correctiva]';
 
@@ -381,6 +391,7 @@ export default function IncidentsModule({
   // Estado para asignaciones múltiples durante creación
   const [createAssignments, setCreateAssignments] = useState<Array<{person: string, status: IncidentStatus}>>([]);
   const [createDailyTasks, setCreateDailyTasks] = useState(true);
+  const [manualIncidentIdEnabled, setManualIncidentIdEnabled] = useState(true);
   const importInputRef = useRef<HTMLInputElement>(null);
 
   // KPIs state
@@ -648,21 +659,35 @@ export default function IncidentsModule({
     if (error) throw error;
     return filePath;
   };
+
+  const loadNextIncidentNumber = async () => {
+    const { data, error } = await supabase
+      .from('incidents')
+      .select('incident_number')
+      .eq('project_id', projectId);
+    if (error) throw error;
+    return getNextIncidentNumberFromRows((data || []) as any);
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingId) return;
     let savedSuccessfully = false;
     try {
       let id = editingId ?? crypto.randomUUID();
-      const incidentNumber = formatManualId(form.incidentNumber);
-
-      if (!incidentNumber) {
-        toast({
-          title: 'ID obligatorio',
-          description: 'Completa el ID de la tarea con un número de hasta 6 dígitos.',
-          variant: 'destructive'
-        });
-        return;
+      let incidentNumber = formatManualId(form.incidentNumber);
+      if (manualIncidentIdEnabled) {
+        if (!incidentNumber) {
+          toast({
+            title: 'ID obligatorio',
+            description: 'Completa el ID de la tarea con un número de hasta 6 dígitos.',
+            variant: 'destructive'
+          });
+          return;
+        }
+      } else if (!incidentNumber) {
+        incidentNumber = String(await loadNextIncidentNumber());
+        setForm(prev => ({ ...prev, incidentNumber }));
       }
 
       // Compose environment/device from single-selects
@@ -808,10 +833,22 @@ export default function IncidentsModule({
           const path = await handleUploadEvidence(id);
           updatePayload.evidence = path;
         }
+        const fromStatus = incidents.find(incident => incident.id === id)?.status;
         const {
           error
         } = await supabase.from('incidents').update(updatePayload).eq('id', id);
         if (error) throw error;
+        if (fromStatus && fromStatus !== updatePayload.status) {
+          await recordIncidentStatusChange({
+            projectId,
+            incidentId: id,
+            incidentNumber: Number(incidentNumber),
+            incidentName: updatePayload.name,
+            incidentCategory: updatePayload.category,
+            fromStatus,
+            toStatus: updatePayload.status,
+          });
+        }
         
         await supabase
           .from('tasks')
@@ -878,8 +915,20 @@ export default function IncidentsModule({
           updatePayload.evidence = path;
         }
 
+        const fromStatus = incidents.find(incident => incident.id === editingId)?.status;
         const { error } = await supabase.from('incidents').update(updatePayload).eq('id', editingId);
         if (error) throw error;
+        if (fromStatus && fromStatus !== updatePayload.status) {
+          await recordIncidentStatusChange({
+            projectId,
+            incidentId: editingId,
+            incidentNumber: Number(incidentNumber),
+            incidentName: updatePayload.name,
+            incidentCategory: updatePayload.category,
+            fromStatus,
+            toStatus: updatePayload.status,
+          });
+        }
 
         await supabase
           .from('tasks')
@@ -1046,6 +1095,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
 
     // Update in database
     try {
+      const fromStatus = activeIncident.status;
       const {
         error
       } = await supabase.from('incidents').update({
@@ -1053,6 +1103,17 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
         updated_at: new Date().toISOString()
       }).eq('id', incidentId);
       if (error) throw error;
+      if (fromStatus !== toStatus) {
+        await recordIncidentStatusChange({
+          projectId,
+          incidentId,
+          incidentNumber: Number(activeIncident.incident_number),
+          incidentName: activeIncident.name,
+          incidentCategory: activeIncident.category,
+          fromStatus,
+          toStatus,
+        });
+      }
       
       // Sync auto-linked tasks with the new status (map incident status to task status)
       await supabase
@@ -1228,6 +1289,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
             <div className="flex flex-wrap items-center gap-2">
               <Button onClick={() => {
               resetForm();
+              setManualIncidentIdEnabled(true);
               setCreateOpen(true);
             }}>
                 <Plus className="h-4 w-4 mr-2" /> Crear tarea
@@ -1451,7 +1513,13 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
     </Card>
 
     {/* Crear/Editar incidencia */}
-    <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+    <Dialog open={createOpen} onOpenChange={(open) => {
+      setCreateOpen(open);
+      if (!open) {
+        setManualIncidentIdEnabled(true);
+        resetForm();
+      }
+    }}>
       <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{editingId ? 'Editar tarea' : 'Crear tarea'}</DialogTitle>
@@ -1459,19 +1527,42 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
         </DialogHeader>
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto pr-2">
           <div className="space-y-2">
-            <RequiredLabel>ID</RequiredLabel>
-            <Input
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
-              placeholder="Máx. 6 dígitos"
-              value={form.incidentNumber}
-              onChange={e => setForm(f => ({
-                ...f,
-                incidentNumber: formatManualId(e.target.value)
-              }))}
-              required
-            />
+            <div className="flex items-center justify-between gap-3">
+              <RequiredLabel>ID</RequiredLabel>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="manual-incident-id" className="text-xs text-muted-foreground">Manual</Label>
+                <Switch
+                  id="manual-incident-id"
+                  checked={manualIncidentIdEnabled}
+                  onCheckedChange={async (checked) => {
+                    setManualIncidentIdEnabled(checked);
+                    if (!checked) {
+                      const autoNumber = await loadNextIncidentNumber();
+                      setForm(f => ({
+                        ...f,
+                        incidentNumber: String(autoNumber),
+                      }));
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {!manualIncidentIdEnabled && <span className="text-sm font-medium text-muted-foreground">INT</span>}
+              <Input
+                inputMode={manualIncidentIdEnabled ? 'numeric' : 'text'}
+                pattern={manualIncidentIdEnabled ? '[0-9]*' : undefined}
+                maxLength={manualIncidentIdEnabled ? 6 : undefined}
+                placeholder={manualIncidentIdEnabled ? 'Máx. 6 dígitos' : '1'}
+                value={form.incidentNumber}
+                onChange={e => setForm(f => ({
+                  ...f,
+                  incidentNumber: formatManualId(e.target.value)
+                }))}
+                readOnly={!manualIncidentIdEnabled}
+                required={manualIncidentIdEnabled}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <RequiredLabel>Nombre</RequiredLabel>

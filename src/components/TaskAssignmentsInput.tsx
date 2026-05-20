@@ -20,9 +20,9 @@ interface TaskAssignmentsInputProps {
 
 const STATUS_OPTIONS: Array<{ value: IncidentStatus; label: string }> = [
   { value: 'pending', label: 'Pendiente' },
-  { value: 'in_progress', label: 'En curso' },
-  { value: 'in_qa', label: 'En pruebas' },
-  { value: 'resolved', label: 'Resuelta' },
+  { value: 'in_progress', label: 'WIP' },
+  { value: 'in_qa', label: 'En QA' },
+  { value: 'resolved', label: 'En PRO' },
   { value: 'closed', label: 'Cerrada' }
 ];
 
@@ -131,7 +131,11 @@ export default function TaskAssignmentsInput({
                 <SelectContent>
                   {STATUS_OPTIONS.map(opt => (
                     <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={`${STATUS_COLORS[opt.value]} border-transparent text-[10px] px-1 py-0.5`}>
+                          {opt.label}
+                        </Badge>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>

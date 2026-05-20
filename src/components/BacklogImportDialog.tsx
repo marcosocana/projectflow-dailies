@@ -68,13 +68,12 @@ export default function BacklogImportDialog({
       if (columns.length >= 5) {
         const number = columns[0]?.trim() || '';
         const name = columns[3]?.trim() || '';
-        const nameWithNumber = number ? `${name} [${number}]` : name;
         
         rows.push({
           number,
           epic: columns[1]?.trim() || '',
           category: columns[2]?.trim() || '',
-          name: nameWithNumber,
+          name,
           description: columns[4]?.trim() || ''
         });
       }
@@ -129,11 +128,18 @@ export default function BacklogImportDialog({
 
     try {
       const categoryPayload = serializeCategory(mapCategory(current.category));
+      const incidentNumber = Number(current.number);
+
+      if (!current.number || !Number.isFinite(incidentNumber)) {
+        throw new Error('El ID del backlog no es válido.');
+      }
+
       // Create incident
       const { data: incident, error: incidentError } = await supabase
         .from('incidents')
         .insert({
           project_id: projectId,
+          incident_number: incidentNumber,
           name: current.name,
           description: current.description || null,
           epic: current.epic || null,
@@ -195,11 +201,13 @@ export default function BacklogImportDialog({
           const taskInserts = assignments.map(assignment => ({
             project_id: projectId,
             person_id: assignment.person,
+            assigned_to: assignment.person,
             title: current.name,
             description: current.description || null,
             status: 'pending' as const,
             incident_id: incident.id,
-            is_auto_linked: true
+            is_auto_linked: true,
+            related_ticket: current.number
           }));
 
           const { data: createdTasks, error: taskError } = await supabase

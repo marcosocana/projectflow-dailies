@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ProjectButton } from '@/components/ui/project-button';
 import { supabase } from '@/integrations/supabase/client';
+import { recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { AlertTriangle, Calendar, CheckCircle2, Clock, List, Columns3, FileText, Filter, Check, X, Wrench } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -303,12 +304,24 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
 
     // Update in database
     try {
+      const previousStatus = activeIncident.status;
       const { error } = await supabase
         .from('incidents')
         .update({ status: newStatus, updated_at: new Date().toISOString() })
         .eq('id', activeId);
 
       if (error) throw error;
+      if (previousStatus !== newStatus) {
+        await recordIncidentStatusChange({
+          projectId,
+          incidentId: activeId,
+          incidentNumber: Number(activeIncident.incident_number),
+          incidentName: activeIncident.name,
+          incidentCategory: activeIncident.category,
+          fromStatus: previousStatus,
+          toStatus: newStatus,
+        });
+      }
       
       // Sync auto-linked tasks with the new status (map incident status to task status)
       const taskStatus = newStatus === 'closed' ? 'resolved' : 

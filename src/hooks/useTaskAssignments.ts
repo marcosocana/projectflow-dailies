@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
+import { recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 
 type IncidentStatus = Database['public']['Enums']['incident_status'];
 // Map task_status for syncing with daily tasks
@@ -96,6 +97,12 @@ export const useTaskAssignments = (taskId: string | null) => {
         .maybeSingle();
 
       if (assignmentRow?.incident_id && assignmentRow?.assigned_to) {
+        const { data: currentIncident } = await supabase
+          .from('incidents')
+          .select('status, incident_number, name, category, project_id')
+          .eq('id', assignmentRow.incident_id)
+          .maybeSingle();
+
         // 3) Sincronizar las tareas del seguimiento interno vinculadas con esta persona
         const mapped: TaskStatus = status === 'closed' 
           ? 'resolved' 
@@ -115,7 +122,7 @@ export const useTaskAssignments = (taskId: string | null) => {
           .select('status')
           .eq('incident_id', assignmentRow.incident_id);
 
-        if (allAssignments && allAssignments.length > 0) {
+          if (allAssignments && allAssignments.length > 0) {
           let newIncidentStatus: IncidentStatus = 'pending';
 
           // Si al menos una está en progreso o en QA, la incidencia está en progreso
@@ -133,6 +140,18 @@ export const useTaskAssignments = (taskId: string | null) => {
             .from('incidents')
             .update({ status: newIncidentStatus })
             .eq('id', assignmentRow.incident_id);
+
+          if (currentIncident && currentIncident.status !== newIncidentStatus) {
+            await recordIncidentStatusChange({
+              projectId: currentIncident.project_id,
+              incidentId: assignmentRow.incident_id,
+              incidentNumber: Number(currentIncident.incident_number),
+              incidentName: currentIncident.name,
+              incidentCategory: currentIncident.category,
+              fromStatus: currentIncident.status,
+              toStatus: newIncidentStatus,
+            });
+          }
         }
       }
 
@@ -162,10 +181,10 @@ export const useTaskAssignments = (taskId: string | null) => {
   const getOverallStatus = (): IncidentStatus => {
     if (assignments.length === 0) return 'pending';
     
-    const hasInProgress = assignments.some(a => a.status === 'in_progress');
+    const hasInProgress = assignments.some(a => a.status === 'in_progress' || a.status === 'in_qa');
     if (hasInProgress) return 'in_progress';
     
-    const allResolved = assignments.every(a => a.status === 'resolved');
+    const allResolved = assignments.every(a => a.status === 'resolved' || a.status === 'closed');
     if (allResolved) return 'resolved';
     
     return 'pending';

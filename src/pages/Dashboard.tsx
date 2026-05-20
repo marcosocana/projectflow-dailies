@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
 import CreateProjectForm from '@/components/CreateProjectForm';
 import IncidentsModule from '@/components/IncidentsModule';
+import ActivityLogModule from '@/components/ActivityLogModule';
 import ReleasesModule from '@/components/ReleasesModule';
 import InterestingLinksModule from '@/components/InterestingLinksModule';
 import VacationsModule from '@/components/VacationsModule';
@@ -158,6 +159,9 @@ const Dashboard = () => {
                 <nav className="mt-4 grid gap-2">
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/tasks">Home</a>
+                  </Button>
+                  <Button asChild variant="ghost" className="justify-start">
+                    <a href="/activity">Actividad</a>
                   </Button>
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/releases">Releases</a>
@@ -331,6 +335,7 @@ const Dashboard = () => {
               <Routes>
                 <Route path="/" element={<Navigate to="tasks" replace />} />
                 <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
+                <Route path="activity" element={<ActivityLogModule projectId={currentProject.id} />} />
                 <Route path="releases" element={<ReleasesModule projectId={currentProject.id} />} />
                 <Route path="vacations" element={<VacationsModule projectId={currentProject.id} />} />
                 <Route path="repository" element={<RepositoryModule projectId={currentProject.id} />} />

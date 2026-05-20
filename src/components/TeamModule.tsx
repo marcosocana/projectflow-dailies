@@ -16,6 +16,7 @@ interface TeamModuleProps {
 export default function TeamModule({ projectId }: TeamModuleProps) {
   const { toast } = useToast();
   const [people, setPeople] = useState<any[]>([]);
+  const [linkedProfiles, setLinkedProfiles] = useState<Record<string, { full_name: string; email: string | null }>>({});
   const [createPersonOpen, setCreatePersonOpen] = useState(false);
   const [personForm, setPersonForm] = useState({
     name: '',
@@ -38,7 +39,24 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
       .order('created_at', { ascending: true });
 
     if (!error) {
-      setPeople(data || []);
+      const rows = data || [];
+      setPeople(rows);
+
+      const userIds = Array.from(new Set(rows.map(person => person.user_id).filter(Boolean)));
+      if (userIds.length > 0) {
+        const { data: profileRows } = await supabase
+          .from('profiles')
+          .select('user_id, full_name, email')
+          .in('user_id', userIds as string[]);
+
+        const map = (profileRows || []).reduce((acc, profile) => {
+          acc[profile.user_id] = { full_name: profile.full_name, email: profile.email };
+          return acc;
+        }, {} as Record<string, { full_name: string; email: string | null }>);
+        setLinkedProfiles(map);
+      } else {
+        setLinkedProfiles({});
+      }
     }
   };
 
@@ -145,6 +163,8 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
                 <TableRow>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Rol</TableHead>
+                  <TableHead>Usuario</TableHead>
+                  <TableHead>Email</TableHead>
                   <TableHead>Color</TableHead>
                   <TableHead className="w-[100px]">Acciones</TableHead>
                 </TableRow>
@@ -154,6 +174,8 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
                   <TableRow key={person.id}>
                     <TableCell className="font-medium">{person.name}</TableCell>
                     <TableCell>{person.role}</TableCell>
+                    <TableCell>{person.user_id ? (linkedProfiles[person.user_id]?.full_name || 'Vinculado') : 'Sin vincular'}</TableCell>
+                    <TableCell>{person.user_id ? (linkedProfiles[person.user_id]?.email || 'Sin email') : '—'}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <div 

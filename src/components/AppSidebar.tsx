@@ -15,6 +15,7 @@ import {
   Info,
   Home,
   BarChart3,
+  History,
   Rocket,
   Link,
   Users,
@@ -38,6 +39,12 @@ const menuItems = [
     url: "config", 
     icon: BarChart3,
     description: "Seguimiento diario y gestión del equipo" 
+  },
+  { 
+    title: "Actividad", 
+    url: "activity", 
+    icon: History,
+    description: "Registro de cambios de incidencias" 
   },
   { 
     title: "Releases", 

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { ColorPicker } from '@/components/ui/color-picker';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -43,12 +44,22 @@ interface ProjectAccessRow {
   project_id: string;
 }
 
+interface PersonRow {
+  id: string;
+  name: string;
+  project_id: string;
+  user_id: string | null;
+  color: string;
+}
+
 const projectSections = ['tasks', 'dailies', 'vacations', 'users', 'notes', 'settings'] as const;
 
 const AdminProjects = () => {
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [profiles, setProfiles] = useState<AdminProfile[]>([]);
   const [projectAccess, setProjectAccess] = useState<ProjectAccessRow[]>([]);
+  const [people, setPeople] = useState<PersonRow[]>([]);
+  const [linkedProjectId, setLinkedProjectId] = useState('');
   const [search, setSearch] = useState('');
   const [userSearch, setUserSearch] = useState('');
   const [editingProject, setEditingProject] = useState<ProjectRow | null>(null);
@@ -56,6 +67,7 @@ const AdminProjects = () => {
   const [selectedProfile, setSelectedProfile] = useState<AdminProfile | null>(null);
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [userForm, setUserForm] = useState({ full_name: '', email: '', color: '#3B82F6', is_active: true });
+  const [linkedPersonId, setLinkedPersonId] = useState('');
   const [loading, setLoading] = useState(false);
   const [usersLoading, setUsersLoading] = useState(false);
   const [showPasswords, setShowPasswords] = useState<{ [key: string]: boolean }>({});
@@ -100,7 +112,10 @@ const AdminProjects = () => {
   const loadUsers = async () => {
     setUsersLoading(true);
     try {
-      const [{ data: profileData, error: profilesError }, { data: accessData, error: accessError }] = await Promise.all([
+      const [
+        { data: profileData, error: profilesError },
+        { data: accessData, error: accessError },
+      ] = await Promise.all([
         supabase
           .from('profiles')
           .select('id, user_id, email, full_name, color, is_active, created_at')
@@ -113,8 +128,16 @@ const AdminProjects = () => {
       if (profilesError) throw profilesError;
       if (accessError) throw accessError;
 
+      const peopleWithLink = await supabase
+        .from('people')
+        .select('id, name, project_id, user_id, color')
+        .order('name');
+
+      if (peopleWithLink.error) throw peopleWithLink.error;
+
       setProfiles(profileData || []);
       setProjectAccess(accessData || []);
+      setPeople(peopleWithLink.data || []);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -132,6 +155,62 @@ const AdminProjects = () => {
       loadUsers();
     }
   }, [authLoading, user, canAccessAdmin]);
+
+  useEffect(() => {
+    if (!editingProject || !editOpen || !editForm.name.trim()) return;
+
+    const handler = setTimeout(async () => {
+      const updates: any = {
+        name: editForm.name.trim(),
+        project_password: editForm.project_password.trim(),
+        dailies_password: editForm.dailies_password.trim(),
+        theme_color: editForm.theme_color,
+      };
+
+      const { error } = await supabase
+        .from('projects')
+        .update(updates)
+        .eq('id', editingProject.id);
+
+      if (error) {
+        toast({ title: "Error", description: error.message || "Error al actualizar el proyecto", variant: "destructive" });
+        return;
+      }
+
+      setProjects(prev => prev.map(project => project.id === editingProject.id ? { ...project, ...updates } : project));
+      setEditingProject(prev => prev ? { ...prev, ...updates } : prev);
+    }, 500);
+
+    return () => clearTimeout(handler);
+  }, [editingProject?.id, editOpen, editForm]);
+
+  useEffect(() => {
+    if (!selectedProfile || !userDialogOpen || !userForm.full_name.trim()) return;
+
+    const handler = setTimeout(async () => {
+      const updates = {
+        full_name: userForm.full_name.trim(),
+        email: userForm.email.trim() || null,
+        color: userForm.color,
+        is_active: userForm.is_active,
+      };
+
+      const { error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', selectedProfile.id);
+
+      if (error) {
+        toast({ title: 'Error', description: error.message || 'No se pudo actualizar el usuario', variant: 'destructive' });
+        return;
+      }
+
+      setProfiles(prev => prev.map(profile => profile.id === selectedProfile.id ? { ...profile, ...updates } : profile));
+      setSelectedProfile(prev => prev ? { ...prev, ...updates } : prev);
+    }, 500);
+
+    return () => clearTimeout(handler);
+  }, [selectedProfile?.id, userDialogOpen, userForm]);
 
   if (authLoading) {
     return (
@@ -306,34 +385,6 @@ const AdminProjects = () => {
     }
   };
 
-  useEffect(() => {
-    if (!editingProject || !editOpen || !editForm.name.trim()) return;
-
-    const handler = setTimeout(async () => {
-      const updates: any = {
-        name: editForm.name.trim(),
-        project_password: editForm.project_password.trim(),
-        dailies_password: editForm.dailies_password.trim(),
-        theme_color: editForm.theme_color,
-      };
-
-      const { error } = await supabase
-        .from('projects')
-        .update(updates)
-        .eq('id', editingProject.id);
-
-      if (error) {
-        toast({ title: "Error", description: error.message || "Error al actualizar el proyecto", variant: "destructive" });
-        return;
-      }
-
-      setProjects(prev => prev.map(project => project.id === editingProject.id ? { ...project, ...updates } : project));
-      setEditingProject(prev => prev ? { ...prev, ...updates } : prev);
-    }, 500);
-
-    return () => clearTimeout(handler);
-  }, [editingProject?.id, editOpen, editForm]);
-
   const togglePasswordVisibility = (field: string) => {
     setShowPasswords(prev => ({
       ...prev,
@@ -350,22 +401,110 @@ const AdminProjects = () => {
 
   const filteredProfiles = profiles.filter(profile => {
     const query = userSearch.toLowerCase();
+    const profileUserId = profile.user_id || '';
     return (
       profile.full_name.toLowerCase().includes(query) ||
       (profile.email || '').toLowerCase().includes(query) ||
-      profile.user_id.toLowerCase().includes(query)
+      profileUserId.toLowerCase().includes(query)
     );
   });
 
   const getUserProjectAccess = (userId: string) => {
+    if (!userId) return [];
     return projectAccess.filter(access => access.user_id === userId);
   };
 
   const hasProjectAccess = (userId: string, projectId: string) => {
+    if (!userId) return false;
     return projectAccess.some(access => access.user_id === userId && access.project_id === projectId);
   };
 
+  const accessiblePeopleForSelectedUser = selectedProfile
+    ? people.filter(person => {
+        if (!selectedProfile.user_id) return false;
+        if (linkedProjectId && person.project_id !== linkedProjectId) return false;
+        const accessibleProjectIds = projectAccess
+          .filter(access => access.user_id === selectedProfile.user_id)
+          .map(access => access.project_id);
+        return accessibleProjectIds.includes(person.project_id);
+      })
+    : [];
+
+  const accessibleProjectsForSelectedUser = selectedProfile
+    ? projects.filter(project =>
+        projectAccess.some(access => access.user_id === selectedProfile.user_id && access.project_id === project.id)
+      )
+    : [];
+
+  const updateLinkedPerson = async (personId: string) => {
+    if (!selectedProfile?.user_id) {
+      setLinkedPersonId(personId);
+      return;
+    }
+
+    const accessibleProjectIds = projectAccess
+      .filter(access => access.user_id === selectedProfile.user_id)
+      .map(access => access.project_id);
+
+    if (personId) {
+      const selectedPerson = people.find(person => person.id === personId);
+      if (!selectedPerson) return;
+      setLinkedProjectId(selectedPerson.project_id);
+      if (!accessibleProjectIds.includes(selectedPerson.project_id)) {
+        toast({
+          title: 'Acceso no permitido',
+          description: 'Ese miembro pertenece a un proyecto al que el usuario no tiene acceso.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    try {
+      if (personId) {
+        const { error: unlinkError } = await supabase
+          .from('people')
+          .update({ user_id: null })
+          .eq('user_id', selectedProfile.user_id)
+          .neq('id', personId);
+
+        if (unlinkError) throw unlinkError;
+
+        const { error: linkError } = await supabase
+          .from('people')
+          .update({ user_id: selectedProfile.user_id })
+          .eq('id', personId);
+
+        if (linkError) throw linkError;
+      } else {
+        const { error: unlinkError } = await supabase
+          .from('people')
+          .update({ user_id: null })
+          .eq('user_id', selectedProfile.user_id);
+
+        if (unlinkError) throw unlinkError;
+      }
+
+      setLinkedPersonId(personId);
+      setPeople(prev => prev.map(person => ({
+        ...person,
+        user_id: person.id === personId ? selectedProfile.user_id : (person.user_id === selectedProfile.user_id ? null : person.user_id)
+      })));
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'No se pudo vincular el usuario con el equipo',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const openUserDialog = (profile: AdminProfile) => {
+    const linkedPerson = people.find(person => person.user_id === profile.user_id);
+    const accessibleProjectIds = projects
+      .filter(project => projectAccess.some(access => access.user_id === profile.user_id && access.project_id === project.id))
+      .map(project => project.id);
+
     setSelectedProfile(profile);
     setUserForm({
       full_name: profile.full_name,
@@ -373,6 +512,8 @@ const AdminProjects = () => {
       color: profile.color,
       is_active: profile.is_active,
     });
+    setLinkedPersonId(linkedPerson?.id || '');
+    setLinkedProjectId(linkedPerson?.project_id || accessibleProjectIds[0] || '');
     setUserDialogOpen(true);
   };
 
@@ -396,38 +537,12 @@ const AdminProjects = () => {
       await loadUsers();
       setUserDialogOpen(false);
       setSelectedProfile(null);
+      setLinkedPersonId('');
+      setLinkedProjectId('');
     } catch (error: any) {
       toast({ title: 'Error', description: error.message || 'No se pudo actualizar el usuario', variant: 'destructive' });
     }
   };
-
-  useEffect(() => {
-    if (!selectedProfile || !userDialogOpen || !userForm.full_name.trim()) return;
-
-    const handler = setTimeout(async () => {
-      const updates = {
-        full_name: userForm.full_name.trim(),
-        email: userForm.email.trim() || null,
-        color: userForm.color,
-        is_active: userForm.is_active,
-      };
-
-      const { error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', selectedProfile.id);
-
-      if (error) {
-        toast({ title: 'Error', description: error.message || 'No se pudo actualizar el usuario', variant: 'destructive' });
-        return;
-      }
-
-      setProfiles(prev => prev.map(profile => profile.id === selectedProfile.id ? { ...profile, ...updates } : profile));
-      setSelectedProfile(prev => prev ? { ...prev, ...updates } : prev);
-    }, 500);
-
-    return () => clearTimeout(handler);
-  }, [selectedProfile?.id, userDialogOpen, userForm]);
 
   const handleToggleUserActive = async (profile: AdminProfile, isActive: boolean) => {
     try {
@@ -773,7 +888,9 @@ const AdminProjects = () => {
                                     <div className="h-4 w-4 rounded-full border" style={{ backgroundColor: profile.color }} />
                                     <div>
                                       <div className="font-medium">{profile.full_name}</div>
-                                      <div className="text-xs text-muted-foreground">ID: {profile.user_id.slice(0, 8)}...</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        ID: {profile.user_id ? `${profile.user_id.slice(0, 8)}...` : 'Sin ID'}
+                                      </div>
                                     </div>
                                   </div>
                                 </TableCell>
@@ -977,7 +1094,14 @@ const AdminProjects = () => {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
+        <Dialog open={userDialogOpen} onOpenChange={(open) => {
+          setUserDialogOpen(open);
+          if (!open) {
+            setSelectedProfile(null);
+            setLinkedPersonId('');
+            setLinkedProjectId('');
+          }
+        }}>
           <DialogContent className="sm:max-w-[760px]">
             <DialogHeader>
               <DialogTitle>Perfil de usuario</DialogTitle>
@@ -1030,6 +1154,54 @@ const AdminProjects = () => {
                       <Badge variant={userForm.is_active ? 'default' : 'secondary'}>
                         {userForm.is_active ? 'Activo' : 'Baja'}
                       </Badge>
+                    </div>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Miembro del equipo</Label>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="admin-user-project">Proyecto</Label>
+                        <Select
+                          value={linkedProjectId || 'none'}
+                          onValueChange={(value) => {
+                            const nextProjectId = value === 'none' ? '' : value;
+                            setLinkedProjectId(nextProjectId);
+                            setLinkedPersonId('');
+                          }}
+                        >
+                          <SelectTrigger id="admin-user-project">
+                            <SelectValue placeholder="Seleccionar proyecto" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Sin proyecto</SelectItem>
+                            {accessibleProjectsForSelectedUser.map(project => (
+                              <SelectItem key={project.id} value={project.id}>
+                                {project.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="admin-user-person">Miembro</Label>
+                        <Select
+                          value={linkedPersonId || 'none'}
+                          onValueChange={(value) => updateLinkedPerson(value === 'none' ? '' : value)}
+                          disabled={!linkedProjectId}
+                        >
+                          <SelectTrigger id="admin-user-person">
+                            <SelectValue placeholder={linkedProjectId ? 'Seleccionar miembro' : 'Elige primero un proyecto'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Sin vincular</SelectItem>
+                            {accessiblePeopleForSelectedUser.map(person => (
+                              <SelectItem key={person.id} value={person.id}>
+                                {person.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
                 </div>
