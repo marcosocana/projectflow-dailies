@@ -31,7 +31,7 @@ import TaskAssignmentsInput from '@/components/TaskAssignmentsInput';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import BacklogImportDialog from '@/components/BacklogImportDialog';
-import { recordIncidentStatusChange } from '@/lib/incidentActivityLog';
+import { recordIncidentCreated, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 
 interface IncidentsModuleProps {
@@ -715,6 +715,15 @@ export default function IncidentsModule({
           error
         } = await supabase.from('incidents').insert(insertPayload);
         if (error) throw error;
+
+        await recordIncidentCreated({
+          projectId,
+          incidentId: id,
+          incidentNumber: Number(incidentNumber),
+          incidentName: form.name,
+          incidentCategory: categoryPayload.category,
+          toStatus: form.status,
+        });
         
         // Create multiple assignments
         if (createAssignments.length > 0) {
@@ -1188,6 +1197,18 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
         error
       } = await supabase.from('incidents').insert(payload);
       if (error) throw error;
+      await Promise.all(payload.map(incident => (
+        Number.isFinite(Number(incident.incident_number)) && incident.name
+          ? recordIncidentCreated({
+              projectId,
+              incidentId: incident.id,
+              incidentNumber: Number(incident.incident_number),
+              incidentName: incident.name,
+              incidentCategory: incident.category,
+              toStatus: incident.status,
+            })
+          : Promise.resolve()
+      )));
       toast({
         title: 'Importación completada',
         description: `${payload.length} incidencias creadas`

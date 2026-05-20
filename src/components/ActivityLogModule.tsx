@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Copy } from 'lucide-react';
+import { Copy, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getActivityLogLastSeen, setActivityLogLastSeen } from '@/lib/activityLogReadState';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -27,6 +29,7 @@ type ActivityLogRow = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
+  created: 'Creada',
   pending: 'Pendiente',
   in_progress: 'WIP',
   in_qa: 'En QA',
@@ -35,6 +38,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_BADGE_CLS: Record<string, string> = {
+  created: 'bg-primary text-primary-foreground border-transparent',
   pending: 'bg-muted text-muted-foreground border-transparent',
   in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent',
   in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))] border-transparent',
@@ -50,14 +54,19 @@ const CATEGORY_META: Record<string, { label: string; className: string; icon: Re
 
 export default function ActivityLogModule({ projectId }: ActivityLogModuleProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const location = useLocation();
   const [logs, setLogs] = useState<ActivityLogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [unreadSince, setUnreadSince] = useState<string | null>(null);
   const pageSize = 20;
 
   const loadLogs = useCallback(async () => {
     setLoading(true);
+    const previousLastSeen = getActivityLogLastSeen(projectId, user?.id);
+    setUnreadSince(previousLastSeen);
+
     try {
       const { data, error } = await supabase
         .from('incident_activity_logs')
@@ -66,6 +75,7 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
         .order('created_at', { ascending: false });
       if (error) throw error;
       setLogs((data || []) as ActivityLogRow[]);
+      setActivityLogLastSeen(projectId, user?.id, data?.[0]?.created_at || new Date().toISOString());
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -75,7 +85,7 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, user?.id]);
 
   useEffect(() => {
     loadLogs();
@@ -130,6 +140,9 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
 
   const formatEntry = (log: ActivityLogRow) => {
     const category = CATEGORY_META[log.incident_category] || CATEGORY_META.incident;
+    if (log.from_status === 'created') {
+      return `${log.actor_name} creó ${category.label} - ${log.incident_number} - ${log.incident_name} con estado ${STATUS_LABELS[log.to_status] || log.to_status}.`;
+    }
     return `${log.actor_name} cambió el estado de ${category.label} - ${log.incident_number} - ${log.incident_name} de ${STATUS_LABELS[log.from_status] || log.from_status} a ${STATUS_LABELS[log.to_status] || log.to_status}.`;
   };
 
@@ -138,9 +151,42 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
     toast({ title: 'Copiado', description });
   };
 
-  const copyDay = (items: ActivityLogRow[]) => {
-    const text = items.map(formatEntry).join('\n');
+  const formatDayTitle = (day: string) => {
+    return format(parseISO(day), "EEEE, d 'de' MMMM yyyy", { locale: es });
+  };
+
+  const copyDay = (day: string, items: ActivityLogRow[]) => {
+    const header = `${formatDayTitle(day)}\n${items.length} cambios`;
+    const text = [header, ...items.map(formatEntry)].join('\n');
     copyText(text, 'Se copió el contenido del día.');
+  };
+
+  const deleteLog = async (log: ActivityLogRow) => {
+    try {
+      const { error } = await supabase
+        .from('incident_activity_logs')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('id', log.id);
+
+      if (error) throw error;
+
+      setLogs(currentLogs => currentLogs.filter(currentLog => currentLog.id !== log.id));
+      toast({
+        title: 'Log eliminado',
+        description: 'Se eliminó el registro correctamente.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'No se pudo eliminar el registro',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const isUnreadLog = (log: ActivityLogRow) => {
+    return !unreadSince || new Date(log.created_at).getTime() > new Date(unreadSince).getTime();
   };
 
   if (loading) {
@@ -167,11 +213,11 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <CardTitle className="text-lg">
-                      {format(parseISO(group.day), "EEEE, d 'de' MMMM yyyy", { locale: es })}
+                      {formatDayTitle(group.day)}
                     </CardTitle>
                     <p className="text-sm text-muted-foreground">{group.items.length} cambios</p>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => copyDay(group.items)}>
+                  <Button variant="outline" size="sm" onClick={() => copyDay(group.day, group.items)}>
                     <Copy className="h-4 w-4 mr-2" />
                     Copiar día
                   </Button>
@@ -181,8 +227,16 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                 {group.items.map(log => {
                   const category = CATEGORY_META[log.incident_category] || CATEGORY_META.incident;
                   const entityLabel = `${category.label} - ${log.incident_number} - ${log.incident_name}`;
+                  const isUnread = isUnreadLog(log);
+                  const isCreation = log.from_status === 'created';
                   return (
-                    <div key={log.id} className="flex items-start justify-between gap-3 rounded-md border p-3">
+                    <div key={log.id} className="relative flex items-start justify-between gap-3 rounded-md border p-3">
+                      {isUnread && (
+                        <span
+                          className="absolute left-2 top-2 h-2.5 w-2.5 rounded-full bg-destructive"
+                          aria-label="Cambio nuevo"
+                        />
+                      )}
                       <div className="flex min-w-0 items-start gap-3">
                         <div className="mt-0.5 h-8 w-8 rounded-full flex items-center justify-center text-white shrink-0" style={{ backgroundColor: log.actor_color }}>
                           {log.actor_name.slice(0, 1).toUpperCase()}
@@ -192,13 +246,18 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                         </div>
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5 text-sm">
-                            <span>{log.actor_name} cambió el estado de</span>
+                            <span>{log.actor_name} {isCreation ? 'creó' : 'cambió el estado de'}</span>
                             <strong>{entityLabel}</strong>
-                            <span>de</span>
-                            <Badge variant="outline" className={STATUS_BADGE_CLS[log.from_status] || 'border-transparent'}>
-                              {STATUS_LABELS[log.from_status] || log.from_status}
-                            </Badge>
-                            <span>a</span>
+                            {!isCreation && (
+                              <>
+                                <span>de</span>
+                                <Badge variant="outline" className={STATUS_BADGE_CLS[log.from_status] || 'border-transparent'}>
+                                  {STATUS_LABELS[log.from_status] || log.from_status}
+                                </Badge>
+                                <span>a</span>
+                              </>
+                            )}
+                            {isCreation && <span>con estado</span>}
                             <Badge variant="outline" className={STATUS_BADGE_CLS[log.to_status] || 'border-transparent'}>
                               {STATUS_LABELS[log.to_status] || log.to_status}
                             </Badge>
@@ -209,9 +268,25 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                           </div>
                         </div>
                       </div>
-                      <Button variant="ghost" size="icon" onClick={() => copyText(formatEntry(log), 'Se copió el cambio.')}>
-                        <Copy className="h-4 w-4" />
-                      </Button>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => copyText(formatEntry(log), 'Se copió el cambio.')}
+                          aria-label="Copiar cambio"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteLog(log)}
+                          aria-label="Eliminar log"
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}

@@ -46,15 +46,29 @@ export function useAuth() {
   };
 
   const signUp = async (email: string, password: string) => {
-    const redirectUrl = `${window.location.origin}/`;
+    const redirectUrl = `${window.location.origin}/auth`;
+    const normalizedEmail = email.trim().toLowerCase();
     
     const { error } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
       options: {
         emailRedirectTo: redirectUrl
       }
     });
+    return { error };
+  };
+
+  const resendSignupConfirmation = async (email: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: normalizedEmail,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth`,
+      },
+    });
+
     return { error };
   };
 
@@ -104,6 +118,7 @@ export function useAuth() {
     isPasswordRecovery,
     signIn,
     signUp,
+    resendSignupConfirmation,
     resetPassword,
     updatePassword,
     signOut,

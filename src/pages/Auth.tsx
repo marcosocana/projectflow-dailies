@@ -17,7 +17,7 @@ const Auth = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { user, signIn, signUp, resetPassword, updatePassword, isPasswordRecovery } = useAuth();
+  const { user, signIn, signUp, resendSignupConfirmation, resetPassword, updatePassword, isPasswordRecovery } = useAuth();
   const { toast } = useToast();
 
   // Redirect if already authenticated
@@ -121,6 +121,35 @@ const Auth = () => {
       });
     }
     
+    setLoading(false);
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!email.trim()) {
+      toast({
+        title: "Email obligatorio",
+        description: "Introduce tu email para reenviar la confirmación.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await resendSignupConfirmation(email);
+
+    if (error) {
+      toast({
+        title: "No se pudo reenviar el email",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Email reenviado",
+        description: "Revisa tu bandeja de entrada y spam.",
+      });
+    }
+
     setLoading(false);
   };
 
@@ -275,6 +304,15 @@ const Auth = () => {
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? 'Registrándose...' : 'Registrarse'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="w-full"
+                  disabled={loading}
+                  onClick={handleResendConfirmation}
+                >
+                  Reenviar email de confirmación
                 </Button>
               </form>
             </TabsContent>

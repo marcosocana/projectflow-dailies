@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,8 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
+import { supabase } from '@/integrations/supabase/client';
+import { getActivityLogLastSeen, subscribeToActivityLogReadState } from '@/lib/activityLogReadState';
 import CreateProjectForm from '@/components/CreateProjectForm';
 import IncidentsModule from '@/components/IncidentsModule';
 import ActivityLogModule from '@/components/ActivityLogModule';
@@ -36,6 +38,7 @@ const Dashboard = () => {
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [projectSelectionReady, setProjectSelectionReady] = useState(false);
+  const [hasUnreadActivity, setHasUnreadActivity] = useState(false);
   const { user, signOut } = useAuth();
   const { toast } = useToast();
   const {
@@ -50,6 +53,29 @@ const Dashboard = () => {
   } = useProjectAccess();
   const navigate = useNavigate();
   const isSuperUser = user?.email?.toLowerCase() === 'mocanat@minsait.com';
+
+  const refreshUnreadActivity = useCallback(async () => {
+    if (!currentProject?.id) {
+      setHasUnreadActivity(false);
+      return;
+    }
+
+    const lastSeen = getActivityLogLastSeen(currentProject.id, user?.id);
+    const { data, error } = await supabase
+      .from('incident_activity_logs')
+      .select('created_at')
+      .eq('project_id', currentProject.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data?.created_at) {
+      setHasUnreadActivity(false);
+      return;
+    }
+
+    setHasUnreadActivity(!lastSeen || new Date(data.created_at).getTime() > new Date(lastSeen).getTime());
+  }, [currentProject?.id, user?.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -76,6 +102,39 @@ const Dashboard = () => {
       isMounted = false;
     };
   }, [user, currentProject]);
+
+  useEffect(() => {
+    refreshUnreadActivity();
+  }, [refreshUnreadActivity]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToActivityLogReadState(refreshUnreadActivity);
+    return unsubscribe;
+  }, [refreshUnreadActivity]);
+
+  useEffect(() => {
+    if (!currentProject?.id) return undefined;
+
+    const channel = supabase
+      .channel(`mobile-activity-log-unread-${currentProject.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'incident_activity_logs',
+          filter: `project_id=eq.${currentProject.id}`,
+        },
+        () => {
+          refreshUnreadActivity();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentProject?.id, refreshUnreadActivity]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -148,8 +207,11 @@ const Dashboard = () => {
             {/* Menú hamburguesa en móvil */}
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="outline" size="icon" className="md:hidden" aria-label="Abrir menú">
+                <Button variant="outline" size="icon" className="relative md:hidden" aria-label="Abrir menú">
                   <Menu className="h-5 w-5" />
+                  {hasUnreadActivity && (
+                    <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-white" />
+                  )}
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="w-64">
@@ -161,7 +223,12 @@ const Dashboard = () => {
                     <a href="/tasks">Home</a>
                   </Button>
                   <Button asChild variant="ghost" className="justify-start">
-                    <a href="/activity">Actividad</a>
+                    <a href="/activity">
+                      <span>Actividad</span>
+                      {hasUnreadActivity && (
+                        <span className="ml-auto h-2.5 w-2.5 rounded-full bg-destructive" />
+                      )}
+                    </a>
                   </Button>
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/releases">Releases</a>

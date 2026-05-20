@@ -10,7 +10,7 @@ type IncidentStatusLogInput = {
   toStatus: string;
 };
 
-export async function recordIncidentStatusChange(input: IncidentStatusLogInput) {
+async function recordIncidentActivity(input: IncidentStatusLogInput) {
   try {
     const { data: authData } = await supabase.auth.getUser();
     const authUser = authData.user;
@@ -43,4 +43,15 @@ export async function recordIncidentStatusChange(input: IncidentStatusLogInput) 
   } catch (error) {
     console.error('Error recording incident activity log:', error);
   }
+}
+
+export async function recordIncidentStatusChange(input: IncidentStatusLogInput) {
+  await recordIncidentActivity(input);
+}
+
+export async function recordIncidentCreated(input: Omit<IncidentStatusLogInput, 'fromStatus'>) {
+  await recordIncidentActivity({
+    ...input,
+    fromStatus: 'created',
+  });
 }

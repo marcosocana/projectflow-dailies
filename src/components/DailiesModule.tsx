@@ -25,7 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { recordIncidentStatusChange } from '@/lib/incidentActivityLog';
+import { recordIncidentCreated, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import {
   DndContext,
@@ -434,6 +434,15 @@ export default function DailiesModule({
       }
 
       incidentIdToLink = newIncidentId;
+
+      await recordIncidentCreated({
+        projectId,
+        incidentId: newIncidentId,
+        incidentNumber,
+        incidentName: taskForm.title,
+        incidentCategory: taskForm.category,
+        toStatus: mapTaskStatusToIncidentStatus(taskForm.status),
+      });
 
       if (taskForm.personIds.length > 0) {
         await supabase.from('incident_assignments').insert({

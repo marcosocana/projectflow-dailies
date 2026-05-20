@@ -68,10 +68,10 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
       try {
         // Crear usuario usando signup regular
         const { data: authData, error: signUpError } = await supabase.auth.signUp({
-          email: formData.email,
+          email: formData.email.trim().toLowerCase(),
           password: password,
           options: {
-            emailRedirectTo: `${window.location.origin}/`,
+            emailRedirectTo: `${window.location.origin}/auth`,
             data: {
               full_name: formData.full_name,
             }

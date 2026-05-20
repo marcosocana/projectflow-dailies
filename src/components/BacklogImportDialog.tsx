@@ -10,6 +10,8 @@ import { supabase } from '@/integrations/supabase/client';
 import TaskAssignmentsInput, { type TaskAssignment } from './TaskAssignmentsInput';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Database } from '@/integrations/supabase/types';
+import { recordIncidentCreated } from '@/lib/incidentActivityLog';
+import { useAuth } from '@/hooks/useAuth';
 
 type IncidentCategory = Database['public']['Enums']['incident_category'];
 
@@ -37,6 +39,7 @@ export default function BacklogImportDialog({
   onImportComplete
 }: BacklogImportDialogProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [step, setStep] = useState<'paste' | 'confirm'>('paste');
   const [pastedText, setPastedText] = useState('');
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
@@ -146,12 +149,22 @@ export default function BacklogImportDialog({
           category: categoryPayload.category,
           additional_comments: categoryPayload.additional_comments,
           status: 'pending',
-          occurred_at: new Date().toISOString()
+          occurred_at: new Date().toISOString(),
+          created_by: user?.id ?? null
         })
         .select()
         .single();
 
       if (incidentError) throw incidentError;
+
+      await recordIncidentCreated({
+        projectId,
+        incidentId: incident.id,
+        incidentNumber,
+        incidentName: current.name,
+        incidentCategory: categoryPayload.category,
+        toStatus: 'pending',
+      });
 
       // Create assignments
       if (assignments.length > 0) {
