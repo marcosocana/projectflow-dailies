@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Copy, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getActivityLogLastSeen, setActivityLogLastSeen } from '@/lib/activityLogReadState';
@@ -58,9 +59,12 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
   const location = useLocation();
   const [logs, setLogs] = useState<ActivityLogRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
   const [unreadSince, setUnreadSince] = useState<string | null>(null);
-  const pageSize = 20;
+  const today = new Date();
+  const [selectedDay, setSelectedDay] = useState(String(today.getDate()));
+  const [selectedMonth, setSelectedMonth] = useState(String(today.getMonth() + 1));
+  const [selectedYear, setSelectedYear] = useState(String(today.getFullYear()));
+  const [queryDate, setQueryDate] = useState<Date>(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
 
   const loadLogs = useCallback(async () => {
     setLoading(true);
@@ -74,8 +78,13 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
         .eq('project_id', projectId)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      setLogs((data || []) as ActivityLogRow[]);
-      setActivityLogLastSeen(projectId, user?.id, data?.[0]?.created_at || new Date().toISOString());
+      const allLogs = (data || []) as ActivityLogRow[];
+      const dayKey = format(queryDate, 'yyyy-MM-dd');
+      const filtered = allLogs.filter(log => format(parseISO(log.created_at), 'yyyy-MM-dd') === dayKey);
+      setLogs(filtered);
+      if (allLogs.length > 0) {
+        setActivityLogLastSeen(projectId, user?.id, allLogs[0].created_at);
+      }
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -85,15 +94,11 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
     } finally {
       setLoading(false);
     }
-  }, [projectId, user?.id]);
+  }, [projectId, user?.id, queryDate]);
 
   useEffect(() => {
     loadLogs();
   }, [loadLogs, location.pathname]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [projectId, location.pathname]);
 
   useEffect(() => {
     const channel = supabase
@@ -116,27 +121,6 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
       supabase.removeChannel(channel);
     };
   }, [projectId, loadLogs]);
-
-  const totalPages = Math.max(1, Math.ceil(logs.length / pageSize));
-  const paginatedLogs = useMemo(() => {
-    const safePage = Math.min(currentPage, totalPages);
-    const start = (safePage - 1) * pageSize;
-    return logs.slice(start, start + pageSize);
-  }, [currentPage, logs, totalPages]);
-
-  useEffect(() => {
-    setCurrentPage(page => Math.min(page, totalPages));
-  }, [totalPages]);
-
-  const groups = useMemo(() => {
-    const map = new Map<string, ActivityLogRow[]>();
-    paginatedLogs.forEach(log => {
-      const day = format(parseISO(log.created_at), 'yyyy-MM-dd');
-      if (!map.has(day)) map.set(day, []);
-      map.get(day)!.push(log);
-    });
-    return Array.from(map.entries()).map(([day, items]) => ({ day, items }));
-  }, [paginatedLogs]);
 
   const formatEntry = (log: ActivityLogRow) => {
     const category = CATEGORY_META[log.incident_category] || CATEGORY_META.incident;
@@ -189,6 +173,15 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
     return !unreadSince || new Date(log.created_at).getTime() > new Date(unreadSince).getTime();
   };
 
+  const yearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const result: number[] = [];
+    for (let year = currentYear - 5; year <= currentYear + 1; year += 1) {
+      result.push(year);
+    }
+    return result;
+  }, []);
+
   if (loading) {
     return (
       <Card>
@@ -197,34 +190,101 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
     );
   }
 
+  const applyDateFilter = () => {
+    const day = Number(selectedDay);
+    const month = Number(selectedMonth);
+    const year = Number(selectedYear);
+    const date = new Date(year, month - 1, day);
+    if (
+      Number.isNaN(date.getTime()) ||
+      date.getFullYear() !== year ||
+      date.getMonth() !== month - 1 ||
+      date.getDate() !== day
+    ) {
+      toast({
+        title: 'Fecha inválida',
+        description: 'Selecciona una fecha válida.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setQueryDate(date);
+  };
+
+  const selectedDayKey = format(queryDate, 'yyyy-MM-dd');
+  const dayTitle = formatDayTitle(selectedDayKey);
+
   return (
     <div className="space-y-4">
-      {groups.length === 0 ? (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Filtrar por fecha</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={selectedDay} onValueChange={setSelectedDay}>
+              <SelectTrigger className="w-[90px]">
+                <SelectValue placeholder="Día" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 31 }, (_, index) => index + 1).map((day) => (
+                  <SelectItem key={day} value={String(day)}>
+                    {day}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue placeholder="Mes" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                  <SelectItem key={month} value={String(month)}>
+                    {month}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedYear} onValueChange={setSelectedYear}>
+              <SelectTrigger className="w-[110px]">
+                <SelectValue placeholder="Año" />
+              </SelectTrigger>
+              <SelectContent>
+                {yearOptions.map((year) => (
+                  <SelectItem key={year} value={String(year)}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button onClick={applyDateFilter}>Ir</Button>
+          </div>
+        </CardContent>
+      </Card>
+      {logs.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            No hay cambios registrados todavía.
+            No hay cambios registrados para {format(queryDate, 'dd/MM/yyyy')}.
           </CardContent>
         </Card>
       ) : (
         <>
-          {groups.map(group => (
-            <Card key={group.day}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <CardTitle className="text-lg">
-                      {formatDayTitle(group.day)}
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">{group.items.length} cambios</p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => copyDay(group.day, group.items)}>
-                    <Copy className="h-4 w-4 mr-2" />
-                    Copiar día
-                  </Button>
+          <Card key={selectedDayKey}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-lg">{dayTitle}</CardTitle>
+                  <p className="text-sm text-muted-foreground">{logs.length} cambios</p>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {group.items.map(log => {
+                <Button variant="outline" size="sm" onClick={() => copyDay(selectedDayKey, logs)}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copiar día
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {logs.map(log => {
                   const category = CATEGORY_META[log.incident_category] || CATEGORY_META.incident;
                   const entityLabel = `${category.label} - ${log.incident_number} - ${log.incident_name}`;
                   const isUnread = isUnreadLog(log);
@@ -289,23 +349,9 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                       </div>
                     </div>
                   );
-                })}
-              </CardContent>
-            </Card>
-          ))}
-          {logs.length > pageSize && (
-            <div className="flex items-center justify-center gap-3">
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(page => Math.max(1, page - 1))} disabled={currentPage <= 1}>
-                Anterior
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                Página {currentPage} de {totalPages}
-              </span>
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))} disabled={currentPage >= totalPages}>
-                Siguiente
-              </Button>
-            </div>
-          )}
+              })}
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

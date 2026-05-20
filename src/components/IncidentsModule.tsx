@@ -381,6 +381,13 @@ export default function IncidentsModule({
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const [compareBacklogOpen, setCompareBacklogOpen] = useState(false);
+  const [backlogCompareRows, setBacklogCompareRows] = useState<Array<{ id: string; excelStatus: string; vectoreaStatus: string }>>([]);
+  const [compareFilters, setCompareFilters] = useState({
+    id: '',
+    excelStatus: '',
+    vectoreaStatus: '',
+  });
   const [backlogImportOpen, setBacklogImportOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] = useState<any | null>(null);
@@ -390,6 +397,7 @@ export default function IncidentsModule({
   const [createDailyTasks, setCreateDailyTasks] = useState(true);
   const [manualIncidentIdEnabled, setManualIncidentIdEnabled] = useState(true);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const compareInputRef = useRef<HTMLInputElement>(null);
 
   // KPIs state
   const [totalIncidents, setTotalIncidents] = useState<number>(0);
@@ -1256,14 +1264,84 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
     }
   };
 
+  const normalizeCompareId = (value: unknown) => String(value ?? '').trim().replace(/^INT/i, '').replace(/\D/g, '');
+
+  const downloadBacklogCompareTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([['ID', 'Estado']]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Plantilla');
+    XLSX.writeFile(wb, 'plantilla_comparar_backlog.xlsx');
+  };
+
+  const compareWithBacklogFile = async (file: File) => {
+    try {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' }) as Array<Record<string, unknown>>;
+
+      const byId = new Map<string, any>();
+      incidents.forEach((incident) => {
+        const id = normalizeCompareId(incident.incident_number);
+        if (id) byId.set(id, incident);
+      });
+
+      const result = rows
+        .map((row) => {
+          const idRaw = row.ID ?? row.Id ?? row.id ?? '';
+          const excelStatus = String(row.Estado ?? row.estado ?? '').trim();
+          const normalizedId = normalizeCompareId(idRaw);
+          const incident = normalizedId ? byId.get(normalizedId) : null;
+          const numericId = Number(normalizedId);
+          const shouldIncludeMissing = !incident && Number.isFinite(numericId) && numericId > 900;
+          return {
+            id: String(idRaw || '').trim(),
+            excelStatus,
+            vectoreaStatus: incident ? (STATUS_LABELS[incident.status] || incident.status) : 'No existe en Vectorea',
+            include: Boolean(incident) || shouldIncludeMissing,
+          };
+        })
+        .filter((row) => row.id && row.include)
+        .map(({ include, ...row }) => row);
+
+      setBacklogCompareRows(result);
+      setCompareFilters({ id: '', excelStatus: '', vectoreaStatus: '' });
+      toast({
+        title: 'Comparativa generada',
+        description: `Se compararon ${result.length} filas.`,
+      });
+    } catch (error) {
+      console.error('Error comparing backlog file:', error);
+      toast({
+        title: 'Error',
+        description: 'No se pudo procesar el Excel de comparación',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const filteredBacklogCompareRows = useMemo(() => {
+    const idFilter = compareFilters.id.trim().toLowerCase();
+    const excelFilter = compareFilters.excelStatus.trim().toLowerCase();
+    const vectoreaFilter = compareFilters.vectoreaStatus.trim().toLowerCase();
+    return backlogCompareRows.filter((row) => {
+      const matchesId = !idFilter || row.id.toLowerCase().includes(idFilter);
+      const matchesExcel = !excelFilter || row.excelStatus.toLowerCase().includes(excelFilter);
+      const matchesVectorea = !vectoreaFilter || row.vectoreaStatus.toLowerCase().includes(vectoreaFilter);
+      return matchesId && matchesExcel && matchesVectorea;
+    });
+  }, [backlogCompareRows, compareFilters]);
+
   // Comentarios y autosave gestionados por IncidentDetailDialog
 
   // Detalle de incidencia gestionado por componente reutilizable
 
   return <div className="space-y-6">
-    {/* KPIs arriba del todo */}
-      {/* KPIs: bloques por tipo de tarea */}
-      <div className="grid gap-2 xl:grid-cols-3">
+    <div className="flex items-start gap-4">
+      <div className="min-w-0 flex-1 space-y-6">
+      {/* KPIs arriba del todo */}
+        {/* KPIs: bloques por tipo de tarea */}
+        <div className="grid gap-2 xl:grid-cols-3">
         {[
           { category: 'incident', title: 'Incidencias', total: totalIncidents, counts: statusCounts },
           { category: 'improvement', title: 'Evolutivos', total: totalImprovements, counts: improvementStatusCounts },
@@ -1307,9 +1385,15 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                     setCurrentPage(1);
                   }} role="button" aria-label={`Filtrar ${group.title} por estado ${STATUS_LABELS[key] || key}`}>
                         <div className="text-lg font-bold leading-5">{group.counts[key] || 0}</div>
-                        <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[9px] px-1 py-0.5`}>
-                          {STATUS_LABELS[key] || key}
-                        </Badge>
+                        {compareBacklogOpen ? (
+                          <div className="mt-1 flex justify-center">
+                            <span className={`h-3 w-3 rounded-full ${STATUS_BADGE_CLS[key] || 'bg-accent border-transparent'}`} />
+                          </div>
+                        ) : (
+                          <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[9px] px-1 py-0.5`}>
+                            {STATUS_LABELS[key] || key}
+                          </Badge>
+                        )}
                       </div>;
                 })}
 
@@ -1323,10 +1407,10 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
             </CardContent>
           </Card>
         ))}
-      </div>
+        </div>
 
 
-    <Card>
+      <Card>
       <CardHeader>
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -1348,9 +1432,23 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
             }}>
                 <Plus className="h-4 w-4 mr-2" /> Crear tarea
               </Button>
+              <Button variant="outline" onClick={() => setCompareBacklogOpen(true)}>
+                Comparar con backlog
+              </Button>
               <Button variant="ghost" size="icon" onClick={fetchIncidents} aria-label="Actualizar" title="Actualizar">
                 <RefreshCcw className="h-4 w-4" />
               </Button>
+              <input
+                ref={compareInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) compareWithBacklogFile(f);
+                  if (compareInputRef.current) compareInputRef.current.value = '';
+                }}
+              />
               {/* Hidden file input for Importar */}
               <input ref={importInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={e => {
               const f = e.target.files?.[0];
@@ -1564,7 +1662,96 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
             </DndContext>
           </div>}
       </CardContent>
-    </Card>
+      </Card>
+      </div>
+
+      {compareBacklogOpen && (
+        <Card className="w-full shrink-0 xl:w-[460px]">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle>Comparar</CardTitle>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setCompareBacklogOpen(false)}>Cerrar</Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={downloadBacklogCompareTemplate}>
+                Descargar plantilla
+              </Button>
+              <Button onClick={() => compareInputRef.current?.click()}>
+                Subir excel
+              </Button>
+            </div>
+            <div className="max-h-[calc(100vh-280px)] overflow-auto rounded-md border">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-background">
+                  <TableRow>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Estado Excel</TableHead>
+                    <TableHead>Estado Vectorea</TableHead>
+                  </TableRow>
+                  <TableRow>
+                    <TableHead>
+                      <Input
+                        value={compareFilters.id}
+                        onChange={(e) => setCompareFilters((prev) => ({ ...prev, id: e.target.value }))}
+                        placeholder="Filtrar ID..."
+                        className="h-8"
+                      />
+                    </TableHead>
+                    <TableHead>
+                      <Input
+                        value={compareFilters.excelStatus}
+                        onChange={(e) => setCompareFilters((prev) => ({ ...prev, excelStatus: e.target.value }))}
+                        placeholder="Filtrar Estado Excel..."
+                        className="h-8"
+                      />
+                    </TableHead>
+                    <TableHead>
+                      <Input
+                        value={compareFilters.vectoreaStatus}
+                        onChange={(e) => setCompareFilters((prev) => ({ ...prev, vectoreaStatus: e.target.value }))}
+                        placeholder="Filtrar Estado Vectorea..."
+                        className="h-8"
+                      />
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredBacklogCompareRows.map((row, index) => (
+                    <TableRow key={`${row.id}-${index}`}>
+                      <TableCell>
+                        <Button
+                          variant="link"
+                          className="h-auto p-0"
+                          onClick={() => {
+                            setSearch(row.id);
+                            setCurrentPage(1);
+                          }}
+                        >
+                          {row.id}
+                        </Button>
+                      </TableCell>
+                      <TableCell>{row.excelStatus || '—'}</TableCell>
+                      <TableCell>{row.vectoreaStatus || '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredBacklogCompareRows.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center text-muted-foreground">
+                        {backlogCompareRows.length === 0 ? 'Sube un archivo para ver la comparativa' : 'No hay filas para los filtros aplicados'}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
 
     {/* Crear/Editar incidencia */}
     <Dialog open={createOpen} onOpenChange={(open) => {
@@ -1799,6 +1986,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
       teamMembers={teamMembers}
       onImportComplete={fetchIncidents}
     />
+
 
     {/* Ver más */}
     <IncidentDetailDialog open={detailsOpen} onOpenChange={setDetailsOpen} incidentId={selected?.id ?? null} onPatched={(id, payload) => {
