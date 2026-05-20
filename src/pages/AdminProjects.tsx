@@ -36,6 +36,7 @@ interface AdminProfile {
   color: string;
   is_active: boolean;
   created_at: string;
+  profile_id: string | null;
 }
 
 interface ProjectAccessRow {
@@ -113,19 +114,16 @@ const AdminProjects = () => {
     setUsersLoading(true);
     try {
       const [
-        { data: profileData, error: profilesError },
+        { data: registeredUsers, error: registeredUsersError },
         { data: accessData, error: accessError },
       ] = await Promise.all([
-        supabase
-          .from('profiles')
-          .select('id, user_id, email, full_name, color, is_active, created_at')
-          .order('full_name'),
+        supabase.rpc('list_registered_users'),
         supabase
           .from('project_access')
           .select('id, user_id, project_id'),
       ]);
 
-      if (profilesError) throw profilesError;
+      if (registeredUsersError) throw registeredUsersError;
       if (accessError) throw accessError;
 
       const peopleWithLink = await supabase
@@ -135,7 +133,22 @@ const AdminProjects = () => {
 
       if (peopleWithLink.error) throw peopleWithLink.error;
 
-      setProfiles(profileData || []);
+      const normalizedProfiles: AdminProfile[] = (registeredUsers || []).map((row: any) => {
+        const email = row.email || null;
+        const fallbackName = email ? email.split('@')[0] : 'Usuario';
+        return {
+          id: row.profile_id || `auth:${row.user_id}`,
+          profile_id: row.profile_id || null,
+          user_id: row.user_id,
+          email,
+          full_name: row.full_name || fallbackName,
+          color: row.color || '#3B82F6',
+          is_active: typeof row.is_active === 'boolean' ? row.is_active : true,
+          created_at: row.created_at,
+        };
+      });
+
+      setProfiles(normalizedProfiles);
       setProjectAccess(accessData || []);
       setPeople(peopleWithLink.data || []);
     } catch (error: any) {
@@ -155,6 +168,57 @@ const AdminProjects = () => {
       loadUsers();
     }
   }, [authLoading, user, canAccessAdmin]);
+
+  useEffect(() => {
+    if (!user || !canAccessAdmin) return;
+
+    const channel = supabase
+      .channel('admin-users-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        loadUsers();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_access' }, () => {
+        loadUsers();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'people' }, () => {
+        loadUsers();
+      })
+      .subscribe();
+
+    const intervalId = window.setInterval(() => {
+      loadUsers();
+    }, 30000);
+
+    const onFocus = () => {
+      loadUsers();
+    };
+
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.clearInterval(intervalId);
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, canAccessAdmin]);
+
+  const ensureProfileExists = async (profile: AdminProfile) => {
+    if (profile.profile_id) return;
+    const fallbackName = profile.full_name?.trim() || profile.email || 'Usuario';
+    const { error } = await supabase
+      .from('profiles')
+      .upsert(
+        {
+          user_id: profile.user_id,
+          full_name: fallbackName,
+          email: profile.email,
+          color: profile.color || '#3B82F6',
+          is_active: profile.is_active,
+        },
+        { onConflict: 'user_id' }
+      );
+    if (error) throw error;
+  };
 
   useEffect(() => {
     if (!editingProject || !editOpen || !editForm.name.trim()) return;
@@ -188,6 +252,13 @@ const AdminProjects = () => {
     if (!selectedProfile || !userDialogOpen || !userForm.full_name.trim()) return;
 
     const handler = setTimeout(async () => {
+      try {
+        await ensureProfileExists(selectedProfile);
+      } catch (error: any) {
+        toast({ title: 'Error', description: error.message || 'No se pudo preparar el perfil del usuario', variant: 'destructive' });
+        return;
+      }
+
       const updates = {
         full_name: userForm.full_name.trim(),
         email: userForm.email.trim() || null,
@@ -198,14 +269,14 @@ const AdminProjects = () => {
       const { error } = await supabase
         .from('profiles')
         .update(updates)
-        .eq('id', selectedProfile.id);
+        .eq('user_id', selectedProfile.user_id);
 
       if (error) {
         toast({ title: 'Error', description: error.message || 'No se pudo actualizar el usuario', variant: 'destructive' });
         return;
       }
 
-      setProfiles(prev => prev.map(profile => profile.id === selectedProfile.id ? { ...profile, ...updates } : profile));
+      setProfiles(prev => prev.map(profile => profile.user_id === selectedProfile.user_id ? { ...profile, ...updates } : profile));
       setSelectedProfile(prev => prev ? { ...prev, ...updates } : prev);
     }, 500);
 
@@ -521,6 +592,8 @@ const AdminProjects = () => {
     if (!selectedProfile) return;
 
     try {
+      await ensureProfileExists(selectedProfile);
+
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -529,7 +602,7 @@ const AdminProjects = () => {
           color: userForm.color,
           is_active: userForm.is_active,
         })
-        .eq('id', selectedProfile.id);
+        .eq('user_id', selectedProfile.user_id);
 
       if (error) throw error;
 
@@ -546,10 +619,12 @@ const AdminProjects = () => {
 
   const handleToggleUserActive = async (profile: AdminProfile, isActive: boolean) => {
     try {
+      await ensureProfileExists(profile);
+
       const { error } = await supabase
         .from('profiles')
         .update({ is_active: isActive })
-        .eq('id', profile.id);
+        .eq('user_id', profile.user_id);
 
       if (error) throw error;
 
