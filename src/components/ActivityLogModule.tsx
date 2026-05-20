@@ -53,6 +53,8 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
   const location = useLocation();
   const [logs, setLogs] = useState<ActivityLogRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
 
   const loadLogs = useCallback(async () => {
     setLoading(true);
@@ -80,6 +82,10 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
   }, [loadLogs, location.pathname]);
 
   useEffect(() => {
+    setCurrentPage(1);
+  }, [projectId, location.pathname]);
+
+  useEffect(() => {
     const channel = supabase
       .channel(`incident-activity-logs-${projectId}`)
       .on(
@@ -101,15 +107,26 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
     };
   }, [projectId, loadLogs]);
 
+  const totalPages = Math.max(1, Math.ceil(logs.length / pageSize));
+  const paginatedLogs = useMemo(() => {
+    const safePage = Math.min(currentPage, totalPages);
+    const start = (safePage - 1) * pageSize;
+    return logs.slice(start, start + pageSize);
+  }, [currentPage, logs, totalPages]);
+
+  useEffect(() => {
+    setCurrentPage(page => Math.min(page, totalPages));
+  }, [totalPages]);
+
   const groups = useMemo(() => {
     const map = new Map<string, ActivityLogRow[]>();
-    logs.forEach(log => {
+    paginatedLogs.forEach(log => {
       const day = format(parseISO(log.created_at), 'yyyy-MM-dd');
       if (!map.has(day)) map.set(day, []);
       map.get(day)!.push(log);
     });
     return Array.from(map.entries()).map(([day, items]) => ({ day, items }));
-  }, [logs]);
+  }, [paginatedLogs]);
 
   const formatEntry = (log: ActivityLogRow) => {
     const category = CATEGORY_META[log.incident_category] || CATEGORY_META.incident;
@@ -143,63 +160,78 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
           </CardContent>
         </Card>
       ) : (
-        groups.map(group => (
-          <Card key={group.day}>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <CardTitle className="text-lg">
-                    {format(parseISO(group.day), "EEEE, d 'de' MMMM yyyy", { locale: es })}
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">{group.items.length} cambios</p>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => copyDay(group.items)}>
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copiar día
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {group.items.map(log => {
-                const category = CATEGORY_META[log.incident_category] || CATEGORY_META.incident;
-                const entityLabel = `${category.label} - ${log.incident_number} - ${log.incident_name}`;
-                return (
-                  <div key={log.id} className="flex items-start justify-between gap-3 rounded-md border p-3">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div className="mt-0.5 h-8 w-8 rounded-full flex items-center justify-center text-white shrink-0" style={{ backgroundColor: log.actor_color }}>
-                        {log.actor_name.slice(0, 1).toUpperCase()}
-                      </div>
-                      <div className={`mt-0.5 grid h-8 w-8 min-w-8 place-items-center rounded-md text-[11px] font-bold leading-none ${category.className}`}>
-                        {category.icon}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-1.5 text-sm">
-                          <span>{log.actor_name} cambió el estado de</span>
-                          <strong>{entityLabel}</strong>
-                          <span>de</span>
-                          <Badge variant="outline" className={STATUS_BADGE_CLS[log.from_status] || 'border-transparent'}>
-                            {STATUS_LABELS[log.from_status] || log.from_status}
-                          </Badge>
-                          <span>a</span>
-                          <Badge variant="outline" className={STATUS_BADGE_CLS[log.to_status] || 'border-transparent'}>
-                            {STATUS_LABELS[log.to_status] || log.to_status}
-                          </Badge>
-                          <span>.</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {log.actor_name} • {format(parseISO(log.created_at), 'HH:mm')}
-                        </div>
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={() => copyText(formatEntry(log), 'Se copió el cambio.')}>
-                      <Copy className="h-4 w-4" />
-                    </Button>
+        <>
+          {groups.map(group => (
+            <Card key={group.day}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-lg">
+                      {format(parseISO(group.day), "EEEE, d 'de' MMMM yyyy", { locale: es })}
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">{group.items.length} cambios</p>
                   </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-        ))
+                  <Button variant="outline" size="sm" onClick={() => copyDay(group.items)}>
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copiar día
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {group.items.map(log => {
+                  const category = CATEGORY_META[log.incident_category] || CATEGORY_META.incident;
+                  const entityLabel = `${category.label} - ${log.incident_number} - ${log.incident_name}`;
+                  return (
+                    <div key={log.id} className="flex items-start justify-between gap-3 rounded-md border p-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div className="mt-0.5 h-8 w-8 rounded-full flex items-center justify-center text-white shrink-0" style={{ backgroundColor: log.actor_color }}>
+                          {log.actor_name.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div className={`mt-0.5 grid h-8 w-8 min-w-8 place-items-center rounded-md text-[11px] font-bold leading-none ${category.className}`}>
+                          {category.icon}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                            <span>{log.actor_name} cambió el estado de</span>
+                            <strong>{entityLabel}</strong>
+                            <span>de</span>
+                            <Badge variant="outline" className={STATUS_BADGE_CLS[log.from_status] || 'border-transparent'}>
+                              {STATUS_LABELS[log.from_status] || log.from_status}
+                            </Badge>
+                            <span>a</span>
+                            <Badge variant="outline" className={STATUS_BADGE_CLS[log.to_status] || 'border-transparent'}>
+                              {STATUS_LABELS[log.to_status] || log.to_status}
+                            </Badge>
+                            <span>.</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {log.actor_name} • {format(parseISO(log.created_at), 'HH:mm')}
+                          </div>
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="icon" onClick={() => copyText(formatEntry(log), 'Se copió el cambio.')}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          ))}
+          {logs.length > pageSize && (
+            <div className="flex items-center justify-center gap-3">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(page => Math.max(1, page - 1))} disabled={currentPage <= 1}>
+                Anterior
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Página {currentPage} de {totalPages}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))} disabled={currentPage >= totalPages}>
+                Siguiente
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

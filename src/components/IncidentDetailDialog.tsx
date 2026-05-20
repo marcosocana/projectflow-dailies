@@ -14,6 +14,7 @@ import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 import { syncSingleAssignmentStatus } from '@/hooks/useSyncTaskStatus';
 import { useTaskAssignments } from '@/hooks/useTaskAssignments';
 import { recordIncidentStatusChange } from '@/lib/incidentActivityLog';
+import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker } from '@/lib/internalTaskIds';
 
 // Options same as IncidentsModule to keep UI identical
 const STATUS_OPTIONS = [
@@ -55,7 +56,7 @@ const formatManualId = (value: string | number | null | undefined) =>
 const CORRECTIVE_CATEGORY_MARKER = '[tipo:mejora_correctiva]';
 
 const cleanAdditionalComments = (value: string | null | undefined) =>
-  String(value ?? '').replace(CORRECTIVE_CATEGORY_MARKER, '').trim();
+  cleanInternalTaskIdMarker(String(value ?? '').replace(CORRECTIVE_CATEGORY_MARKER, '')).trim();
 
 const getDisplayCategory = (incident: { category?: string | null; additional_comments?: string | null }) => {
   if (incident.category === 'corrective_improvement' || String(incident.additional_comments ?? '').includes(CORRECTIVE_CATEGORY_MARKER)) {
@@ -66,13 +67,14 @@ const getDisplayCategory = (incident: { category?: string | null; additional_com
 
 const serializeCategory = (category: string, additionalComments: string | null | undefined) => {
   const cleanComments = cleanAdditionalComments(additionalComments);
+  const internalMarker = String(additionalComments ?? '').includes(INTERNAL_TASK_ID_MARKER) ? INTERNAL_TASK_ID_MARKER : '';
   if (category === 'corrective_improvement') {
     return {
       category: 'improvement',
-      additional_comments: [CORRECTIVE_CATEGORY_MARKER, cleanComments].filter(Boolean).join('\n')
+      additional_comments: [CORRECTIVE_CATEGORY_MARKER, internalMarker, cleanComments].filter(Boolean).join('\n')
     };
   }
-  return { category, additional_comments: cleanComments };
+  return { category, additional_comments: [internalMarker, cleanComments].filter(Boolean).join('\n') };
 };
 
 const getMadridDateTimeLocal = (value: string | Date = new Date()) => {
@@ -262,7 +264,13 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     const handler = setTimeout(async () => {
       const manualIncidentNumber = formatManualId(detailForm.incidentNumber);
       if (!manualIncidentNumber) return;
-      const categoryPayload = serializeCategory(detailForm.category, detailForm.additionalComments);
+      const categoryPayload = serializeCategory(
+        detailForm.category,
+        [
+          String(selected.additional_comments ?? '').includes(INTERNAL_TASK_ID_MARKER) ? INTERNAL_TASK_ID_MARKER : '',
+          detailForm.additionalComments,
+        ].filter(Boolean).join('\n'),
+      );
       const payload: any = {
         incident_number: Number(manualIncidentNumber),
         name: detailForm.name,

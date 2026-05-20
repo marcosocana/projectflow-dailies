@@ -26,6 +26,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { recordIncidentStatusChange } from '@/lib/incidentActivityLog';
+import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import {
   DndContext,
   closestCenter,
@@ -81,17 +82,18 @@ const normalizeTaskEnvironment = (status: TaskStatus, environment: TaskEnvironme
 };
 
 const cleanAdditionalComments = (value: string | null | undefined) =>
-  String(value ?? '').replace(CORRECTIVE_CATEGORY_MARKER, '').trim();
+  cleanInternalTaskIdMarker(String(value ?? '').replace(CORRECTIVE_CATEGORY_MARKER, '')).trim();
 
 const serializeCategory = (category: IncidentCategory, additionalComments: string | null | undefined) => {
   const cleanComments = cleanAdditionalComments(additionalComments);
+  const internalMarker = String(additionalComments ?? '').includes(INTERNAL_TASK_ID_MARKER) ? INTERNAL_TASK_ID_MARKER : '';
   if (category === 'corrective_improvement') {
     return {
       category: 'corrective_improvement' as const,
-      additional_comments: [CORRECTIVE_CATEGORY_MARKER, cleanComments].filter(Boolean).join('\n'),
+      additional_comments: [CORRECTIVE_CATEGORY_MARKER, internalMarker, cleanComments].filter(Boolean).join('\n'),
     };
   }
-  return { category, additional_comments: cleanComments };
+  return { category, additional_comments: [internalMarker, cleanComments].filter(Boolean).join('\n') };
 };
 
 const dateToLocalInputValue = (value: Date) =>
@@ -400,7 +402,7 @@ export default function DailiesModule({
 
     if (creationMode === 'manual') {
       const newIncidentId = crypto.randomUUID();
-      const incidentNumber = manualTaskIdEnabled ? Number(relatedTicket) : await loadNextIncidentNumber();
+      const incidentNumber = manualTaskIdEnabled ? Number(relatedTicket) : Number(relatedTicket.replace(/^INT/i, ''));
       const { error: incidentError } = await supabase.from('incidents').insert({
         id: newIncidentId,
         incident_number: incidentNumber,
@@ -411,7 +413,10 @@ export default function DailiesModule({
         occurred_at: date.toISOString(),
         status: mapTaskStatusToIncidentStatus(taskForm.status),
         category: taskForm.category,
-        additional_comments: '[origen:seguimiento_diario]',
+        additional_comments: [
+          '[origen:seguimiento_diario]',
+          !manualTaskIdEnabled ? INTERNAL_TASK_ID_MARKER : '',
+        ].filter(Boolean).join('\n'),
         project_id: projectId,
         created_by: user?.id ?? null,
         assigned_to: taskForm.personIds.length > 0 ? taskForm.personIds[0] : null,
@@ -1203,36 +1208,8 @@ export default function DailiesModule({
     return String(value ?? '').replace(/\D/g, '').slice(0, 6);
   };
 
-  const getNextSequentialId = (values: Array<string | number | null | undefined>, prefix = '') => {
-    const max = values.reduce((currentMax, value) => {
-      const text = String(value ?? '').trim();
-      if (!text) return currentMax;
-      const match = text.match(new RegExp(`^${prefix}?(\\d+)$`, 'i'));
-      if (!match) return currentMax;
-      const parsed = Number(match[1]);
-      return Number.isFinite(parsed) ? Math.max(currentMax, parsed) : currentMax;
-    }, 0);
-    return `${prefix}${max + 1}`;
-  };
-
   const loadNextAutoTaskId = async () => {
-    const { data } = await supabase
-      .from('tasks')
-      .select('related_ticket')
-      .eq('project_id', projectId);
-    return getNextSequentialId(data?.map(row => row.related_ticket) || [], 'INT');
-  };
-
-  const loadNextIncidentNumber = async () => {
-    const { data } = await supabase
-      .from('incidents')
-      .select('incident_number')
-      .eq('project_id', projectId);
-    const max = (data || []).reduce((currentMax, row: any) => {
-      const value = Number(row?.incident_number);
-      return Number.isFinite(value) ? Math.max(currentMax, value) : currentMax;
-    }, 0);
-    return max + 1;
+    return (await loadNextInternalTaskId(projectId)).label;
   };
 
   const getCategoryLabel = (category: string | null | undefined) => {

@@ -32,6 +32,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import BacklogImportDialog from '@/components/BacklogImportDialog';
 import { recordIncidentStatusChange } from '@/lib/incidentActivityLog';
+import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 
 interface IncidentsModuleProps {
   projectId: string;
@@ -110,18 +111,10 @@ const MADRID_TIME_ZONE = 'Europe/Madrid';
 const formatManualId = (value: string | number | null | undefined) =>
   String(value ?? '').replace(/\D/g, '').slice(0, 6);
 
-const getNextIncidentNumberFromRows = (rows: Array<{ incident_number: number | null | undefined }>) => {
-  const max = rows.reduce((currentMax, row) => {
-    const value = Number(row?.incident_number);
-    return Number.isFinite(value) ? Math.max(currentMax, value) : currentMax;
-  }, 0);
-  return max + 1;
-};
-
 const CORRECTIVE_CATEGORY_MARKER = '[tipo:mejora_correctiva]';
 
 const cleanAdditionalComments = (value: string | null | undefined) =>
-  String(value ?? '').replace(CORRECTIVE_CATEGORY_MARKER, '').trim();
+  cleanInternalTaskIdMarker(String(value ?? '').replace(CORRECTIVE_CATEGORY_MARKER, '')).trim();
 
 const getDisplayCategory = (incident: { category?: string | null; additional_comments?: string | null }): IncidentCategory => {
   if (incident.category === 'corrective_improvement' || String(incident.additional_comments ?? '').includes(CORRECTIVE_CATEGORY_MARKER)) {
@@ -132,15 +125,16 @@ const getDisplayCategory = (incident: { category?: string | null; additional_com
 
 const serializeCategory = (category: string, additionalComments: string | null | undefined) => {
   const cleanComments = cleanAdditionalComments(additionalComments);
+  const internalMarker = String(additionalComments ?? '').includes(INTERNAL_TASK_ID_MARKER) ? INTERNAL_TASK_ID_MARKER : '';
   if (category === 'corrective_improvement') {
     return {
       category: 'improvement' as IncidentCategory,
-      additional_comments: [CORRECTIVE_CATEGORY_MARKER, cleanComments].filter(Boolean).join('\n')
+      additional_comments: [CORRECTIVE_CATEGORY_MARKER, internalMarker, cleanComments].filter(Boolean).join('\n')
     };
   }
   return {
     category: category as IncidentCategory,
-    additional_comments: cleanComments
+    additional_comments: [internalMarker, cleanComments].filter(Boolean).join('\n')
   };
 };
 
@@ -661,12 +655,7 @@ export default function IncidentsModule({
   };
 
   const loadNextIncidentNumber = async () => {
-    const { data, error } = await supabase
-      .from('incidents')
-      .select('incident_number')
-      .eq('project_id', projectId);
-    if (error) throw error;
-    return getNextIncidentNumberFromRows((data || []) as any);
+    return (await loadNextInternalTaskId(projectId)).number;
   };
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -694,6 +683,11 @@ export default function IncidentsModule({
       const environmentValue = form.environment || '';
       const deviceValue = form.device || '';
       const categoryPayload = serializeCategory(form.category, form.additionalComments);
+      const incidentReference = manualIncidentIdEnabled ? incidentNumber : `INT${incidentNumber}`;
+      const additionalComments = [
+        categoryPayload.additional_comments,
+        !manualIncidentIdEnabled ? INTERNAL_TASK_ID_MARKER : '',
+      ].filter(Boolean).join('\n');
 
       // If creating, insert with provided id to bind evidence path
       if (!editingId) {
@@ -708,7 +702,7 @@ export default function IncidentsModule({
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
           category: categoryPayload.category,
-          additional_comments: categoryPayload.additional_comments,
+          additional_comments: additionalComments,
           project_id: projectId,
           created_by: user?.id ?? null,
           assigned_to: form.assignedTo === 'unassigned' ? null : form.assignedTo
@@ -782,7 +776,7 @@ export default function IncidentsModule({
                   assigned_to: a.person,
                   status: taskStatus,
                   is_auto_linked: true,
-                  related_ticket: incidentNumber
+                  related_ticket: incidentReference
                 };
               });
 
@@ -895,7 +889,14 @@ export default function IncidentsModule({
 
     const handler = setTimeout(async () => {
       try {
-        const categoryPayload = serializeCategory(form.category, form.additionalComments);
+        const currentIncident = incidents.find(incident => incident.id === editingId);
+        const categoryPayload = serializeCategory(
+          form.category,
+          [
+            String(currentIncident?.additional_comments ?? '').includes(INTERNAL_TASK_ID_MARKER) ? INTERNAL_TASK_ID_MARKER : '',
+            form.additionalComments,
+          ].filter(Boolean).join('\n'),
+        );
         const updatePayload: any = {
           incident_number: Number(incidentNumber),
           name: form.name,
