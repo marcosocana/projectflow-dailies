@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Edit2, Trash2, RefreshCw, Check, X } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -58,6 +58,7 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingProfile) return;
     
     if (!editingProfile) {
       // Crear nuevo usuario
@@ -142,13 +143,6 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
           variant: "destructive",
         });
       }
-    } else {
-      // Actualizar perfil existente
-      await updateProfile(editingProfile.id, {
-        full_name: formData.full_name,
-        color: formData.color,
-      });
-      handleCloseDialog();
     }
   };
 
@@ -174,6 +168,19 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
     });
     setIsDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (!editingProfile || !isDialogOpen || !formData.full_name.trim()) return;
+
+    const handler = setTimeout(async () => {
+      await updateProfile(editingProfile.id, {
+        full_name: formData.full_name,
+        color: formData.color,
+      });
+    }, 500);
+
+    return () => clearTimeout(handler);
+  }, [editingProfile?.id, isDialogOpen, formData.full_name, formData.color]);
 
   const handleToggleActive = async (profile: Profile) => {
     await updateProfile(profile.id, { is_active: !profile.is_active });
@@ -333,11 +340,13 @@ export default function UsersModule({ projectId }: UsersModuleProps) {
 
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="outline" onClick={handleCloseDialog}>
-                    Cancelar
+                    {editingProfile ? 'Cerrar' : 'Cancelar'}
                   </Button>
-                  <Button type="submit">
-                    {editingProfile ? 'Actualizar' : 'Crear usuario'}
-                  </Button>
+                  {!editingProfile && (
+                    <Button type="submit">
+                      Crear usuario
+                    </Button>
+                  )}
                 </div>
               </form>
             )}

@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 export interface Profile {
   id: string;
   user_id: string;
+  email: string | null;
   full_name: string;
   color: string;
   is_active: boolean;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -45,18 +45,24 @@ const ContactsModule = ({ projectId }: ContactsModuleProps) => {
     setCreateDialogOpen(false);
   };
 
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
     if (!editingContact) return;
-    await updateContact(editingContact.id, {
-      name: editForm.name,
-      email: editForm.email || null,
-      phone: editForm.phone || null,
-      role: editForm.role || null,
-      description: editForm.description || null,
-    });
-    setEditingContact(null);
-  };
+    if (!editForm.name.trim()) return;
+
+    const handler = setTimeout(async () => {
+      await updateContact(editingContact.id, {
+        name: editForm.name,
+        email: editForm.email || null,
+        phone: editForm.phone || null,
+        role: editForm.role || null,
+        description: editForm.description || null,
+      });
+      setEditingContact(prev => prev ? { ...prev, ...editForm } : prev);
+    }, 500);
+
+    return () => clearTimeout(handler);
+  }, [editForm, editingContact?.id]);
+
 
   const openEditDialog = (contact: Contact) => {
     setEditingContact(contact);
@@ -238,7 +244,7 @@ const ContactsModule = ({ projectId }: ContactsModuleProps) => {
             <DialogTitle>Editar contacto</DialogTitle>
             <DialogDescription>Modifica la información del contacto</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleEditSubmit} className="space-y-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="edit-name">Nombre *</Label>
               <Input
@@ -289,13 +295,10 @@ const ContactsModule = ({ projectId }: ContactsModuleProps) => {
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setEditingContact(null)}>
-                Cancelar
-              </Button>
-              <Button type="submit">
-                Guardar cambios
+                Cerrar
               </Button>
             </div>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

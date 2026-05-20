@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -25,7 +25,7 @@ import { AppSidebar } from '@/components/AppSidebar';
 import NoteDetail from '@/components/NoteDetail';
 import NoteCreate from '@/components/NoteCreate';
 import ScrollToTop from '@/components/ScrollToTop';
-import { LogOut, Menu, User } from 'lucide-react';
+import { LogOut, Menu, Shield, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import vecturaLogo from '@/assets/vectura-logo.png';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -34,19 +34,52 @@ const Dashboard = () => {
   const [projectPassword, setProjectPassword] = useState('');
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [projectSelectionReady, setProjectSelectionReady] = useState(false);
   const { user, signOut } = useAuth();
   const { toast } = useToast();
   const {
     accessProject,
+    accessProjectDirectly,
     currentProject,
+    fetchUserProjects,
     isAccessing,
     leaveProject,
+    loadingProjects,
+    userProjects,
   } = useProjectAccess();
   const navigate = useNavigate();
+  const isSuperUser = user?.email?.toLowerCase() === 'mocanat@minsait.com';
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadUserProjects = async () => {
+      if (!user || currentProject) {
+        if (isMounted) setProjectSelectionReady(true);
+        return;
+      }
+
+      const projects = await fetchUserProjects();
+      if (!isMounted) return;
+
+      if (projects.length === 1) {
+        await accessProjectDirectly(projects[0]);
+      }
+
+      setProjectSelectionReady(true);
+    };
+
+    loadUserProjects();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user, currentProject]);
 
   const handleSignOut = async () => {
     await signOut();
     leaveProject();
+    sessionStorage.removeItem('projectflow_admin_access');
     navigate('/');
     toast({
       title: "Sesión cerrada",
@@ -59,6 +92,7 @@ const Dashboard = () => {
     try {
       if (projectPassword === 'AdminProjects01') {
         setProjectPassword('');
+        sessionStorage.setItem('projectflow_admin_access', 'true');
         navigate('/admin');
         return;
       }
@@ -89,21 +123,21 @@ const Dashboard = () => {
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-white h-[64px] flex items-center">
         <div className="relative w-full h-full flex items-center justify-center px-3 md:px-6">
           {/* Bloque izquierdo: logo + título */}
-          <div className="absolute left-2 md:left-[10px] flex items-center gap-2">
+          <div className="absolute left-2 right-28 md:left-[10px] md:right-auto flex min-w-0 items-center gap-2">
             {currentProject?.logo_url ? (
               <img
                 src={currentProject.logo_url}
                 alt={`${currentProject.name} logo`}
-                className="h-8 md:h-10 w-auto object-contain"
+                className="h-8 md:h-10 max-w-10 md:max-w-none w-auto shrink-0 object-contain"
               />
             ) : (
               <img
                 src={vecturaLogo}
                 alt="Vectorea"
-                className="h-8 md:h-10 w-auto object-contain"
+                className="h-8 md:h-10 max-w-10 md:max-w-none w-auto shrink-0 object-contain"
               />
             )}
-            <h1 className="text-lg md:text-2xl font-bold">
+            <h1 className="min-w-0 truncate text-lg md:text-2xl font-bold">
               {currentProject ? currentProject.name : 'Vectorea'}
             </h1>
           </div>
@@ -146,9 +180,26 @@ const Dashboard = () => {
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/config">Seguimiento</a>
                   </Button>
+                  {isSuperUser && (
+                    <Button asChild variant="ghost" className="justify-start">
+                      <a href="/admin">Admin</a>
+                    </Button>
+                  )}
                 </nav>
               </SheetContent>
             </Sheet>
+
+            {isSuperUser && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/admin')}
+                className="hidden items-center gap-2 md:flex"
+              >
+                <Shield className="h-4 w-4" />
+                Admin
+              </Button>
+            )}
 
             <Sheet open={isProfileOpen} onOpenChange={setIsProfileOpen}>
               <SheetTrigger asChild>
@@ -167,7 +218,7 @@ const Dashboard = () => {
             </Sheet>
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
               onClick={handleSignOut}
               aria-label="Cerrar sesión"
             >
@@ -182,6 +233,50 @@ const Dashboard = () => {
       <main className="container mx-auto pt-[94px] py-0 px-0">
         {!currentProject ? (
           <div className="max-w-4xl mx-auto space-y-6 px-4 md:px-0">
+            {!projectSelectionReady || loadingProjects ? (
+              <Card>
+                <CardContent className="flex items-center justify-center py-10">
+                  <div className="text-muted-foreground">Cargando proyectos...</div>
+                </CardContent>
+              </Card>
+            ) : userProjects.length > 1 ? (
+              <Card>
+                <CardHeader className="text-center space-y-4">
+                  <div className="flex justify-center">
+                    <img src={vecturaLogo} alt="Vectorea" className="h-16 w-auto object-contain" />
+                  </div>
+                  <div>
+                    <CardTitle>Selecciona un proyecto</CardTitle>
+                    <CardDescription>
+                      Tienes acceso a varios proyectos. Elige con cuál quieres trabajar.
+                    </CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {userProjects.map(project => (
+                      <button
+                        key={project.id}
+                        type="button"
+                        onClick={() => accessProjectDirectly(project)}
+                        className="flex items-center gap-4 rounded-md border p-4 text-left transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        {project.logo_url ? (
+                          <img src={project.logo_url} alt={`${project.name} logo`} className="h-10 w-10 object-contain" />
+                        ) : (
+                          <div className="h-10 w-10 rounded border" style={{ backgroundColor: project.theme_color }} />
+                        )}
+                        <div className="min-w-0">
+                          <div className="font-semibold truncate">{project.name}</div>
+                          <div className="text-sm text-muted-foreground">Proyecto #{project.project_number}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+            <>
             {/* Acceso con contraseña */}
             <Card>
               <CardHeader className="text-center space-y-4">
@@ -225,6 +320,8 @@ const Dashboard = () => {
                 <CreateProjectForm onProjectCreated={handleProjectCreated} onClose={() => setCreateProjectOpen(false)} />
               </DialogContent>
             </Dialog>
+            </>
+            )}
           </div>
         ) : (
           <div className="min-h-screen">

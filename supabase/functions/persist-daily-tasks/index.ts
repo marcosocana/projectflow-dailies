@@ -18,7 +18,7 @@ Deno.serve(async (req: Request) => {
     )
 
     // Execute the persist_previous_day_tasks function
-    const { data, error } = await supabase.rpc("persist_previous_day_tasks")
+    const { data, error } = await supabase.rpc("persist_previous_day_tasks", { p_force: false })
 
     if (error) {
       console.error("Error persisting tasks:", error)

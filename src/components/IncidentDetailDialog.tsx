@@ -33,6 +33,12 @@ const DEVICE_OPTIONS = ['Web','APP','Otro'] as const;
 
 const MADRID_TIME_ZONE = 'Europe/Madrid';
 
+const mapIncidentStatusToTaskStatus = (status: string): 'pending' | 'in_progress' | 'resolved' => {
+  if (status === 'closed') return 'resolved';
+  if (status === 'in_qa') return 'in_progress';
+  return status as 'pending' | 'in_progress' | 'resolved';
+};
+
 const formatManualId = (value: string | number | null | undefined) =>
   String(value ?? '').replace(/\D/g, '').slice(0, 6);
 
@@ -280,24 +286,21 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
       }
       await supabase.from('incidents').update(payload).eq('id', selected.id);
       
-      // Sync auto-linked tasks if status changed
+      // Sync single-person assignment state if the incident status changed.
       if (payload.status !== selected.status) {
-        const taskStatus = payload.status === 'closed' ? 'resolved' : 
-                          payload.status === 'in_qa' ? 'in_progress' : 
-                          payload.status;
-        await supabase
-          .from('tasks')
-          .update({ status: taskStatus })
-          .eq('incident_id', selected.id)
-          .eq('is_auto_linked', true);
-        
-        // Si solo hay una asignación, sincronizar su estado con el de la tarea
         await syncSingleAssignmentStatus(selected.id, payload.status);
       }
 
       await supabase
         .from('tasks')
-        .update({ related_ticket: manualIncidentNumber })
+        .update({
+          title: payload.name,
+          description: payload.description || null,
+          person_id: payload.assigned_to,
+          assigned_to: payload.assigned_to,
+          related_ticket: manualIncidentNumber,
+          status: mapIncidentStatusToTaskStatus(payload.status)
+        } as any)
         .eq('incident_id', selected.id)
         .eq('is_auto_linked', true);
       

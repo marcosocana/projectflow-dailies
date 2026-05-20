@@ -183,6 +183,34 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
     setIsEditing(true);
   };
 
+  useEffect(() => {
+    if (!isDetailDialogOpen || !isEditing || !selectedRelease || !editVersion.trim()) return;
+
+    const handler = setTimeout(async () => {
+      const updatePayload = {
+        platform: editPlatform,
+        environment: editEnvironment,
+        version: editVersion.trim(),
+        description: null,
+        included_tasks: editIncludedTasks,
+      };
+
+      const { error } = await supabase
+        .from('releases')
+        .update(updatePayload)
+        .eq('id', selectedRelease.id);
+
+      if (error) {
+        console.error('Error autosaving release:', error);
+        return;
+      }
+
+      setSelectedRelease(prev => prev ? { ...prev, ...updatePayload } : prev);
+    }, 500);
+
+    return () => clearTimeout(handler);
+  }, [isDetailDialogOpen, isEditing, selectedRelease?.id, editPlatform, editEnvironment, editVersion, editIncludedTasks]);
+
   const handleSaveEdit = async () => {
     if (!selectedRelease || !editVersion.trim()) return;
     
@@ -428,23 +456,24 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
                   variant="outline" 
                   onClick={() => setExpanded(!expanded)}
                   className="flex items-center gap-2"
+                  aria-label={expanded ? 'Ver menos releases' : 'Ver más releases'}
                 >
                   {expanded ? (
                     <>
                       <ChevronUp className="h-4 w-4" />
-                      Ver menos
+                      <span className="hidden sm:inline">Ver menos</span>
                     </>
                   ) : (
                     <>
                       <ChevronDown className="h-4 w-4" />
-                      Ver más
+                      <span className="hidden sm:inline">Ver más</span>
                     </>
                   )}
                 </Button>
               )}
-              <Button onClick={() => setIsDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Añadir release
+              <Button onClick={() => setIsDialogOpen(true)} aria-label="Añadir release">
+                <Plus className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Añadir release</span>
               </Button>
             </div>
           </div>
@@ -463,7 +492,7 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
                   <h3 className="text-lg font-semibold">Web</h3>
                   <Badge variant="secondary">{webReleases.length}</Badge>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {['dev', 'pre', 'pro'].map(env => {
                     const envReleases = webByEnvironment[env] || [];
                     return (
@@ -532,7 +561,7 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
                   <h3 className="text-lg font-semibold">App</h3>
                   <Badge variant="secondary">{appReleases.length}</Badge>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {['pre', 'pro'].map(env => {
                     const envReleases = appByEnvironment[env] || [];
                     return (
@@ -843,18 +872,15 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
                 </p>
               </div>
               
-              <div className="flex justify-between pt-4 border-t">
+              <div className="flex flex-col gap-3 pt-4 border-t sm:flex-row sm:justify-between">
                 {isEditing ? (
-                  <div className="flex gap-2">
-                    <Button onClick={handleSaveEdit} className="flex items-center gap-2">
-                      Guardar
-                    </Button>
-                    <Button variant="outline" onClick={handleCancelEdit}>
-                      Cancelar
+                  <div className="flex flex-col-reverse gap-2 sm:flex-row">
+                    <Button variant="outline" onClick={() => setIsEditing(false)}>
+                      Cerrar edición
                     </Button>
                   </div>
                 ) : (
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <Button
                       variant="outline"
                       onClick={handleEdit}

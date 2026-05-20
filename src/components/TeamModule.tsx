@@ -98,23 +98,27 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
     setEditPersonOpen(true);
   };
 
-  const updatePerson = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
     if (!editingPerson) return;
-    const { error } = await supabase
-      .from('people')
-      .update({ name: editForm.name, role: editForm.role, color: editForm.color })
-      .eq('id', editingPerson.id);
+    if (!editPersonOpen || !editForm.name.trim() || !editForm.role.trim()) return;
 
-    if (error) {
-      return toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' });
-    }
+    const handler = setTimeout(async () => {
+      const { error } = await supabase
+        .from('people')
+        .update({ name: editForm.name, role: editForm.role, color: editForm.color })
+        .eq('id', editingPerson.id);
 
-    setEditPersonOpen(false);
-    setEditingPerson(null);
-    loadPeople();
-    toast({ title: 'Éxito', description: 'Miembro actualizado' });
-  };
+      if (error) {
+        toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' });
+        return;
+      }
+
+      setPeople(prev => prev.map(person => person.id === editingPerson.id ? { ...person, ...editForm } : person));
+      setEditingPerson((prev: any) => prev ? { ...prev, ...editForm } : prev);
+    }, 500);
+
+    return () => clearTimeout(handler);
+  }, [editForm, editingPerson?.id, editPersonOpen]);
 
   return (
     <div className="space-y-6">
@@ -253,7 +257,7 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
             <DialogTitle>Editar persona</DialogTitle>
             <DialogDescription>Actualiza la información del miembro</DialogDescription>
           </DialogHeader>
-          <form onSubmit={updatePerson} className="space-y-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="edit-name">Nombre</Label>
               <Input
@@ -291,11 +295,10 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setEditPersonOpen(false)}>
-                Cancelar
+                Cerrar
               </Button>
-              <Button type="submit">Guardar cambios</Button>
             </div>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

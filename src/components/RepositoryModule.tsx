@@ -72,6 +72,42 @@ export default function RepositoryModule({ projectId }: RepositoryModuleProps) {
     loadFiles();
   }, [projectId]);
 
+  useEffect(() => {
+    if (!editingFile || !isEditDialogOpen || !editName.trim()) return;
+
+    const handler = setTimeout(async () => {
+      let passwordHash = editingFile.password_hash;
+      if (editIsPasswordRequired && editPassword) {
+        passwordHash = btoa(editPassword);
+      } else if (!editIsPasswordRequired) {
+        passwordHash = null;
+      }
+
+      const updatePayload = {
+        name: editName.trim(),
+        description: editDescription.trim() || null,
+        password_required: editIsPasswordRequired,
+        password_hash: passwordHash,
+      };
+
+      const { error } = await supabase
+        .from('repository_files')
+        .update(updatePayload)
+        .eq('id', editingFile.id);
+
+      if (error) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+        return;
+      }
+
+      setFiles(prev => prev.map(file => file.id === editingFile.id ? { ...file, ...updatePayload } : file));
+      setEditingFile(prev => prev ? { ...prev, ...updatePayload } : prev);
+      if (editPassword) setEditPassword('');
+    }, 500);
+
+    return () => clearTimeout(handler);
+  }, [editingFile?.id, isEditDialogOpen, editName, editDescription, editIsPasswordRequired, editPassword]);
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     setSelectedFile(file || null);
@@ -231,6 +267,7 @@ export default function RepositoryModule({ projectId }: RepositoryModuleProps) {
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingFile) return;
     
     if (!editingFile || !editName.trim()) {
       toast({
@@ -542,8 +579,8 @@ export default function RepositoryModule({ projectId }: RepositoryModuleProps) {
               </div>
             )}
             
-            <Button type="submit" className="w-full" disabled={!editName.trim()}>
-              Actualizar archivo
+            <Button type="button" variant="outline" className="w-full" onClick={() => setIsEditDialogOpen(false)}>
+              Cerrar
             </Button>
           </form>
         </DialogContent>

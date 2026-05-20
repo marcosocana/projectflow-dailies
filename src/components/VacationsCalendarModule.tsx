@@ -130,20 +130,34 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingVacation) return;
-    try {
-      await updateVacation(editingVacation.id, {
-        person_id: editForm.personId || null,
-        start_date: format(editForm.startDate, 'yyyy-MM-dd'),
-        end_date: format(editForm.endDate, 'yyyy-MM-dd'),
-        description: editForm.description || null,
-      });
-      setEditingVacation(null);
-      toast({ title: 'Éxito', description: 'Vacación actualizada' });
-    } catch (error) {
-      console.error('Error updating vacation:', error);
-    }
   };
+
+  useEffect(() => {
+    if (!editingVacation) return;
+    if (!editForm.personId) return;
+
+    const handler = setTimeout(async () => {
+      try {
+        await updateVacation(editingVacation.id, {
+          person_id: editForm.personId || null,
+          start_date: format(editForm.startDate, 'yyyy-MM-dd'),
+          end_date: format(editForm.endDate, 'yyyy-MM-dd'),
+          description: editForm.description || null,
+        });
+        setEditingVacation((prev: any) => prev ? {
+          ...prev,
+          person_id: editForm.personId || null,
+          start_date: format(editForm.startDate, 'yyyy-MM-dd'),
+          end_date: format(editForm.endDate, 'yyyy-MM-dd'),
+          description: editForm.description || null,
+        } : prev);
+      } catch (error) {
+        console.error('Error updating vacation:', error);
+      }
+    }, 500);
+
+    return () => clearTimeout(handler);
+  }, [editingVacation?.id, editForm]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -440,9 +454,8 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
 
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setEditingVacation(null)}>
-                Cancelar
+                Cerrar
               </Button>
-              <Button type="submit">Guardar cambios</Button>
             </div>
           </form>
         </DialogContent>

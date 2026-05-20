@@ -42,6 +42,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 type TaskStatus = 'pending' | 'in_progress' | 'resolved' | 'resolved_yesterday';
+type IncidentCategory = 'incident' | 'improvement' | 'corrective_improvement';
 const NOTE_MARKER = '[tipo:nota_seguimiento]';
 
 // Helper function to map task status to incident status
@@ -146,18 +147,21 @@ export default function DailiesModule({
     incidentId: string;
     status: TaskStatus;
     relatedTicket: string;
+    category: IncidentCategory;
   }>({
     title: '',
     description: '',
     personIds: [],
     incidentId: '',
     status: 'pending',
-    relatedTicket: ''
+    relatedTicket: '',
+    category: 'incident'
   });
   
   // New state for task creation mode
   const [creationMode, setCreationMode] = useState<'select' | 'linked' | 'manual'>('select');
   const [incidentSearchQuery, setIncidentSearchQuery] = useState('');
+  const [incidentCategoryFilter, setIncidentCategoryFilter] = useState<'all' | IncidentCategory>('all');
   const [selectedPersonFilter, setSelectedPersonFilter] = useState<string>('all');
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteForm, setNoteForm] = useState({
@@ -268,7 +272,8 @@ export default function DailiesModule({
         personIds: [],
         incidentId: incident.id,
         status: incident.status === 'resolved' ? 'resolved' : incident.status === 'in_progress' ? 'in_progress' : 'pending',
-        relatedTicket: formatTaskManualId(incident.incident_number)
+        relatedTicket: formatTaskManualId(incident.incident_number),
+        category: getDisplayCategory(incident) || 'incident'
       });
       setCreationMode('linked');
     }
@@ -281,7 +286,8 @@ export default function DailiesModule({
       personIds: [],
       incidentId: '',
       status: 'pending',
-      relatedTicket: ''
+      relatedTicket: '',
+      category: 'incident'
     });
     setCreationMode('manual');
   };
@@ -297,15 +303,57 @@ export default function DailiesModule({
         variant: 'destructive'
       });
     }
+    let incidentIdToLink = taskForm.incidentId || null;
+
+    if (creationMode === 'manual') {
+      const newIncidentId = crypto.randomUUID();
+      const { error: incidentError } = await supabase.from('incidents').insert({
+        id: newIncidentId,
+        incident_number: Number(relatedTicket),
+        name: taskForm.title,
+        description: taskForm.description || null,
+        environment: '',
+        device: '',
+        occurred_at: date.toISOString(),
+        status: mapTaskStatusToIncidentStatus(taskForm.status),
+        category: taskForm.category,
+        additional_comments: '[origen:seguimiento_diario]',
+        project_id: projectId,
+        created_by: user?.id ?? null,
+        assigned_to: taskForm.personIds.length > 0 ? taskForm.personIds[0] : null,
+      } as any);
+
+      if (incidentError) {
+        const isDuplicateId = incidentError.code === '23505' && String(incidentError.message || '').includes('incident_number');
+        return toast({
+          title: 'Error',
+          description: isDuplicateId
+            ? 'Ya existe una tarea con ese ID en este proyecto. Usa otro ID.'
+            : 'No se pudo crear la tarea en Home',
+          variant: 'destructive',
+        });
+      }
+
+      incidentIdToLink = newIncidentId;
+
+      if (taskForm.personIds.length > 0) {
+        await supabase.from('incident_assignments').insert({
+          incident_id: newIncidentId,
+          assigned_to: taskForm.personIds[0],
+          status: mapTaskStatusToIncidentStatus(taskForm.status),
+        } as any);
+      }
+    }
+
     const payload: TablesInsert<'tasks'> = {
       title: taskForm.title,
       description: taskForm.description || null,
       project_id: projectId,
       daily_id: dailyId,
       person_id: taskForm.personIds.length > 0 ? taskForm.personIds[0] : null,
-      incident_id: taskForm.incidentId || null,
+      incident_id: incidentIdToLink,
       status: taskForm.status ?? 'pending',
-      is_auto_linked: creationMode === 'linked', // Set to true only for automatically linked tasks
+      is_auto_linked: creationMode === 'linked' || creationMode === 'manual',
       related_ticket: relatedTicket
     };
     const {
@@ -319,11 +367,11 @@ export default function DailiesModule({
     });
     
     // If automatically linked to incident, sync status
-    if (taskForm.incidentId && creationMode === 'linked') {
+    if (incidentIdToLink && creationMode === 'linked') {
       await supabase
         .from('incidents')
         .update({ status: mapTaskStatusToIncidentStatus(taskForm.status) } as any)
-        .eq('id', taskForm.incidentId);
+        .eq('id', incidentIdToLink);
       
       // Si hay una persona asignada, crear asignación en incident_assignments
       if (taskForm.personIds.length > 0) {
@@ -333,7 +381,7 @@ export default function DailiesModule({
         const { data: existingAssignment } = await supabase
           .from('incident_assignments')
           .select('id')
-          .eq('incident_id', taskForm.incidentId)
+          .eq('incident_id', incidentIdToLink)
           .eq('assigned_to', personId)
           .maybeSingle();
         
@@ -342,7 +390,7 @@ export default function DailiesModule({
           await supabase
             .from('incident_assignments')
             .insert({
-              incident_id: taskForm.incidentId,
+              incident_id: incidentIdToLink,
               assigned_to: personId,
               status: mapTaskStatusToIncidentStatus(taskForm.status)
             } as any);
@@ -376,10 +424,12 @@ export default function DailiesModule({
       personIds: [],
       incidentId: '',
       status: 'pending',
-      relatedTicket: ''
+      relatedTicket: '',
+      category: 'incident'
     });
     setCreationMode('select');
     setIncidentSearchQuery('');
+    setIncidentCategoryFilter('all');
     setCreateTaskOpen(false);
     preserveScroll();
     loadTasks(date);
@@ -399,7 +449,7 @@ export default function DailiesModule({
       });
     }
 
-    const { error } = await supabase.from('tasks').insert({
+    const { data: createdNote, error } = await supabase.from('tasks').insert({
       title: comment,
       description: NOTE_MARKER,
       project_id: projectId,
@@ -409,12 +459,39 @@ export default function DailiesModule({
       status: 'pending',
       is_auto_linked: false,
       related_ticket: null,
-    });
+    }).select().single();
 
-    if (error) {
+    if (error || !createdNote) {
       return toast({
         title: 'Error',
         description: 'No se pudo crear la nota',
+        variant: 'destructive',
+      });
+    }
+
+    const { data: maxOrderData } = await supabase
+      .from('daily_tasks')
+      .select('order_position')
+      .eq('daily_id', targetDailyId)
+      .order('order_position', { ascending: false })
+      .limit(1);
+
+    const nextPosition = maxOrderData && maxOrderData.length > 0
+      ? (maxOrderData[0].order_position || 0) + 1
+      : 0;
+
+    const { error: linkError } = await supabase.from('daily_tasks').upsert({
+      daily_id: targetDailyId,
+      task_id: createdNote.id,
+      order_position: nextPosition,
+    } as any, {
+      onConflict: 'daily_id,task_id',
+    } as any);
+
+    if (linkError) {
+      return toast({
+        title: 'Error',
+        description: 'La nota se creó pero no se pudo vincular al día seleccionado',
         variant: 'destructive',
       });
     }
@@ -1095,6 +1172,20 @@ export default function DailiesModule({
     return Array.from(counts.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [people, tasks]);
 
+  const taskCreationIncidents = useMemo(() => {
+    const query = incidentSearchQuery.trim().toLowerCase();
+
+    return incidents
+      .filter(i => i.status !== 'resolved')
+      .filter(i => incidentCategoryFilter === 'all' || getDisplayCategory(i) === incidentCategoryFilter)
+      .filter(i => {
+        if (!query) return true;
+        const ticketCode = getTicketCode(i)?.toLowerCase() || '';
+        const name = i.name?.toLowerCase() || '';
+        return ticketCode.includes(query) || name.includes(query);
+      });
+  }, [incidents, incidentSearchQuery, incidentCategoryFilter]);
+
   const openIncidentDetails = (incidentId: string) => {
     preserveScroll();
     setSelectedIncidentId(incidentId);
@@ -1158,11 +1249,17 @@ export default function DailiesModule({
         error
       } = await supabase.from('tasks').update(update).eq('id', selectedTask.id);
       if (!error) {
-        // If task is auto-linked to incident and status changed, sync incident status
-        if (selectedTask.is_auto_linked && update.incident_id && update.status !== selectedTask.status) {
+        // If task is linked to Home, keep the incident in sync with daily edits.
+        if (selectedTask.is_auto_linked && update.incident_id) {
           await supabase
             .from('incidents')
-            .update({ status: mapTaskStatusToIncidentStatus(update.status) } as any)
+            .update({
+              incident_number: Number(relatedTicket),
+              name: update.title,
+              description: update.description,
+              status: mapTaskStatusToIncidentStatus(update.status),
+              assigned_to: update.person_id,
+            } as any)
             .eq('id', update.incident_id);
           
           // Si hay una persona asignada, sincronizar también su asignación
@@ -1367,13 +1464,15 @@ export default function DailiesModule({
         if (!open) {
           setCreationMode('select');
           setIncidentSearchQuery('');
+          setIncidentCategoryFilter('all');
           setTaskForm({
             title: '',
             description: '',
             personIds: [],
             incidentId: '',
             status: 'pending',
-            relatedTicket: ''
+            relatedTicket: '',
+            category: 'incident'
           });
         }
       }}>
@@ -1391,24 +1490,27 @@ export default function DailiesModule({
             <div className="space-y-4">
               <div>
                 <Label>Vincular con incidencia existente</Label>
-                <Input 
-                  placeholder="Buscar por número o nombre..."
-                  value={incidentSearchQuery}
-                  onChange={(e) => setIncidentSearchQuery(e.target.value)}
-                  className="mt-2 mb-2"
-                />
+                <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_180px]">
+                  <Input 
+                    placeholder="Buscar por número o nombre..."
+                    value={incidentSearchQuery}
+                    onChange={(e) => setIncidentSearchQuery(e.target.value)}
+                  />
+                  <Select value={incidentCategoryFilter} onValueChange={value => setIncidentCategoryFilter(value as 'all' | IncidentCategory)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="incident">Incidencias</SelectItem>
+                      <SelectItem value="improvement">Evolutivos</SelectItem>
+                      <SelectItem value="corrective_improvement">Mejoras correctoras</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <ScrollArea className="h-[300px] border rounded-md p-3 mt-2">
                   <div className="space-y-2">
-                    {incidents
-                      .filter(i => i.status !== 'resolved')
-                      .filter(i => {
-                        if (!incidentSearchQuery.trim()) return true;
-                        const query = incidentSearchQuery.toLowerCase();
-                        const ticketCode = getTicketCode(i)?.toLowerCase() || '';
-                        const name = i.name?.toLowerCase() || '';
-                        return ticketCode.includes(query) || name.includes(query);
-                      })
-                      .map(incident => (
+                    {taskCreationIncidents.map(incident => (
                       <Card
                         key={incident.id}
                         className="cursor-pointer hover:bg-accent transition-colors p-3"
@@ -1443,15 +1545,9 @@ export default function DailiesModule({
                         </div>
                       </Card>
                     ))}
-                    {incidents.filter(i => i.status !== 'resolved').filter(i => {
-                      if (!incidentSearchQuery.trim()) return true;
-                      const query = incidentSearchQuery.toLowerCase();
-                      const ticketCode = getTicketCode(i)?.toLowerCase() || '';
-                      const name = i.name?.toLowerCase() || '';
-                      return ticketCode.includes(query) || name.includes(query);
-                    }).length === 0 && (
+                    {taskCreationIncidents.length === 0 && (
                       <div className="text-center text-muted-foreground py-8">
-                        {incidentSearchQuery.trim() ? 'No se encontraron incidencias' : 'No hay incidencias activas'}
+                        {incidentSearchQuery.trim() || incidentCategoryFilter !== 'all' ? 'No se encontraron tareas' : 'No hay tareas activas'}
                       </div>
                     )}
                   </div>
@@ -1522,6 +1618,22 @@ export default function DailiesModule({
                   required
                 />
               </div>
+              {creationMode === 'manual' && (
+                <div>
+                  <RequiredLabel>Tipo</RequiredLabel>
+                  <Select value={taskForm.category} onValueChange={v => setTaskForm(f => ({
+                    ...f,
+                    category: v as IncidentCategory
+                  }))}>
+                    <SelectTrigger><SelectValue placeholder="Seleccionar tipo" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="incident">Incidencia</SelectItem>
+                      <SelectItem value="improvement">Evolutivo</SelectItem>
+                      <SelectItem value="corrective_improvement">Mejora correctora</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div>
                 <Label>Personas</Label>
                 <Popover>
@@ -1602,13 +1714,15 @@ export default function DailiesModule({
                   variant="outline" 
                   onClick={() => {
                     setCreationMode('select');
+                    setIncidentCategoryFilter('all');
                     setTaskForm({
                       title: '',
                       description: '',
                       personIds: [],
                       incidentId: '',
                       status: 'pending',
-                      relatedTicket: ''
+                      relatedTicket: '',
+                      category: 'incident'
                     });
                   }}
                 >

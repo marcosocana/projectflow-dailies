@@ -51,6 +51,11 @@ interface SortableIncidentCardProps {
 }
 type IncidentStatus = Database['public']['Enums']['incident_status'];
 type IncidentCategory = Database['public']['Enums']['incident_category'];
+const mapIncidentStatusToTaskStatus = (status: IncidentStatus): 'pending' | 'in_progress' | 'resolved' => {
+  if (status === 'closed') return 'resolved';
+  if (status === 'in_qa') return 'in_progress';
+  return status as 'pending' | 'in_progress' | 'resolved';
+};
 const STATUS_OPTIONS = [{
   value: 'pending',
   label: 'Pendiente'
@@ -645,6 +650,7 @@ export default function IncidentsModule({
   };
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingId) return;
     let savedSuccessfully = false;
     try {
       let id = editingId ?? crypto.randomUUID();
@@ -807,22 +813,16 @@ export default function IncidentsModule({
         } = await supabase.from('incidents').update(updatePayload).eq('id', id);
         if (error) throw error;
         
-        // If status changed, sync auto-linked tasks
-        if (updatePayload.status && updatePayload.status !== incidents.find(i => i.id === id)?.status) {
-          // Map incident status to task status
-          const taskStatus = updatePayload.status === 'closed' ? 'resolved' : 
-                            updatePayload.status === 'in_qa' ? 'in_progress' : 
-                            updatePayload.status;
-          await supabase
-            .from('tasks')
-            .update({ status: taskStatus })
-            .eq('incident_id', id)
-            .eq('is_auto_linked', true);
-        }
-
         await supabase
           .from('tasks')
-          .update({ related_ticket: incidentNumber })
+          .update({
+            title: updatePayload.name,
+            description: updatePayload.description || null,
+            person_id: updatePayload.assigned_to,
+            assigned_to: updatePayload.assigned_to,
+            related_ticket: incidentNumber,
+            status: mapIncidentStatusToTaskStatus(updatePayload.status)
+          } as any)
           .eq('incident_id', id)
           .eq('is_auto_linked', true);
         
@@ -850,6 +850,68 @@ export default function IncidentsModule({
       }
     }
   };
+
+  useEffect(() => {
+    if (!createOpen || !editingId) return;
+    const incidentNumber = formatManualId(form.incidentNumber);
+    if (!incidentNumber || !form.name.trim()) return;
+
+    const handler = setTimeout(async () => {
+      try {
+        const categoryPayload = serializeCategory(form.category, form.additionalComments);
+        const updatePayload: any = {
+          incident_number: Number(incidentNumber),
+          name: form.name,
+          description: form.description,
+          environment: form.environment || '',
+          device: form.device || '',
+          epic: form.epic,
+          occurred_at: new Date(form.occurredAt).toISOString(),
+          status: form.status,
+          category: categoryPayload.category,
+          additional_comments: categoryPayload.additional_comments,
+          assigned_to: form.assignedTo === 'unassigned' ? null : form.assignedTo
+        };
+
+        if (evidenceFile) {
+          const path = await handleUploadEvidence(editingId, evidenceFile);
+          updatePayload.evidence = path;
+        }
+
+        const { error } = await supabase.from('incidents').update(updatePayload).eq('id', editingId);
+        if (error) throw error;
+
+        await supabase
+          .from('tasks')
+          .update({
+            title: updatePayload.name,
+            description: updatePayload.description || null,
+            person_id: updatePayload.assigned_to,
+            assigned_to: updatePayload.assigned_to,
+            related_ticket: incidentNumber,
+            status: mapIncidentStatusToTaskStatus(updatePayload.status)
+          } as any)
+          .eq('incident_id', editingId)
+          .eq('is_auto_linked', true);
+
+        setIncidents(prev => prev.map(incident => incident.id === editingId ? { ...incident, ...updatePayload } : incident));
+        if (evidenceFile) setEvidenceFile(null);
+      } catch (err: any) {
+        console.error(err);
+        const isDuplicateId = err?.code === '23505' && String(err?.message || '').includes('incident_number');
+        toast({
+          title: isDuplicateId ? 'ID duplicado' : 'Error',
+          description: isDuplicateId
+            ? 'Ya existe una tarea con ese ID en este proyecto. Usa otro ID.'
+            : err?.message || 'No se pudo guardar la tarea',
+          variant: 'destructive'
+        });
+      }
+    }, 500);
+
+    return () => clearTimeout(handler);
+  }, [createOpen, editingId, form, evidenceFile]);
+
   const onEdit = (incident: any) => {
     setEditingId(incident.id);
     setForm({
@@ -993,12 +1055,9 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
       if (error) throw error;
       
       // Sync auto-linked tasks with the new status (map incident status to task status)
-      const taskStatus = toStatus === 'closed' ? 'resolved' : 
-                        toStatus === 'in_qa' ? 'in_progress' : 
-                        toStatus;
       await supabase
         .from('tasks')
-        .update({ status: taskStatus })
+        .update({ status: mapIncidentStatusToTaskStatus(toStatus) } as any)
         .eq('incident_id', incidentId)
         .eq('is_auto_linked', true);
       
@@ -1576,10 +1635,12 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
             {editingId && <Button type="button" variant="outline" onClick={() => {
               resetForm();
               setCreateOpen(false);
-            }}>Cancelar</Button>}
-             <Button type="submit" className="flex items-center gap-2">
-               <Plus className="h-4 w-4" /> {editingId ? 'Guardar cambios' : 'Crear tarea'}
-             </Button>
+            }}>Cerrar</Button>}
+             {!editingId && (
+               <Button type="submit" className="flex items-center gap-2">
+                 <Plus className="h-4 w-4" /> Crear tarea
+               </Button>
+             )}
           </div>
         </form>
       </DialogContent>

@@ -56,8 +56,50 @@ export default function InterestingLinksModule({ projectId }: InterestingLinksMo
     loadLinks();
   }, [projectId]);
 
+  useEffect(() => {
+    if (!editingLink || !isDialogOpen) return;
+    if (!name.trim() || !url.trim()) return;
+    try {
+      new URL(url);
+    } catch {
+      return;
+    }
+
+    const handler = setTimeout(async () => {
+      const { error } = await supabase
+        .from('interesting_links')
+        .update({
+          name: name.trim(),
+          url: url.trim(),
+          description: description.trim() || null,
+        })
+        .eq('id', editingLink.id);
+
+      if (error) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+        return;
+      }
+
+      setLinks(prev => prev.map(link => link.id === editingLink.id ? {
+        ...link,
+        name: name.trim(),
+        url: url.trim(),
+        description: description.trim() || null,
+      } : link));
+      setEditingLink(prev => prev ? {
+        ...prev,
+        name: name.trim(),
+        url: url.trim(),
+        description: description.trim() || null,
+      } : prev);
+    }, 500);
+
+    return () => clearTimeout(handler);
+  }, [editingLink?.id, isDialogOpen, name, url, description]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingLink) return;
     
     if (!name.trim() || !url.trim()) {
       toast({
@@ -81,37 +123,20 @@ export default function InterestingLinksModule({ projectId }: InterestingLinksMo
     }
 
     try {
-      if (editingLink) {
-        const { error } = await supabase
-          .from('interesting_links')
-          .update({
-            name: name.trim(),
-            url: url.trim(),
-            description: description.trim() || null,
-          })
-          .eq('id', editingLink.id);
-
-        if (error) throw error;
-        toast({
-          title: "Éxito",
-          description: "Enlace actualizado correctamente",
+      const { error } = await supabase
+        .from('interesting_links')
+        .insert({
+          project_id: projectId,
+          name: name.trim(),
+          url: url.trim(),
+          description: description.trim() || null,
         });
-      } else {
-        const { error } = await supabase
-          .from('interesting_links')
-          .insert({
-            project_id: projectId,
-            name: name.trim(),
-            url: url.trim(),
-            description: description.trim() || null,
-          });
 
-        if (error) throw error;
-        toast({
-          title: "Éxito",
-          description: "Enlace añadido correctamente",
-        });
-      }
+      if (error) throw error;
+      toast({
+        title: "Éxito",
+        description: "Enlace añadido correctamente",
+      });
 
       await loadLinks();
       setIsDialogOpen(false);
@@ -284,9 +309,11 @@ export default function InterestingLinksModule({ projectId }: InterestingLinksMo
               />
             </div>
             
-            <Button type="submit" className="w-full">
-              {editingLink ? 'Guardar cambios' : 'Añadir enlace'}
-            </Button>
+            {!editingLink && (
+              <Button type="submit" className="w-full">
+                Añadir enlace
+              </Button>
+            )}
           </form>
         </DialogContent>
       </Dialog>
