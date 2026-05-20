@@ -168,7 +168,7 @@ export default function DailiesModule({
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   
   // Sorting state for daily tasks
-  const [dailySortField, setDailySortField] = useState<'status' | 'person' | null>('person');
+  const [dailySortField, setDailySortField] = useState<'status' | 'person' | null>(null);
   const [dailySortDirection, setDailySortDirection] = useState<'asc' | 'desc'>('asc');
   
   // Sync when parent unlocks via modal
@@ -908,15 +908,18 @@ export default function DailiesModule({
     }
   };
 
-  // Sort daily tasks based on current sort settings
-  const sortedTasks = useMemo(() => {
-    const visibleTasks = selectedPersonFilter === 'all'
+  const visibleDailyTasks = useMemo(() => {
+    return selectedPersonFilter === 'all'
       ? tasks
       : tasks.filter(task => (task.person_id || task.assigned_to || 'unassigned') === selectedPersonFilter);
+  }, [tasks, selectedPersonFilter]);
 
-    if (!dailySortField) return visibleTasks;
+  // Sort daily tasks based on current sort settings. With no column sort selected,
+  // the table follows the persisted manual order from daily_tasks.order_position.
+  const sortedTasks = useMemo(() => {
+    if (!dailySortField) return visibleDailyTasks;
 
-    return [...visibleTasks].sort((a, b) => {
+    return [...visibleDailyTasks].sort((a, b) => {
       let aValue, bValue;
       
       switch (dailySortField) {
@@ -942,7 +945,7 @@ export default function DailiesModule({
         return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
       }
     });
-  }, [tasks, dailySortField, dailySortDirection, people, selectedPersonFilter]);
+  }, [visibleDailyTasks, dailySortField, dailySortDirection, people]);
 
   const DailySortableHeader = ({ field, children }: { field: 'status' | 'person'; children: React.ReactNode }) => (
     <TableHead 
@@ -1029,8 +1032,13 @@ export default function DailiesModule({
     preserveScroll();
 
     const newVisibleTasks = arrayMove(sortedTasks, oldIndex, newIndex);
-    const visibleTaskMap = new Map(newVisibleTasks.map(task => [task.id, task]));
-    const newTasks = tasks.map(task => visibleTaskMap.get(task.id) ?? task);
+    const visibleTaskIds = new Set(visibleDailyTasks.map(task => task.id));
+    const movedVisibleQueue = [...newVisibleTasks];
+    const newTasks = tasks.map(task => {
+      if (!visibleTaskIds.has(task.id)) return task;
+      return movedVisibleQueue.shift() ?? task;
+    });
+    setDailySortField(null);
     setTasks(newTasks);
 
     // Update order_position in database
