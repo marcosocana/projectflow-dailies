@@ -3,13 +3,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { useReleases, Release } from '@/hooks/useReleases';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { supabase } from '@/integrations/supabase/client';
+import { useReleases, Release, ReleaseIncludedTask } from '@/hooks/useReleases';
 
-import { Plus, Smartphone, Globe, Eye, Trash2, Edit, ChevronDown, ChevronUp, Copy } from 'lucide-react';
+import { Plus, Smartphone, Globe, Eye, Trash2, Edit, ChevronDown, ChevronUp, Copy, X } from 'lucide-react';
 
 interface ReleasesModuleProps {
   projectId: string;
@@ -17,6 +18,7 @@ interface ReleasesModuleProps {
 
 export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
   const { releases, loading, createRelease, updateRelease, deleteRelease } = useReleases(projectId);
+  const [availableTasks, setAvailableTasks] = useState<ReleaseIncludedTask[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
@@ -25,13 +27,111 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
   const [platform, setPlatform] = useState<'web' | 'app'>('web');
   const [environment, setEnvironment] = useState<'dev' | 'pre' | 'pro'>('pro');
   const [version, setVersion] = useState('');
-  const [description, setDescription] = useState('');
+  const [includedTasks, setIncludedTasks] = useState<ReleaseIncludedTask[]>([]);
+  const [taskSearch, setTaskSearch] = useState('');
+  const [manualTaskId, setManualTaskId] = useState('');
+  const [manualTaskTitle, setManualTaskTitle] = useState('');
   
   // Edit form states
   const [editPlatform, setEditPlatform] = useState<'web' | 'app'>('web');
   const [editEnvironment, setEditEnvironment] = useState<'dev' | 'pre' | 'pro'>('pro');
   const [editVersion, setEditVersion] = useState('');
-  const [editDescription, setEditDescription] = useState('');
+  const [editIncludedTasks, setEditIncludedTasks] = useState<ReleaseIncludedTask[]>([]);
+  const [editTaskSearch, setEditTaskSearch] = useState('');
+  const [editManualTaskId, setEditManualTaskId] = useState('');
+  const [editManualTaskTitle, setEditManualTaskTitle] = useState('');
+
+  useEffect(() => {
+    const fetchAvailableTasks = async () => {
+      const { data, error } = await supabase
+        .from('incidents')
+        .select('id, incident_number, name')
+        .eq('project_id', projectId)
+        .order('incident_number', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching release task options:', error);
+        return;
+      }
+
+      setAvailableTasks((data || []).map(task => ({
+        id: String(task.incident_number),
+        title: task.name,
+        source: 'existing',
+        taskId: task.id,
+      })));
+    };
+
+    fetchAvailableTasks();
+  }, [projectId]);
+
+  const normalizeIncludedTasks = (value: Release['included_tasks'] | null | undefined): ReleaseIncludedTask[] => {
+    if (!Array.isArray(value)) return [];
+
+    return value
+      .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null && !Array.isArray(item))
+      .map(item => ({
+        id: String(item.id || '').trim(),
+        title: String(item.title || '').trim(),
+        source: item.source === 'manual' ? 'manual' : 'existing',
+        taskId: typeof item.taskId === 'string' ? item.taskId : undefined,
+      }))
+      .filter(item => item.id && item.title);
+  };
+
+  const formatIncludedTasks = (tasks: ReleaseIncludedTask[], fallbackDescription?: string | null) => {
+    if (tasks.length > 0) {
+      return tasks.map(task => `${task.id} - ${task.title}`).join('\n');
+    }
+
+    return fallbackDescription || 'Sin tareas vinculadas';
+  };
+
+  const hasTask = (tasks: ReleaseIncludedTask[], task: ReleaseIncludedTask) => {
+    return tasks.some(item => {
+      if (task.taskId && item.taskId) return item.taskId === task.taskId;
+      return item.id.toLowerCase() === task.id.toLowerCase();
+    });
+  };
+
+  const toggleTask = (
+    task: ReleaseIncludedTask,
+    setTasks: React.Dispatch<React.SetStateAction<ReleaseIncludedTask[]>>
+  ) => {
+    setTasks(currentTasks => {
+      if (hasTask(currentTasks, task)) {
+        return currentTasks.filter(item => (task.taskId && item.taskId) ? item.taskId !== task.taskId : item.id.toLowerCase() !== task.id.toLowerCase());
+      }
+
+      return [...currentTasks, task];
+    });
+  };
+
+  const removeTask = (
+    task: ReleaseIncludedTask,
+    setTasks: React.Dispatch<React.SetStateAction<ReleaseIncludedTask[]>>
+  ) => {
+    setTasks(current => current.filter(item => (task.taskId && item.taskId) ? item.taskId !== task.taskId : item.id.toLowerCase() !== task.id.toLowerCase()));
+  };
+
+  const addManualTask = (
+    currentTasks: ReleaseIncludedTask[],
+    setTasks: React.Dispatch<React.SetStateAction<ReleaseIncludedTask[]>>,
+    id: string,
+    title: string,
+    reset: () => void
+  ) => {
+    const task: ReleaseIncludedTask = {
+      id: id.trim(),
+      title: title.trim(),
+      source: 'manual',
+    };
+
+    if (!task.id || !task.title || hasTask(currentTasks, task)) return;
+
+    setTasks([...currentTasks, task]);
+    reset();
+  };
 
   // Check if any environment has more than 3 releases
   const hasMoreThanThree = () => {
@@ -52,12 +152,16 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
       platform,
       environment,
       version: version.trim(),
-      description: description.trim() || null,
+      description: null,
+      included_tasks: includedTasks,
     });
 
     setIsDialogOpen(false);
     setVersion('');
-    setDescription('');
+    setIncludedTasks([]);
+    setTaskSearch('');
+    setManualTaskId('');
+    setManualTaskTitle('');
     setPlatform('web');
     setEnvironment('pro');
   };
@@ -67,7 +171,10 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
     setEditPlatform(release.platform);
     setEditEnvironment(release.environment);
     setEditVersion(release.version);
-    setEditDescription(release.description || '');
+    setEditIncludedTasks(normalizeIncludedTasks(release.included_tasks));
+    setEditTaskSearch('');
+    setEditManualTaskId('');
+    setEditManualTaskTitle('');
     setIsEditing(false);
     setIsDetailDialogOpen(true);
   };
@@ -83,7 +190,8 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
       platform: editPlatform,
       environment: editEnvironment,
       version: editVersion.trim(),
-      description: editDescription.trim() || null,
+      description: null,
+      included_tasks: editIncludedTasks,
     });
     
     setIsEditing(false);
@@ -95,7 +203,10 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
     setEditPlatform(selectedRelease?.platform || 'web');
     setEditEnvironment(selectedRelease?.environment || 'pro');
     setEditVersion(selectedRelease?.version || '');
-    setEditDescription(selectedRelease?.description || '');
+    setEditIncludedTasks(normalizeIncludedTasks(selectedRelease?.included_tasks));
+    setEditTaskSearch('');
+    setEditManualTaskId('');
+    setEditManualTaskTitle('');
     setIsEditing(false);
   };
 
@@ -124,7 +235,8 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
 Plataforma: ${platformLabel}
 Entorno: ${environmentLabel}
 Versión: v${release.version}
-Qué incluye: ${release.description || 'Sin descripción'}`;
+Qué incluye:
+${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.description)}`;
 
     try {
       await navigator.clipboard.writeText(releaseInfo);
@@ -167,6 +279,136 @@ Qué incluye: ${release.description || 'Sin descripción'}`;
 
   const getAvailableEnvironments = (platform: 'web' | 'app'): Array<'dev' | 'pre' | 'pro'> => {
     return platform === 'web' ? ['dev', 'pre', 'pro'] : ['pre', 'pro'];
+  };
+
+  const dialogContentClassName = 'w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] overflow-hidden sm:w-[720px] sm:max-w-[720px]';
+  const formGroupClassName = 'grid min-w-0 max-w-full gap-2';
+
+  const renderIncludedTasksEditor = ({
+    tasks,
+    setTasks,
+    search,
+    setSearch,
+    manualId,
+    setManualId,
+    manualTitle,
+    setManualTitle,
+  }: {
+    tasks: ReleaseIncludedTask[];
+    setTasks: React.Dispatch<React.SetStateAction<ReleaseIncludedTask[]>>;
+    search: string;
+    setSearch: React.Dispatch<React.SetStateAction<string>>;
+    manualId: string;
+    setManualId: React.Dispatch<React.SetStateAction<string>>;
+    manualTitle: string;
+    setManualTitle: React.Dispatch<React.SetStateAction<string>>;
+  }) => {
+    const query = search.trim().toLowerCase();
+    const filteredTasks = availableTasks.filter(task => {
+      if (!query) return true;
+      return task.id.toLowerCase().includes(query) || task.title.toLowerCase().includes(query);
+    });
+
+    return (
+      <div className="min-w-0 max-w-full space-y-3 overflow-hidden">
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar tarea existente por ID o título"
+          className="min-w-0 max-w-full"
+        />
+
+        <ScrollArea className="h-36 min-w-0 max-w-full rounded-md border">
+          <div className="space-y-1 p-2">
+            {filteredTasks.length === 0 ? (
+              <p className="px-2 py-6 text-center text-sm text-muted-foreground">No se encontraron tareas</p>
+            ) : (
+              filteredTasks.map(task => {
+                const selected = hasTask(tasks, task);
+                return (
+                  <div
+                    key={task.taskId}
+                    role="checkbox"
+                    tabIndex={0}
+                    aria-checked={selected}
+                    onClick={() => toggleTask(task, setTasks)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        toggleTask(task, setTasks);
+                      }
+                    }}
+                    className="flex w-full cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      readOnly
+                      tabIndex={-1}
+                      aria-hidden="true"
+                      className="h-4 w-4 shrink-0 cursor-pointer rounded border-input accent-primary"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-mono text-xs text-muted-foreground">{task.id}</span>
+                      <span className="block truncate">{task.title}</span>
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </ScrollArea>
+
+        <div className="grid min-w-0 max-w-full gap-2 sm:grid-cols-[140px_minmax(0,1fr)_44px]">
+          <Input
+            value={manualId}
+            onChange={(e) => setManualId(e.target.value)}
+            placeholder="ID"
+            className="min-w-0"
+          />
+          <Input
+            value={manualTitle}
+            onChange={(e) => setManualTitle(e.target.value)}
+            placeholder="Título de la tarea"
+            className="min-w-0"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Añadir tarea manual"
+            onClick={() => addManualTask(tasks, setTasks, manualId, manualTitle, () => {
+              setManualId('');
+              setManualTitle('');
+            })}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {tasks.length > 0 && (
+          <div className="max-h-[168px] min-w-0 overflow-y-auto rounded-md border bg-muted/30 p-2">
+            <div className="flex flex-wrap gap-2 pr-2">
+              {tasks.map(task => (
+                <Badge key={`${task.source}-${task.taskId || task.id}`} variant="secondary" className="gap-1 pr-1">
+                  <span className="max-w-[420px] min-w-0 truncate">{task.id} · {task.title}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Quitar tarea"
+                    className="h-5 w-5 p-0 hover:bg-transparent"
+                    onClick={() => removeTask(task, setTasks)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -358,7 +600,7 @@ Qué incluye: ${release.description || 'Sin descripción'}`;
 
       {/* Add Release Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className={dialogContentClassName}>
           <DialogHeader>
             <DialogTitle>Añadir release</DialogTitle>
             <DialogDescription>
@@ -366,77 +608,82 @@ Qué incluye: ${release.description || 'Sin descripción'}`;
             </DialogDescription>
           </DialogHeader>
           
-          <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="platform">Plataforma</Label>
-              <Select value={platform} onValueChange={(value: 'web' | 'app') => {
-                setPlatform(value);
-                // Reset environment when platform changes and set default
-                const defaultEnv = value === 'web' ? 'pro' : 'pro';
-                setEnvironment(defaultEnv);
-              }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona la plataforma" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="web">
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-4 w-4" />
-                      Web
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="app">
-                    <div className="flex items-center gap-2">
-                      <Smartphone className="h-4 w-4" />
-                      App
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="environment">Entorno</Label>
-              <Select value={environment} onValueChange={(value: 'dev' | 'pre' | 'pro') => setEnvironment(value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona el entorno" />
-                </SelectTrigger>
-                <SelectContent>
-                  {getAvailableEnvironments(platform).map(env => (
-                    <SelectItem key={env} value={env}>
+          <form onSubmit={handleSubmit} className="grid min-w-0 max-w-full gap-4 overflow-hidden py-4">
+            <div className="grid min-w-0 max-w-full gap-3 md:grid-cols-3">
+              <div className={formGroupClassName}>
+                <Label htmlFor="platform">Plataforma</Label>
+                <Select value={platform} onValueChange={(value: 'web' | 'app') => {
+                  setPlatform(value);
+                  const defaultEnv = value === 'web' ? 'pro' : 'pro';
+                  setEnvironment(defaultEnv);
+                }}>
+                  <SelectTrigger className="min-w-0 max-w-full">
+                    <SelectValue placeholder="Selecciona la plataforma" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="web">
                       <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${
-                          env === 'dev' ? 'bg-blue-500' : 
-                          env === 'pre' ? 'bg-yellow-500' : 'bg-green-500'
-                        }`} />
-                        {getEnvironmentLabel(env)}
+                        <Globe className="h-4 w-4" />
+                        Web
                       </div>
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    <SelectItem value="app">
+                      <div className="flex items-center gap-2">
+                        <Smartphone className="h-4 w-4" />
+                        App
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className={formGroupClassName}>
+                <Label htmlFor="environment">Entorno</Label>
+                <Select value={environment} onValueChange={(value: 'dev' | 'pre' | 'pro') => setEnvironment(value)}>
+                  <SelectTrigger className="min-w-0 max-w-full">
+                    <SelectValue placeholder="Selecciona el entorno" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getAvailableEnvironments(platform).map(env => (
+                      <SelectItem key={env} value={env}>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${
+                            env === 'dev' ? 'bg-blue-500' : 
+                            env === 'pre' ? 'bg-yellow-500' : 'bg-green-500'
+                          }`} />
+                          {getEnvironmentLabel(env)}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className={formGroupClassName}>
+                <Label htmlFor="version">Nº de versión</Label>
+                <Input
+                  id="version"
+                  value={version}
+                  onChange={(e) => setVersion(e.target.value)}
+                  placeholder="ej: 1.0.0"
+                  required
+                  className="min-w-0 max-w-full"
+                />
+              </div>
             </div>
             
-            <div className="grid gap-2">
-              <Label htmlFor="version">Número de versión</Label>
-              <Input
-                id="version"
-                value={version}
-                onChange={(e) => setVersion(e.target.value)}
-                placeholder="ej: 1.0.0"
-                required
-              />
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="description">Qué incluye</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe las nuevas características, mejoras o correcciones..."
-                rows={4}
-              />
+            <div className={formGroupClassName}>
+              <Label>Qué incluye</Label>
+              {renderIncludedTasksEditor({
+                tasks: includedTasks,
+                setTasks: setIncludedTasks,
+                search: taskSearch,
+                setSearch: setTaskSearch,
+                manualId: manualTaskId,
+                setManualId: setManualTaskId,
+                manualTitle: manualTaskTitle,
+                setManualTitle: setManualTaskTitle,
+              })}
             </div>
             
             <Button type="submit" className="w-full">
@@ -448,7 +695,7 @@ Qué incluye: ${release.description || 'Sin descripción'}`;
 
       {/* Release Detail Dialog */}
       <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className={dialogContentClassName}>
           <DialogHeader>
             <DialogTitle>Detalle del Release</DialogTitle>
             <DialogDescription>Consulta o edita los datos del release seleccionado.</DialogDescription>
@@ -551,18 +798,34 @@ Qué incluye: ${release.description || 'Sin descripción'}`;
               <div>
                 <Label>Qué incluye</Label>
                 {isEditing ? (
-                  <Textarea
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    className="mt-1"
-                    placeholder="Describe las nuevas características, mejoras o correcciones..."
-                    rows={4}
-                  />
+                  <div className="mt-1">
+                    {renderIncludedTasksEditor({
+                      tasks: editIncludedTasks,
+                      setTasks: setEditIncludedTasks,
+                      search: editTaskSearch,
+                      setSearch: setEditTaskSearch,
+                      manualId: editManualTaskId,
+                      setManualId: setEditManualTaskId,
+                      manualTitle: editManualTaskTitle,
+                      setManualTitle: setEditManualTaskTitle,
+                    })}
+                  </div>
                 ) : (
                   <div className="mt-1 p-3 bg-muted rounded-md">
-                    <p className="text-sm whitespace-pre-wrap">
-                      {selectedRelease.description || 'Sin descripción'}
-                    </p>
+                    {normalizeIncludedTasks(selectedRelease.included_tasks).length > 0 ? (
+                      <div className="space-y-2">
+                        {normalizeIncludedTasks(selectedRelease.included_tasks).map(task => (
+                          <div key={`${task.source}-${task.taskId || task.id}`} className="flex gap-2 text-sm">
+                            <span className="font-mono text-muted-foreground">{task.id}</span>
+                            <span>{task.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">
+                        {selectedRelease.description || 'Sin tareas vinculadas'}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

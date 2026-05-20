@@ -495,6 +495,7 @@ export type Database = {
           description: string | null
           environment: string
           id: string
+          included_tasks: Json
           platform: string
           project_id: string
           updated_at: string
@@ -505,6 +506,7 @@ export type Database = {
           description?: string | null
           environment?: string
           id?: string
+          included_tasks?: Json
           platform: string
           project_id: string
           updated_at?: string
@@ -515,6 +517,7 @@ export type Database = {
           description?: string | null
           environment?: string
           id?: string
+          included_tasks?: Json
           platform?: string
           project_id?: string
           updated_at?: string

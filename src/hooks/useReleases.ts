@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 import { useToast } from '@/hooks/use-toast';
+
+export interface ReleaseIncludedTask {
+  id: string;
+  title: string;
+  source: 'existing' | 'manual';
+  taskId?: string;
+}
 
 export interface Release {
   id: string;
@@ -9,6 +17,7 @@ export interface Release {
   environment: 'dev' | 'pre' | 'pro';
   version: string;
   description: string | null;
+  included_tasks: ReleaseIncludedTask[] | Json;
   created_at: string;
   updated_at: string;
 }
