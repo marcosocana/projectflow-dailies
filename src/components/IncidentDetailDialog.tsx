@@ -318,8 +318,6 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         .update({
           title: payload.name,
           description: payload.description || null,
-          person_id: payload.assigned_to,
-          assigned_to: payload.assigned_to,
           related_ticket: manualIncidentNumber,
           status: mapIncidentStatusToTaskStatus(payload.status)
         } as any)

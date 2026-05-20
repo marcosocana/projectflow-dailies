@@ -16,7 +16,7 @@ import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 import { es } from 'date-fns/locale';
 import { format, isBefore, isWeekend, startOfDay, isWithinInterval, parseISO } from 'date-fns';
 import type { TablesInsert } from '@/integrations/supabase/types';
-import { Trash2, Eye, Pencil, RefreshCcw, List, ChevronUp, ChevronDown, GripVertical, Link, Copy, AlertTriangle, Asterisk } from 'lucide-react';
+import { Trash2, Pencil, RefreshCcw, List, ChevronUp, ChevronDown, GripVertical, Link, Copy, AlertTriangle, Asterisk } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
@@ -139,6 +139,7 @@ export default function DailiesModule({
     description: string;
     personIds: string[];
     incidentId: string;
+    epic: string;
     status: TaskStatus;
     environment: TaskEnvironment | '';
     category: IncidentCategory;
@@ -148,6 +149,7 @@ export default function DailiesModule({
     description: '',
     personIds: [],
     incidentId: '',
+    epic: '',
     status: 'pending',
     environment: '',
     category: 'incident'
@@ -168,14 +170,23 @@ export default function DailiesModule({
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   
   // Sorting state for daily tasks
-  const [dailySortField, setDailySortField] = useState<'status' | 'person' | null>(null);
-  const [dailySortDirection, setDailySortDirection] = useState<'asc' | 'desc'>('asc');
-  
   // Sync when parent unlocks via modal
   useEffect(() => {
     if (initiallyUnlocked) setUnlocked(true);
   }, [initiallyUnlocked]);
+
   const [date, setDate] = useState<Date>(new Date());
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const custom = event as CustomEvent<{ projectId?: string }>;
+      if (custom.detail?.projectId !== projectId) return;
+      preserveScroll();
+      loadBaseData();
+      loadTasks(date);
+    };
+    window.addEventListener('dailies-task-created', handler as EventListener);
+    return () => window.removeEventListener('dailies-task-created', handler as EventListener);
+  }, [projectId, date]);
   const [dailyId, setDailyId] = useState<string | null>(null);
   const [people, setPeople] = useState<any[]>([]);
   const [linkedProfiles, setLinkedProfiles] = useState<Record<string, { full_name: string; email: string | null }>>({});
@@ -195,6 +206,7 @@ export default function DailiesModule({
     description: string;
     personIds: string[];
     incidentId: string;
+    epic: string;
     status: TaskStatus;
     environment: TaskEnvironment | '';
     relatedTicket: string;
@@ -204,6 +216,7 @@ export default function DailiesModule({
     description: '',
     personIds: [],
     incidentId: '',
+    epic: '',
     status: 'pending',
     environment: '',
     relatedTicket: '',
@@ -231,7 +244,7 @@ export default function DailiesModule({
       data: vacs
     }] = await Promise.all([supabase.from('people').select('*').eq('project_id', projectId).order('created_at', {
       ascending: true
-    }), supabase.from('incidents').select('id,name,description,incident_number,status,category,additional_comments,environment').eq('project_id', projectId).order('incident_number', {
+    }), supabase.from('incidents').select('id,name,description,incident_number,status,category,epic,additional_comments,environment').eq('project_id', projectId).order('incident_number', {
       ascending: false
     }), supabase.from('vacations').select('*').eq('project_id', projectId).order('start_date', {
       ascending: true
@@ -341,6 +354,7 @@ export default function DailiesModule({
         description: incident.description || '',
         personIds: [],
         incidentId: incident.id,
+        epic: incident.epic || '',
         status: incident.status === 'resolved' ? 'resolved' : incident.status === 'in_progress' ? 'in_progress' : 'pending',
         environment: incident.status === 'resolved' ? (incident.environment || '') : '',
         relatedTicket: formatTaskManualId(incident.incident_number),
@@ -350,19 +364,10 @@ export default function DailiesModule({
     }
   };
 
-  const handleCreateWithoutLink = () => {
-    setManualTaskIdEnabled(true);
-    setTaskForm({
-      title: '',
-      description: '',
-      personIds: [],
-      incidentId: '',
-      status: 'pending',
-      environment: '',
-      relatedTicket: '',
-      category: 'incident'
-    });
-    setCreationMode('manual');
+  const openHomeCreateTaskModal = () => {
+    setCreateTaskOpen(false);
+    setCreationMode('select');
+    window.dispatchEvent(new CustomEvent('open-home-create-task-modal'));
   };
 
   const addTask = async (e: React.FormEvent) => {
@@ -413,6 +418,7 @@ export default function DailiesModule({
         occurred_at: date.toISOString(),
         status: mapTaskStatusToIncidentStatus(taskForm.status),
         category: taskForm.category,
+        epic: taskForm.epic || null,
         additional_comments: [
           '[origen:seguimiento_diario]',
           !manualTaskIdEnabled ? INTERNAL_TASK_ID_MARKER : '',
@@ -487,6 +493,7 @@ export default function DailiesModule({
         .from('incidents')
         .update({
           status: mapTaskStatusToIncidentStatus(taskForm.status),
+          epic: taskForm.epic || null,
           environment: taskEnvironment || null,
         } as any)
         .eq('id', incidentIdToLink);
@@ -556,6 +563,7 @@ export default function DailiesModule({
       status: 'pending',
       environment: '',
       relatedTicket: '',
+      epic: '',
       category: 'incident'
     });
     setManualTaskIdEnabled(true);
@@ -662,12 +670,43 @@ export default function DailiesModule({
       } : x));
     }
   };
-  const deleteTask = async (id: string) => {
+  const deleteTask = async (taskOrId: any) => {
     preserveScroll();
+    const task = typeof taskOrId === 'string'
+      ? tasks.find((candidate) => candidate.id === taskOrId)
+      : taskOrId;
+    const id = typeof taskOrId === 'string' ? taskOrId : taskOrId?.id;
+    if (!id) return;
+
+    if (task?.incident_id && task?.person_id) {
+      await supabase
+        .from('incident_assignments')
+        .delete()
+        .eq('incident_id', task.incident_id)
+        .eq('assigned_to', task.person_id);
+
+      const { data: remainingAssignments } = await supabase
+        .from('incident_assignments')
+        .select('assigned_to')
+        .eq('incident_id', task.incident_id)
+        .limit(1);
+
+      const fallbackAssignedTo = remainingAssignments && remainingAssignments.length > 0
+        ? remainingAssignments[0].assigned_to
+        : null;
+
+      await supabase
+        .from('incidents')
+        .update({ assigned_to: fallbackAssignedTo })
+        .eq('id', task.incident_id);
+    }
+
     const {
       error
     } = await supabase.from('tasks').delete().eq('id', id);
-    if (!error) setTasks(t => t.filter(x => x.id !== id));
+    if (!error) {
+      setTasks(t => t.filter(x => x.id !== id));
+    }
   };
   const openPersistModal = async () => {
     try {
@@ -908,72 +947,36 @@ export default function DailiesModule({
     }
   };
 
-  const handleDailySort = (field: 'status' | 'person') => {
-    if (dailySortField === field) {
-      setDailySortDirection(dailySortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setDailySortField(field);
-      setDailySortDirection('asc');
-    }
-  };
-
   const visibleDailyTasks = useMemo(() => {
     return selectedPersonFilter === 'all'
       ? tasks
       : tasks.filter(task => (task.person_id || task.assigned_to || 'unassigned') === selectedPersonFilter);
   }, [tasks, selectedPersonFilter]);
 
-  // Sort daily tasks based on current sort settings. With no column sort selected,
-  // the table follows the persisted manual order from daily_tasks.order_position.
+  const statusOrder: Record<TaskStatus, number> = {
+    in_progress: 0,
+    pending: 1,
+    resolved: 2,
+    resolved_yesterday: 3,
+  };
+
+  // Daily list is always sorted by status: WIP, Pending, Resolved, Resolved yesterday.
   const sortedTasks = useMemo(() => {
-    if (!dailySortField) return visibleDailyTasks;
-
     return [...visibleDailyTasks].sort((a, b) => {
-      let aValue, bValue;
-      
-      switch (dailySortField) {
-        case 'status':
-          const statusOrder = { 'in_progress': 0, 'pending': 1, 'resolved': 2 };
-          aValue = statusOrder[a.status as keyof typeof statusOrder] ?? 3;
-          bValue = statusOrder[b.status as keyof typeof statusOrder] ?? 3;
-          break;
-        case 'person':
-          const aPerson = people.find(p => p.id === (a.person_id || (a as any).assigned_to));
-          const bPerson = people.find(p => p.id === (b.person_id || (b as any).assigned_to));
-          aValue = aPerson?.name?.toLowerCase() || 'z';
-          bValue = bPerson?.name?.toLowerCase() || 'z';
-          break;
-        default:
-          aValue = 0;
-          bValue = 0;
-      }
-
-      if (dailySortDirection === 'asc') {
-        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
-      } else {
-        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
-      }
+      const byStatus = (statusOrder[a.status as TaskStatus] ?? 99) - (statusOrder[b.status as TaskStatus] ?? 99);
+      if (byStatus !== 0) return byStatus;
+      return (a.order_position ?? 0) - (b.order_position ?? 0);
     });
-  }, [visibleDailyTasks, dailySortField, dailySortDirection, people]);
+  }, [visibleDailyTasks]);
 
-  const DailySortableHeader = ({ field, children }: { field: 'status' | 'person'; children: React.ReactNode }) => (
-    <TableHead 
-      className="cursor-pointer hover:bg-muted/50 select-none"
-      onClick={() => handleDailySort(field)}
-    >
-      <div className="flex items-center gap-1">
-        {children}
-        <div className="flex flex-col">
-          <ChevronUp 
-            className={`h-3 w-3 ${dailySortField === field && dailySortDirection === 'asc' ? 'text-primary' : 'text-muted-foreground'}`} 
-          />
-          <ChevronDown 
-            className={`h-3 w-3 -mt-1 ${dailySortField === field && dailySortDirection === 'desc' ? 'text-primary' : 'text-muted-foreground'}`} 
-          />
-        </div>
-      </div>
-    </TableHead>
-  );
+  const availableEpics = useMemo(() => {
+    const set = new Set<string>();
+    incidents.forEach((incident) => {
+      const epic = String(incident.epic ?? '').trim();
+      if (epic) set.add(epic);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [incidents]);
 
   const SortableHeader = ({ field, children }: { field: 'status' | 'title' | 'person'; children: React.ReactNode }) => (
     <TableHead 
@@ -1036,6 +1039,9 @@ export default function DailiesModule({
     const newIndex = sortedTasks.findIndex((t) => t.id === over.id);
 
     if (oldIndex === -1 || newIndex === -1) return;
+    const activeTask = sortedTasks[oldIndex];
+    const overTask = sortedTasks[newIndex];
+    if (activeTask.status !== overTask.status) return;
 
     // Save scroll position before update
     preserveScroll();
@@ -1047,7 +1053,6 @@ export default function DailiesModule({
       if (!visibleTaskIds.has(task.id)) return task;
       return movedVisibleQueue.shift() ?? task;
     });
-    setDailySortField(null);
     setTasks(newTasks);
 
     // Update order_position in database
@@ -1172,29 +1177,20 @@ export default function DailiesModule({
                   {task.description.length > 70 ? `${task.description.slice(0, 70)}...` : task.description}
                 </div>
               )}
+              {person && (
+                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="h-2.5 w-2.5 rounded" style={{ backgroundColor: person.color }} />
+                  {person.name}
+                </div>
+              )}
             </div>
           </div>
         </TableCell>
         <TableCell>
-          {person ? (
-            <div className="flex items-center gap-2">
-              <span className="h-3 w-3 rounded" style={{ backgroundColor: person.color }} />
-              {person.name}
-            </div>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
+          <span className="text-sm text-muted-foreground">{incident?.epic || '—'}</span>
         </TableCell>
         <TableCell className="flex gap-1">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => openDetails(task)} 
-            aria-label="Ver"
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => deleteTask(task.id)} aria-label="Eliminar">
+          <Button variant="ghost" size="icon" onClick={() => deleteTask(task)} aria-label="Eliminar">
             <Trash2 className="h-4 w-4" />
           </Button>
         </TableCell>
@@ -1348,15 +1344,26 @@ export default function DailiesModule({
   const openDetails = async (task: any) => {
     preserveScroll();
     setSelectedTask(task);
+    const linkedIncident = incidents.find(i => i.id === task.incident_id);
+    let personIds = task.person_id ? [task.person_id] : [];
+    if (task.incident_id) {
+      const { data: assignmentRows } = await supabase
+        .from('incident_assignments')
+        .select('assigned_to')
+        .eq('incident_id', task.incident_id);
+      const assignmentIds = (assignmentRows || []).map((row: any) => row.assigned_to).filter(Boolean);
+      if (assignmentIds.length > 0) personIds = assignmentIds;
+    }
     setEditForm({
       title: task.title || '',
       relatedTicket: formatTaskManualId(task.related_ticket),
       description: task.description || '',
-      personIds: task.person_id ? [task.person_id] : [],
+      personIds,
       incidentId: task.incident_id || '',
+      epic: linkedIncident?.epic || '',
       status: task.status as TaskStatus || 'pending',
       environment: task.environment || '',
-      category: getDisplayCategory(incidents.find(i => i.id === task.incident_id)) || 'incident'
+      category: getDisplayCategory(linkedIncident) || 'incident'
     });
     setEditing(false);
     setDetailsOpen(true);
@@ -1423,6 +1430,7 @@ export default function DailiesModule({
             .update({
               incident_number: Number(relatedTicket),
               name: update.title,
+              epic: editForm.epic || null,
               description: update.description,
               status: nextIncidentStatus,
               assigned_to: update.person_id,
@@ -1443,36 +1451,112 @@ export default function DailiesModule({
               toStatus: nextIncidentStatus,
             });
           }
-          
-          // Si hay una persona asignada, sincronizar también su asignación
-          if (update.person_id) {
-            // Verificar si existe una asignación para esta persona
-            const { data: existingAssignment } = await supabase
-              .from('incident_assignments')
-              .select('id')
-              .eq('incident_id', update.incident_id)
-              .eq('assigned_to', update.person_id)
-              .maybeSingle();
-            
-            if (existingAssignment) {
-              // Actualizar el estado de la asignación existente
+
+          const desiredPersonIds = Array.from(new Set(editForm.personIds.filter(Boolean)));
+          const { data: existingAssignments } = await supabase
+            .from('incident_assignments')
+            .select('id, assigned_to')
+            .eq('incident_id', update.incident_id);
+
+          const existingByPerson = new Map<string, any>();
+          (existingAssignments || []).forEach((assignment: any) => {
+            existingByPerson.set(assignment.assigned_to, assignment);
+          });
+
+          const desiredSet = new Set(desiredPersonIds);
+          const toDeleteIds = (existingAssignments || [])
+            .filter((assignment: any) => !desiredSet.has(assignment.assigned_to))
+            .map((assignment: any) => assignment.id);
+
+          if (toDeleteIds.length > 0) {
+            await supabase.from('incident_assignments').delete().in('id', toDeleteIds);
+          }
+
+          for (const personId of desiredPersonIds) {
+            const existing = existingByPerson.get(personId);
+            if (existing) {
               await supabase
                 .from('incident_assignments')
                 .update({ status: mapTaskStatusToIncidentStatus(update.status) } as any)
-                .eq('id', existingAssignment.id);
+                .eq('id', existing.id);
             } else {
-              // Crear una nueva asignación si no existe
+              await supabase.from('incident_assignments').insert({
+                incident_id: update.incident_id,
+                assigned_to: personId,
+                status: mapTaskStatusToIncidentStatus(update.status),
+              } as any);
+            }
+          }
+
+          const { data: linkedTasks } = await supabase
+            .from('tasks')
+            .select('id, person_id, assigned_to')
+            .eq('incident_id', update.incident_id)
+            .eq('is_auto_linked', true);
+
+          const existingTasksByPerson = new Map<string, any>();
+          (linkedTasks || []).forEach((taskRow: any) => {
+            const personId = taskRow.person_id || taskRow.assigned_to;
+            if (personId) existingTasksByPerson.set(personId, taskRow);
+          });
+
+          const personsToDelete = (linkedTasks || [])
+            .filter((taskRow: any) => {
+              const personId = taskRow.person_id || taskRow.assigned_to;
+              return personId && !desiredSet.has(personId);
+            })
+            .map((taskRow: any) => taskRow.id);
+
+          if (personsToDelete.length > 0) {
+            await supabase.from('daily_tasks').delete().in('task_id', personsToDelete);
+            await supabase.from('tasks').delete().in('id', personsToDelete);
+          }
+
+          for (const personId of desiredPersonIds) {
+            const existingTask = existingTasksByPerson.get(personId);
+            if (existingTask) {
               await supabase
-                .from('incident_assignments')
+                .from('tasks')
+                .update({
+                  title: update.title,
+                  description: update.description || null,
+                  related_ticket: relatedTicket || null,
+                  status: update.status,
+                  environment: taskEnvironment || null,
+                  person_id: personId,
+                  assigned_to: personId,
+                } as any)
+                .eq('id', existingTask.id);
+            } else {
+              const { data: createdTask } = await supabase
+                .from('tasks')
                 .insert({
+                  title: update.title,
+                  description: update.description || null,
+                  project_id: projectId,
+                  daily_id: selectedTask.daily_id,
                   incident_id: update.incident_id,
-                  assigned_to: update.person_id,
-                  status: mapTaskStatusToIncidentStatus(update.status)
-                } as any);
+                  person_id: personId,
+                  assigned_to: personId,
+                  status: update.status,
+                  environment: taskEnvironment || null,
+                  is_auto_linked: true,
+                  related_ticket: relatedTicket || null,
+                } as any)
+                .select('id')
+                .single();
+
+              if (createdTask?.id && selectedTask.daily_id) {
+                await supabase.from('daily_tasks').upsert({
+                  daily_id: selectedTask.daily_id,
+                  task_id: createdTask.id,
+                } as any, { onConflict: 'daily_id,task_id' } as any);
+              }
             }
           }
           
           loadBaseData(); // Reload incidents to reflect status change
+          loadTasks(date);
         }
         
         setTasks(t => t.map(x => x.id === selectedTask.id ? {
@@ -1581,8 +1665,10 @@ export default function DailiesModule({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') setSelectedPersonFilter(current => current === item.id ? 'all' : item.id);
                       }}
-                      className={cn("cursor-pointer bg-muted/50", selectedPersonFilter === item.id && "bg-primary/10 ring-2 ring-primary")}
-                      style={{ borderColor: item.color || undefined }}
+                      className={cn(
+                        "cursor-pointer border border-border bg-background",
+                        selectedPersonFilter === item.id && "bg-primary/20 border-primary"
+                      )}
                     >
                       <span className="mr-2">{item.name}</span>
                       <span className="flex items-center gap-1">
@@ -1618,12 +1704,12 @@ export default function DailiesModule({
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-8"></TableHead>
-                      <DailySortableHeader field="status">Estado</DailySortableHeader>
+                      <TableHead>Estado</TableHead>
                       <TableHead>Entorno</TableHead>
                       <TableHead>ID</TableHead>
                       <TableHead>Tipo</TableHead>
                       <TableHead>Tarea</TableHead>
-                      <DailySortableHeader field="person">Persona</DailySortableHeader>
+                      <TableHead>Épica</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1674,6 +1760,7 @@ export default function DailiesModule({
             description: '',
             personIds: [],
             incidentId: '',
+            epic: '',
             status: 'pending',
             environment: '',
             relatedTicket: '',
@@ -1685,9 +1772,9 @@ export default function DailiesModule({
           <DialogHeader>
             <DialogTitle>Crear tarea</DialogTitle>
             <DialogDescription>
-              {creationMode === 'select' && 'Selecciona una incidencia existente o crea una tarea sin vinculación'}
+              {creationMode === 'select' && 'Selecciona una incidencia existente o crea una incidencia manual'}
               {creationMode === 'linked' && 'Tarea vinculada a incidencia (información precargada)'}
-              {creationMode === 'manual' && 'Tarea sin vinculación (información manual)'}
+              {creationMode === 'manual' && 'Crear tarea manual'}
             </DialogDescription>
           </DialogHeader>
 
@@ -1768,9 +1855,9 @@ export default function DailiesModule({
               <Button 
                 variant="secondary" 
                 className="w-full"
-                onClick={handleCreateWithoutLink}
+                onClick={openHomeCreateTaskModal}
               >
-                Crear tarea sin vinculación
+                Crear incidencia manual
               </Button>
             </div>
           )}
@@ -1794,8 +1881,8 @@ export default function DailiesModule({
               {creationMode === 'manual' && (
                 <div className="md:col-span-2 p-3 bg-muted/50 rounded-lg border">
                   <div className="flex items-center gap-2 text-sm">
-                    <Badge variant="outline">Sin vinculación</Badge>
-                    <span className="text-muted-foreground">Tarea independiente</span>
+                    <Badge variant="outline">Manual</Badge>
+                    <span className="text-muted-foreground">Tarea creada manualmente</span>
                   </div>
                 </div>
               )}
@@ -1854,6 +1941,20 @@ export default function DailiesModule({
                       <SelectItem value="incident">Incidencia</SelectItem>
                       <SelectItem value="improvement">Evolutivo</SelectItem>
                       <SelectItem value="corrective_improvement">Mejora correctora</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {(creationMode === 'linked' || creationMode === 'manual') && (
+                <div>
+                  <Label>Épica</Label>
+                  <Select value={taskForm.epic || '__none__'} onValueChange={value => setTaskForm(f => ({ ...f, epic: value === '__none__' ? '' : value }))}>
+                    <SelectTrigger><SelectValue placeholder="Sin épica" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Sin épica</SelectItem>
+                      {availableEpics.map(epic => (
+                        <SelectItem key={epic} value={epic}>{epic}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1967,6 +2068,7 @@ export default function DailiesModule({
                       description: '',
                       personIds: [],
                       incidentId: '',
+                      epic: '',
                       status: 'pending',
                       environment: '',
                       relatedTicket: '',
@@ -2033,6 +2135,8 @@ export default function DailiesModule({
         preserveScroll();
         setDetailsOpen(o);
         if (!o) {
+          loadBaseData();
+          loadTasks(date);
           setSelectedTask(null);
           setEditing(false);
         }
@@ -2076,7 +2180,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                     onClick={() => {
                       if (!selectedTask) return;
                       if (confirm('¿Estás seguro de que quieres eliminar esta tarea?')) {
-                        deleteTask(selectedTask.id);
+                        deleteTask(selectedTask);
                         setDetailsOpen(false);
                       }
                     }} 
@@ -2235,7 +2339,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                             <CommandItem
                               value="none"
                               onSelect={() => {
-                                setEditForm(f => ({ ...f, incidentId: '' }));
+                                setEditForm(f => ({ ...f, incidentId: '', epic: '' }));
                               }}
                             >
                               Ninguna
@@ -2245,7 +2349,13 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                                  key={i.id}
                                  value={formatIncidentLabel(i)}
                  onSelect={() => {
-                                   setEditForm(f => ({ ...f, incidentId: i.id, relatedTicket: formatTaskManualId(i.incident_number) }));
+                                   setEditForm(f => ({
+                                     ...f,
+                                     incidentId: i.id,
+                                     relatedTicket: formatTaskManualId(i.incident_number),
+                                     epic: i.epic || '',
+                                     category: getDisplayCategory(i) || f.category,
+                                   }));
                                  }}
                                >
                                  <span className="block max-w-full truncate" title={formatIncidentLabel(i)}>
@@ -2273,6 +2383,20 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                       <SelectItem value="incident">Incidencia</SelectItem>
                       <SelectItem value="improvement">Evolutivo</SelectItem>
                       <SelectItem value="corrective_improvement">Mejora correctora</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Épica</Label>
+                  <Select value={editForm.epic || '__none__'} onValueChange={value => setEditForm(f => ({ ...f, epic: value === '__none__' ? '' : value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sin épica" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Sin épica</SelectItem>
+                      {availableEpics.map(epic => (
+                        <SelectItem key={epic} value={epic}>{epic}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

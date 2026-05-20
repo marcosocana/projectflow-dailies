@@ -179,7 +179,25 @@ export default function TaskAssignmentsManager({
 
   const handleRemoveAssignment = async (assignmentId: string) => {
     try {
+      const assignment = assignments.find((current) => current.id === assignmentId);
       await removeAssignment(assignmentId);
+
+      if (taskId && assignment?.assigned_to) {
+        const { data: linkedTasks, error: linkedTasksError } = await supabase
+          .from('tasks')
+          .select('id')
+          .eq('incident_id', taskId)
+          .eq('is_auto_linked', true)
+          .or(`person_id.eq.${assignment.assigned_to},assigned_to.eq.${assignment.assigned_to}`);
+
+        if (linkedTasksError) throw linkedTasksError;
+
+        const linkedTaskIds = (linkedTasks || []).map((task) => task.id);
+        if (linkedTaskIds.length > 0) {
+          await supabase.from('daily_tasks').delete().in('task_id', linkedTaskIds);
+          await supabase.from('tasks').delete().in('id', linkedTaskIds);
+        }
+      }
       
       // Sincronizar el estado general de la tarea
       if (taskId) {

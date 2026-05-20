@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -52,6 +52,7 @@ const Dashboard = () => {
     userProjects,
   } = useProjectAccess();
   const navigate = useNavigate();
+  const location = useLocation();
   const isSuperUser = user?.email?.toLowerCase() === 'mocanat@minsait.com';
 
   const refreshUnreadActivity = useCallback(async () => {
@@ -396,6 +397,11 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="min-h-screen">
+            {!location.pathname.endsWith('/tasks') && (
+              <div className="hidden">
+                <IncidentsModule projectId={currentProject.id} />
+              </div>
+            )}
             <AppSidebar currentProject={currentProject} />
             <main className="ml-0 md:ml-16 p-4 md:p-6 pt-[64px]">
               <ScrollToTop />

@@ -33,6 +33,7 @@ import { Switch } from '@/components/ui/switch';
 import BacklogImportDialog from '@/components/BacklogImportDialog';
 import { recordIncidentCreated, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, loadNextInternalTaskId } from '@/lib/internalTaskIds';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface IncidentsModuleProps {
   projectId: string;
@@ -309,6 +310,8 @@ const DroppablePipelineColumn = ({
 export default function IncidentsModule({
   projectId
 }: IncidentsModuleProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const {
     toast
   } = useToast();
@@ -399,6 +402,32 @@ export default function IncidentsModule({
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('openCreate') !== '1') return;
+    resetForm();
+    setEditingId(null);
+    setCreateOpen(true);
+    params.delete('openCreate');
+    const nextSearch = params.toString();
+    navigate(
+      { pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '' },
+      { replace: true }
+    );
+  }, [location.pathname, location.search, navigate]);
+
+  useEffect(() => {
+    const handler = () => {
+      resetForm();
+      setEditingId(null);
+      setCreateOpen(true);
+    };
+    window.addEventListener('open-home-create-task-modal', handler);
+    return () => {
+      window.removeEventListener('open-home-create-task-modal', handler);
+    };
+  }, []);
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return incidents.filter(i => {
@@ -873,6 +902,9 @@ export default function IncidentsModule({
       }
       resetForm();
       fetchIncidents();
+      if (!editingId && createDailyTasks) {
+        window.dispatchEvent(new CustomEvent('dailies-task-created', { detail: { projectId } }));
+      }
       savedSuccessfully = true;
     } catch (err: any) {
       console.error(err);

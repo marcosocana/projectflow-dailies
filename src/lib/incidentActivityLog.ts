@@ -23,7 +23,11 @@ async function recordIncidentActivity(input: IncidentStatusLogInput) {
       .eq('user_id', authUser.id)
       .maybeSingle();
 
-    const actorName = profile?.full_name || authUser.email || 'Usuario';
+    const email = authUser.email || '';
+    const trimmedName = profile?.full_name?.trim() || '';
+    const actorName = trimmedName
+      ? `${trimmedName} (${email})`
+      : (email || 'Usuario');
     const actorColor = profile?.color || '#3B82F6';
 
     const { error } = await supabase.from('incident_activity_logs').insert({
