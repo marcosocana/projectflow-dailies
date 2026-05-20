@@ -6,11 +6,16 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsPasswordRecovery(true);
+        }
+
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
@@ -53,6 +58,40 @@ export function useAuth() {
     return { error };
   };
 
+  const resetPassword = async (email: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const { data: users, error: lookupError } = await supabase.rpc('find_user_by_email', {
+      user_email: normalizedEmail,
+    });
+
+    if (lookupError) return { error: lookupError };
+
+    const existingUser = users?.find((profile) => profile.email?.toLowerCase() === normalizedEmail && profile.is_active);
+
+    if (!existingUser) {
+      return {
+        error: new Error('No existe ningún usuario activo con ese email.'),
+      };
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+      redirectTo: `${window.location.origin}/auth`,
+    });
+
+    return { error };
+  };
+
+  const updatePassword = async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+
+    if (!error) {
+      setIsPasswordRecovery(false);
+    }
+
+    return { error };
+  };
+
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     return { error };
@@ -62,8 +101,11 @@ export function useAuth() {
     user,
     session,
     loading,
+    isPasswordRecovery,
     signIn,
     signUp,
+    resetPassword,
+    updatePassword,
     signOut,
   };
 }

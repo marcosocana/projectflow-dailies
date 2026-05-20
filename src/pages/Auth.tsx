@@ -12,12 +12,16 @@ import vecturaLogo from '@/assets/vectura-logo.png';
 const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { user, signIn, signUp } = useAuth();
+  const { user, signIn, signUp, resetPassword, updatePassword, isPasswordRecovery } = useAuth();
   const { toast } = useToast();
 
   // Redirect if already authenticated
-  if (user) {
+  if (user && !isPasswordRecovery) {
     return <Navigate to="/" replace />;
   }
 
@@ -40,6 +44,61 @@ const Auth = () => {
       });
     }
     
+    setLoading(false);
+  };
+
+  const handleResetPasswordRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    const { error } = await resetPassword(resetEmail || email);
+
+    if (error) {
+      toast({
+        title: "No se pudo enviar el email",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Email enviado",
+        description: "Revisa tu correo para crear una nueva contraseña.",
+      });
+      setIsForgotPassword(false);
+    }
+
+    setLoading(false);
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Las contraseñas no coinciden",
+        description: "Revisa ambos campos antes de continuar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    const { error } = await updatePassword(newPassword);
+
+    if (error) {
+      toast({
+        title: "No se pudo actualizar la contraseña",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Contraseña actualizada",
+        description: "Ya puedes acceder con tu nueva contraseña.",
+      });
+    }
+
     setLoading(false);
   };
 
@@ -84,6 +143,64 @@ const Auth = () => {
           </div>
         </CardHeader>
         <CardContent>
+          {isPasswordRecovery ? (
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">Nueva contraseña</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  disabled={loading}
+                  minLength={6}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirmar contraseña</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  disabled={loading}
+                  minLength={6}
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? 'Guardando...' : 'Guardar nueva contraseña'}
+              </Button>
+            </form>
+          ) : isForgotPassword ? (
+            <form onSubmit={handleResetPasswordRequest} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="reset-email">Email</Label>
+                <Input
+                  id="reset-email"
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  required
+                  disabled={loading}
+                  placeholder="tu.email@ejemplo.com"
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? 'Enviando...' : 'Enviar email de recuperación'}
+              </Button>
+              <Button
+                type="button"
+                variant="link"
+                className="w-full"
+                disabled={loading}
+                onClick={() => setIsForgotPassword(false)}
+              >
+                Volver al login
+              </Button>
+            </form>
+          ) : (
           <Tabs defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Iniciar Sesión</TabsTrigger>
@@ -116,6 +233,18 @@ const Auth = () => {
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="w-full"
+                  disabled={loading}
+                  onClick={() => {
+                    setResetEmail(email);
+                    setIsForgotPassword(true);
+                  }}
+                >
+                  He olvidado la contraseña
                 </Button>
               </form>
             </TabsContent>
@@ -150,6 +279,7 @@ const Auth = () => {
               </form>
             </TabsContent>
           </Tabs>
+          )}
         </CardContent>
       </Card>
     </div>
