@@ -383,10 +383,14 @@ export default function IncidentsModule({
   const [createOpen, setCreateOpen] = useState(false);
   const [compareBacklogOpen, setCompareBacklogOpen] = useState(false);
   const [backlogCompareRows, setBacklogCompareRows] = useState<Array<{ id: string; excelStatus: string; vectoreaStatus: string }>>([]);
-  const [compareFilters, setCompareFilters] = useState({
-    id: '',
-    excelStatus: '',
-    vectoreaStatus: '',
+  const [compareSelected, setCompareSelected] = useState<{
+    ids: string[];
+    excelStatuses: string[];
+    vectoreaStatuses: string[];
+  }>({
+    ids: [],
+    excelStatuses: [],
+    vectoreaStatuses: [],
   });
   const [backlogImportOpen, setBacklogImportOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -1292,20 +1296,22 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
           const excelStatus = String(row.Estado ?? row.estado ?? '').trim();
           const normalizedId = normalizeCompareId(idRaw);
           const incident = normalizedId ? byId.get(normalizedId) : null;
-          const numericId = Number(normalizedId);
-          const shouldIncludeMissing = !incident && Number.isFinite(numericId) && numericId > 900;
           return {
             id: String(idRaw || '').trim(),
             excelStatus,
             vectoreaStatus: incident ? (STATUS_LABELS[incident.status] || incident.status) : 'No existe en Vectorea',
-            include: Boolean(incident) || shouldIncludeMissing,
+            include: true,
           };
         })
         .filter((row) => row.id && row.include)
         .map(({ include, ...row }) => row);
 
       setBacklogCompareRows(result);
-      setCompareFilters({ id: '', excelStatus: '', vectoreaStatus: '' });
+      setCompareSelected({
+        ids: [],
+        excelStatuses: [],
+        vectoreaStatuses: [],
+      });
       toast({
         title: 'Comparativa generada',
         description: `Se compararon ${result.length} filas.`,
@@ -1320,17 +1326,24 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
     }
   };
 
+  const compareFilterOptions = useMemo(() => {
+    const ids = Array.from(new Set(backlogCompareRows.map((row) => row.id))).sort((a, b) => Number(a) - Number(b));
+    const excelStatuses = Array.from(new Set(backlogCompareRows.map((row) => row.excelStatus || '—'))).sort();
+    const vectoreaStatuses = Array.from(new Set(backlogCompareRows.map((row) => row.vectoreaStatus || '—'))).sort();
+    return { ids, excelStatuses, vectoreaStatuses };
+  }, [backlogCompareRows]);
+
   const filteredBacklogCompareRows = useMemo(() => {
-    const idFilter = compareFilters.id.trim().toLowerCase();
-    const excelFilter = compareFilters.excelStatus.trim().toLowerCase();
-    const vectoreaFilter = compareFilters.vectoreaStatus.trim().toLowerCase();
     return backlogCompareRows.filter((row) => {
-      const matchesId = !idFilter || row.id.toLowerCase().includes(idFilter);
-      const matchesExcel = !excelFilter || row.excelStatus.toLowerCase().includes(excelFilter);
-      const matchesVectorea = !vectoreaFilter || row.vectoreaStatus.toLowerCase().includes(vectoreaFilter);
-      return matchesId && matchesExcel && matchesVectorea;
+      const idValue = row.id;
+      const excelValue = row.excelStatus || '—';
+      const vectoreaValue = row.vectoreaStatus || '—';
+      const matchId = compareSelected.ids.length === 0 || compareSelected.ids.includes(idValue);
+      const matchExcel = compareSelected.excelStatuses.length === 0 || compareSelected.excelStatuses.includes(excelValue);
+      const matchVectorea = compareSelected.vectoreaStatuses.length === 0 || compareSelected.vectoreaStatuses.includes(vectoreaValue);
+      return matchId && matchExcel && matchVectorea;
     });
-  }, [backlogCompareRows, compareFilters]);
+  }, [backlogCompareRows, compareSelected]);
 
   // Comentarios y autosave gestionados por IncidentDetailDialog
 
@@ -1688,34 +1701,78 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Estado Excel</TableHead>
-                    <TableHead>Estado Vectorea</TableHead>
-                  </TableRow>
-                  <TableRow>
                     <TableHead>
-                      <Input
-                        value={compareFilters.id}
-                        onChange={(e) => setCompareFilters((prev) => ({ ...prev, id: e.target.value }))}
-                        placeholder="Filtrar ID..."
-                        className="h-8"
-                      />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 px-2">ID</Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="max-h-64 overflow-auto">
+                          {compareFilterOptions.ids.map((id) => (
+                            <DropdownMenuCheckboxItem
+                              key={id}
+                              checked={compareSelected.ids.includes(id)}
+                              onCheckedChange={(checked) => {
+                                setCompareSelected((prev) => ({
+                                  ...prev,
+                                  ids: checked ? [...prev.ids, id] : prev.ids.filter((value) => value !== id),
+                                }));
+                              }}
+                            >
+                              {id}
+                            </DropdownMenuCheckboxItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableHead>
                     <TableHead>
-                      <Input
-                        value={compareFilters.excelStatus}
-                        onChange={(e) => setCompareFilters((prev) => ({ ...prev, excelStatus: e.target.value }))}
-                        placeholder="Filtrar Estado Excel..."
-                        className="h-8"
-                      />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 px-2">Estado Excel</Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="max-h-64 overflow-auto">
+                          {compareFilterOptions.excelStatuses.map((status) => (
+                            <DropdownMenuCheckboxItem
+                              key={status}
+                              checked={compareSelected.excelStatuses.includes(status)}
+                              onCheckedChange={(checked) => {
+                                setCompareSelected((prev) => ({
+                                  ...prev,
+                                  excelStatuses: checked
+                                    ? [...prev.excelStatuses, status]
+                                    : prev.excelStatuses.filter((value) => value !== status),
+                                }));
+                              }}
+                            >
+                              {status}
+                            </DropdownMenuCheckboxItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableHead>
                     <TableHead>
-                      <Input
-                        value={compareFilters.vectoreaStatus}
-                        onChange={(e) => setCompareFilters((prev) => ({ ...prev, vectoreaStatus: e.target.value }))}
-                        placeholder="Filtrar Estado Vectorea..."
-                        className="h-8"
-                      />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 px-2">Estado Vectorea</Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="max-h-64 overflow-auto">
+                          {compareFilterOptions.vectoreaStatuses.map((status) => (
+                            <DropdownMenuCheckboxItem
+                              key={status}
+                              checked={compareSelected.vectoreaStatuses.includes(status)}
+                              onCheckedChange={(checked) => {
+                                setCompareSelected((prev) => ({
+                                  ...prev,
+                                  vectoreaStatuses: checked
+                                    ? [...prev.vectoreaStatuses, status]
+                                    : prev.vectoreaStatuses.filter((value) => value !== status),
+                                }));
+                              }}
+                            >
+                              {status}
+                            </DropdownMenuCheckboxItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
