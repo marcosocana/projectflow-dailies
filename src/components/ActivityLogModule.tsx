@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getActivityLogLastSeen, setActivityLogLastSeen } from '@/lib/activityLogReadState';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 
 interface ActivityLogModuleProps {
   projectId: string;
@@ -20,6 +21,7 @@ interface ActivityLogModuleProps {
 type ActivityLogRow = {
   id: string;
   created_at: string;
+  incident_id: string;
   actor_name: string;
   actor_color: string;
   incident_name: string;
@@ -68,6 +70,13 @@ const MONTH_OPTIONS = [
   'Diciembre',
 ];
 
+const TEAMS_LOGS_URL = 'https://teams.microsoft.com/l/chat/19:63ce0f3b03274bf5965c1fa39434813d@thread.v2/conversations?context=%7B%22contextType%22%3A%22chat%22%7D';
+
+const buildTeamsUrl = (message: string) => {
+  const separator = TEAMS_LOGS_URL.includes('?') ? '&' : '?';
+  return `${TEAMS_LOGS_URL}${separator}message=${encodeURIComponent(message)}`;
+};
+
 export default function ActivityLogModule({ projectId }: ActivityLogModuleProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -80,6 +89,8 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
   const [selectedMonth, setSelectedMonth] = useState(String(today.getMonth() + 1));
   const [selectedYear, setSelectedYear] = useState(String(today.getFullYear()));
   const [queryDate, setQueryDate] = useState<Date>(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
+  const [detailIncidentId, setDetailIncidentId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const loadLogs = useCallback(async () => {
     setLoading(true);
@@ -145,6 +156,14 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
     return `${log.actor_name} cambió el estado de ${category.label} - ${log.incident_number} - ${log.incident_name} de ${STATUS_LABELS[log.from_status] || log.from_status} a ${STATUS_LABELS[log.to_status] || log.to_status}.`;
   };
 
+  const formatAnonymousEntry = (log: ActivityLogRow) => {
+    const category = CATEGORY_META[log.incident_category] || CATEGORY_META.incident;
+    if (log.from_status === 'created') {
+      return `Se ha creado ${category.label} - ${log.incident_number} - ${log.incident_name} con estado ${STATUS_LABELS[log.to_status] || log.to_status}.`;
+    }
+    return `Se ha cambiado el estado de ${category.label} - ${log.incident_number} - ${log.incident_name} de ${STATUS_LABELS[log.from_status] || log.from_status} a ${STATUS_LABELS[log.to_status] || log.to_status}.`;
+  };
+
   const copyText = async (text: string, description: string) => {
     await navigator.clipboard.writeText(text);
     toast({ title: 'Copiado', description });
@@ -158,6 +177,26 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
     const header = `${formatDayTitle(day)}\n${items.length} cambios`;
     const text = [header, ...items.map(formatEntry)].join('\n');
     copyText(text, 'Se copió el contenido del día.');
+  };
+
+  const sendToTeams = async (text: string) => {
+    await navigator.clipboard.writeText(text);
+    window.open(buildTeamsUrl(text), '_blank', 'noopener,noreferrer');
+    toast({
+      title: 'Mensaje preparado para Teams',
+      description: 'Se abrió Teams con el mensaje anónimo pre-rellenado.',
+    });
+  };
+
+  const sendDayToTeams = (day: string, items: ActivityLogRow[]) => {
+    const header = `${formatDayTitle(day)}\n${items.length} cambios`;
+    const text = [header, ...items.map(formatAnonymousEntry)].join('\n');
+    sendToTeams(text);
+  };
+
+  const openIncidentDetails = (incidentId: string) => {
+    setDetailIncidentId(incidentId);
+    setDetailOpen(true);
   };
 
   const deleteLog = async (log: ActivityLogRow) => {
@@ -294,10 +333,15 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                   <CardTitle className="text-lg">{dayTitle}</CardTitle>
                   <p className="text-sm text-muted-foreground">{logs.length} cambios</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => copyDay(selectedDayKey, logs)}>
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copiar día
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => copyDay(selectedDayKey, logs)}>
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copiar día
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={() => sendDayToTeams(selectedDayKey, logs)} aria-label="Enviar día a Teams" title="Enviar día a Teams">
+                    <span className="text-xs font-bold">T</span>
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -324,7 +368,13 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5 text-sm">
                             <span>{log.actor_name} {isCreation ? 'creó' : 'cambió el estado de'}</span>
-                            <strong>{entityLabel}</strong>
+                            <Button
+                              variant="link"
+                              className="h-auto p-0 align-baseline text-sm font-bold"
+                              onClick={() => openIncidentDetails(log.incident_id)}
+                            >
+                              {entityLabel}
+                            </Button>
                             {!isCreation && (
                               <>
                                 <span>de</span>
@@ -357,6 +407,15 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                         <Button
                           variant="ghost"
                           size="icon"
+                          onClick={() => sendToTeams(formatAnonymousEntry(log))}
+                          aria-label="Enviar cambio a Teams"
+                          title="Enviar a Teams"
+                        >
+                          <span className="text-xs font-bold">T</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => deleteLog(log)}
                           aria-label="Eliminar log"
                           className="text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -371,6 +430,14 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
           </Card>
         </>
       )}
+      <IncidentDetailDialog
+        open={detailOpen}
+        onOpenChange={(open) => {
+          setDetailOpen(open);
+          if (!open) setDetailIncidentId(null);
+        }}
+        incidentId={detailIncidentId}
+      />
     </div>
   );
 }

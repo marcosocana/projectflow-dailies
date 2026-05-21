@@ -35,6 +35,7 @@ interface AdminProfile {
   full_name: string;
   color: string;
   is_active: boolean;
+  is_admin: boolean;
   created_at: string;
   profile_id: string | null;
 }
@@ -68,6 +69,8 @@ const AdminProjects = () => {
   const [selectedProfile, setSelectedProfile] = useState<AdminProfile | null>(null);
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [userForm, setUserForm] = useState({ full_name: '', email: '', color: '#3B82F6', is_active: true });
+  const [isAdminRole, setIsAdminRole] = useState(false);
+  const [checkingAdminRole, setCheckingAdminRole] = useState(true);
   const [linkedPersonId, setLinkedPersonId] = useState('');
   const [loading, setLoading] = useState(false);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -87,7 +90,31 @@ const AdminProjects = () => {
   const navigate = useNavigate();
   const isSuperUser = user?.email?.toLowerCase() === 'mocanat@minsait.com';
   const hasAdminPasswordAccess = sessionStorage.getItem('projectflow_admin_access') === 'true';
-  const canAccessAdmin = isSuperUser || hasAdminPasswordAccess;
+  const canAccessAdmin = isSuperUser || isAdminRole || hasAdminPasswordAccess;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadAdminRole = async () => {
+      if (isMounted) setCheckingAdminRole(true);
+      if (!user) {
+        setIsAdminRole(false);
+        setCheckingAdminRole(false);
+        return;
+      }
+      const { data } = await supabase.rpc('current_user_is_admin');
+      if (isMounted) {
+        setIsAdminRole(Boolean(data));
+        setCheckingAdminRole(false);
+      }
+    };
+
+    loadAdminRole();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
 
   const load = async () => {
     setLoading(true);
@@ -144,6 +171,7 @@ const AdminProjects = () => {
           full_name: row.full_name || fallbackName,
           color: row.color || '#3B82F6',
           is_active: typeof row.is_active === 'boolean' ? row.is_active : true,
+          is_admin: Boolean(row.is_admin),
           created_at: row.created_at,
         };
       });
@@ -283,7 +311,7 @@ const AdminProjects = () => {
     return () => clearTimeout(handler);
   }, [selectedProfile?.id, userDialogOpen, userForm]);
 
-  if (authLoading) {
+  if (authLoading || checkingAdminRole) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-muted-foreground">Cargando...</div>
@@ -638,6 +666,31 @@ const AdminProjects = () => {
     }
   };
 
+  const handleToggleAdminRole = async (profile: AdminProfile, makeAdmin: boolean) => {
+    try {
+      const { error } = await (supabase.rpc as any)('set_user_admin_role', {
+        target_user_id: profile.user_id,
+        make_admin: makeAdmin,
+      });
+
+      if (error) throw error;
+
+      setSelectedProfile(prev => prev?.user_id === profile.user_id ? { ...prev, is_admin: makeAdmin } : prev);
+      setProfiles(prev => prev.map(item => item.user_id === profile.user_id ? { ...item, is_admin: makeAdmin } : item));
+      toast({
+        title: makeAdmin ? 'Permisos de Admin concedidos' : 'Permisos de Admin retirados',
+        description: `${profile.full_name} ${makeAdmin ? 'ahora puede acceder a Admin.' : 'ya no puede acceder a Admin.'}`,
+      });
+      await loadUsers();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'No se pudo actualizar el permiso de Admin',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleProjectAccessToggle = async (profile: AdminProfile, project: ProjectRow, checked: boolean) => {
     try {
       if (checked) {
@@ -962,7 +1015,12 @@ const AdminProjects = () => {
                                   <div className="flex items-center gap-3">
                                     <div className="h-4 w-4 rounded-full border" style={{ backgroundColor: profile.color }} />
                                     <div>
-                                      <div className="font-medium">{profile.full_name}</div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium">{profile.full_name}</span>
+                                        {profile.is_admin && (
+                                          <Badge variant="outline">Admin</Badge>
+                                        )}
+                                      </div>
                                       <div className="text-xs text-muted-foreground">
                                         ID: {profile.user_id ? `${profile.user_id.slice(0, 8)}...` : 'Sin ID'}
                                       </div>
@@ -1229,6 +1287,27 @@ const AdminProjects = () => {
                       <Badge variant={userForm.is_active ? 'default' : 'secondary'}>
                         {userForm.is_active ? 'Activo' : 'Baja'}
                       </Badge>
+                    </div>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Permisos de Admin</Label>
+                    <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+                      <div className="min-w-0">
+                        <div className="font-medium">Acceso a Admin</div>
+                        <p className="text-sm text-muted-foreground">
+                          Permite entrar al panel de Administración y gestionar proyectos, usuarios y permisos.
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Switch
+                          checked={selectedProfile.is_admin}
+                          onCheckedChange={(checked) => handleToggleAdminRole(selectedProfile, checked)}
+                          disabled={selectedProfile.user_id === user?.id && selectedProfile.is_admin}
+                        />
+                        <Badge variant={selectedProfile.is_admin ? 'default' : 'secondary'}>
+                          {selectedProfile.is_admin ? 'Admin' : 'Usuario'}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
                   <div className="space-y-2 md:col-span-2">

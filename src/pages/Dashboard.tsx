@@ -39,6 +39,7 @@ const Dashboard = () => {
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [compareBacklogOpen, setCompareBacklogOpen] = useState(false);
+  const [isAdminRole, setIsAdminRole] = useState(false);
   const [projectSelectionReady, setProjectSelectionReady] = useState(false);
   const [hasUnreadActivity, setHasUnreadActivity] = useState(false);
   const { user, signOut } = useAuth();
@@ -56,6 +57,27 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isSuperUser = user?.email?.toLowerCase() === 'mocanat@minsait.com';
+  const hasAdminPasswordAccess = sessionStorage.getItem('projectflow_admin_access') === 'true';
+  const canOpenAdmin = isSuperUser || isAdminRole || hasAdminPasswordAccess;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadAdminRole = async () => {
+      if (!user) {
+        setIsAdminRole(false);
+        return;
+      }
+      const { data } = await supabase.rpc('current_user_is_admin');
+      if (isMounted) setIsAdminRole(Boolean(data));
+    };
+
+    loadAdminRole();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
 
   const refreshUnreadActivity = useCallback(async () => {
     if (!currentProject?.id) {
@@ -289,7 +311,7 @@ const Dashboard = () => {
                 <SheetHeader>
                   <SheetTitle></SheetTitle>
                 </SheetHeader>
-                {isSuperUser && (
+                {canOpenAdmin && (
                   <div className="mt-6">
                     <Button
                       variant="outline"
