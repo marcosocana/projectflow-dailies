@@ -210,6 +210,25 @@ function CategoryIcon({
   }
   return <span className="inline-grid place-items-center h-5 w-5 rounded-sm bg-primary text-primary-foreground text-[10px] font-bold">E</span>;
 }
+
+function CompareTypeIcon({
+  type
+}: {
+  type: string;
+}) {
+  if (!String(type ?? '').trim()) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  const category = normalizeCategory(type);
+  if (category === 'incident') {
+    return <span title="Incidencia" className="inline-grid place-items-center h-5 w-5 rounded-sm bg-destructive text-destructive-foreground text-[10px] font-bold">I</span>;
+  }
+  if (category === 'corrective_improvement') {
+    return <span title="Mejora correctiva" className="inline-grid place-items-center h-5 w-5 rounded-sm bg-purple-600 text-white text-[10px] font-bold">C</span>;
+  }
+  return <span title="Evolutivo" className="inline-grid place-items-center h-5 w-5 rounded-sm bg-primary text-primary-foreground text-[10px] font-bold">E</span>;
+}
+
 type ImportButtonProps = {
   onFile: (file: File) => void;
 };
@@ -382,13 +401,15 @@ export default function IncidentsModule({
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [compareBacklogOpen, setCompareBacklogOpen] = useState(false);
-  const [backlogCompareRows, setBacklogCompareRows] = useState<Array<{ id: string; excelStatus: string; vectoreaStatus: string }>>([]);
+  const [backlogCompareRows, setBacklogCompareRows] = useState<Array<{ id: string; type: string; excelStatus: string; vectoreaStatus: string }>>([]);
   const [compareSelected, setCompareSelected] = useState<{
     ids: string[];
+    types: string[];
     excelStatuses: string[];
     vectoreaStatuses: string[];
   }>({
     ids: [],
+    types: [],
     excelStatuses: [],
     vectoreaStatuses: [],
   });
@@ -1271,7 +1292,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
   const normalizeCompareId = (value: unknown) => String(value ?? '').trim().replace(/^INT/i, '').replace(/\D/g, '');
 
   const downloadBacklogCompareTemplate = () => {
-    const ws = XLSX.utils.aoa_to_sheet([['ID', 'Estado']]);
+    const ws = XLSX.utils.aoa_to_sheet([['ID', 'Tipo', 'Estado']]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Plantilla');
     XLSX.writeFile(wb, 'plantilla_comparar_backlog.xlsx');
@@ -1293,11 +1314,13 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
       const result = rows
         .map((row) => {
           const idRaw = row.ID ?? row.Id ?? row.id ?? '';
+          const type = String(row.Tipo ?? row.tipo ?? '').trim();
           const excelStatus = String(row.Estado ?? row.estado ?? '').trim();
           const normalizedId = normalizeCompareId(idRaw);
           const incident = normalizedId ? byId.get(normalizedId) : null;
           return {
             id: String(idRaw || '').trim(),
+            type,
             excelStatus,
             vectoreaStatus: incident ? (STATUS_LABELS[incident.status] || incident.status) : 'No existe en Vectorea',
             include: true,
@@ -1309,6 +1332,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
       setBacklogCompareRows(result);
       setCompareSelected({
         ids: [],
+        types: [],
         excelStatuses: [],
         vectoreaStatuses: [],
       });
@@ -1328,22 +1352,77 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
 
   const compareFilterOptions = useMemo(() => {
     const ids = Array.from(new Set(backlogCompareRows.map((row) => row.id))).sort((a, b) => Number(a) - Number(b));
+    const types = Array.from(new Set(backlogCompareRows.map((row) => row.type || '—'))).sort();
     const excelStatuses = Array.from(new Set(backlogCompareRows.map((row) => row.excelStatus || '—'))).sort();
     const vectoreaStatuses = Array.from(new Set(backlogCompareRows.map((row) => row.vectoreaStatus || '—'))).sort();
-    return { ids, excelStatuses, vectoreaStatuses };
+    return { ids, types, excelStatuses, vectoreaStatuses };
   }, [backlogCompareRows]);
 
   const filteredBacklogCompareRows = useMemo(() => {
     return backlogCompareRows.filter((row) => {
       const idValue = row.id;
+      const typeValue = row.type || '—';
       const excelValue = row.excelStatus || '—';
       const vectoreaValue = row.vectoreaStatus || '—';
       const matchId = compareSelected.ids.length === 0 || compareSelected.ids.includes(idValue);
+      const matchType = compareSelected.types.length === 0 || compareSelected.types.includes(typeValue);
       const matchExcel = compareSelected.excelStatuses.length === 0 || compareSelected.excelStatuses.includes(excelValue);
       const matchVectorea = compareSelected.vectoreaStatuses.length === 0 || compareSelected.vectoreaStatuses.includes(vectoreaValue);
-      return matchId && matchExcel && matchVectorea;
+      return matchId && matchType && matchExcel && matchVectorea;
     });
   }, [backlogCompareRows, compareSelected]);
+
+  const sortedBacklogCompareRows = useMemo(() => {
+    return [...filteredBacklogCompareRows].sort((a, b) => {
+      const aNum = Number(String(a.id).replace(/\D/g, ''));
+      const bNum = Number(String(b.id).replace(/\D/g, ''));
+      if (Number.isFinite(aNum) && Number.isFinite(bNum)) return bNum - aNum;
+      return String(b.id).localeCompare(String(a.id));
+    });
+  }, [filteredBacklogCompareRows]);
+
+  const normalizeText = (value: string) =>
+    String(value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+
+  const isComparisonMatch = (excelStatusRaw: string, vectoreaStatusRaw: string) => {
+    const excel = normalizeText(excelStatusRaw);
+    const vectorea = normalizeText(vectoreaStatusRaw);
+
+    // Verde contra "No existe en Vectorea"
+    if (vectorea.includes('no existe en vectorea')) {
+      if (
+        excel.includes('cerrado') ||
+        excel.includes('resuelto') ||
+        excel.includes('descartado') ||
+        excel.includes('bloqueado') ||
+        excel.includes('en pruebas')
+      ) {
+        return true;
+      }
+      return false;
+    }
+
+    // Equivalencias explícitas verdes
+    if (excel.includes('resuelto') && vectorea.includes('en pro')) return true;
+    if (excel.includes('en pruebas') && vectorea.includes('en pre')) return true;
+    if (excel.includes('en curso') && vectorea.includes('wip')) return true;
+    if (excel.includes('cerrado') && vectorea.includes('en pro')) return true;
+    if (excel.includes('resuelto') && vectorea.includes('cerrada')) return true;
+    if (excel.includes('descartado') && vectorea.includes('cerrada')) return true;
+    if (excel.includes('descartado') && vectorea.includes('en pro')) return true;
+    if (excel.includes('en pruebas') && vectorea.includes('en pro')) return true;
+
+    // Estados iguales o que se contienen
+    if (excel && vectorea && (excel === vectorea || excel.includes(vectorea) || vectorea.includes(excel))) {
+      return true;
+    }
+
+    return false;
+  };
 
   // Comentarios y autosave gestionados por IncidentDetailDialog
 
@@ -1724,6 +1803,31 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableHead>
+                    <TableHead className="w-16">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 px-2">Tipo</Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="max-h-64 overflow-auto">
+                          {compareFilterOptions.types.map((type) => (
+                            <DropdownMenuCheckboxItem
+                              key={type}
+                              checked={compareSelected.types.includes(type)}
+                              onCheckedChange={(checked) => {
+                                setCompareSelected((prev) => ({
+                                  ...prev,
+                                  types: checked
+                                    ? [...prev.types, type]
+                                    : prev.types.filter((value) => value !== type),
+                                }));
+                              }}
+                            >
+                              {type}
+                            </DropdownMenuCheckboxItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableHead>
                     <TableHead>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -1777,8 +1881,13 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredBacklogCompareRows.map((row, index) => (
-                    <TableRow key={`${row.id}-${index}`}>
+                  {sortedBacklogCompareRows.map((row, index) => {
+                    const isMatch = isComparisonMatch(row.excelStatus || '', row.vectoreaStatus || '');
+                    return (
+                    <TableRow
+                      key={`${row.id}-${index}`}
+                      className={isMatch ? 'bg-green-100 hover:bg-green-200/80' : 'bg-red-100 hover:bg-red-200/80'}
+                    >
                       <TableCell>
                         <Button
                           variant="link"
@@ -1791,13 +1900,16 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                           {row.id}
                         </Button>
                       </TableCell>
+                      <TableCell>
+                        <CompareTypeIcon type={row.type} />
+                      </TableCell>
                       <TableCell>{row.excelStatus || '—'}</TableCell>
                       <TableCell>{row.vectoreaStatus || '—'}</TableCell>
                     </TableRow>
-                  ))}
-                  {filteredBacklogCompareRows.length === 0 && (
+                  )})}
+                  {sortedBacklogCompareRows.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center text-muted-foreground">
+                      <TableCell colSpan={4} className="text-center text-muted-foreground">
                         {backlogCompareRows.length === 0 ? 'Sube un archivo para ver la comparativa' : 'No hay filas para los filtros aplicados'}
                       </TableCell>
                     </TableRow>

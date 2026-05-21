@@ -671,6 +671,8 @@ export default function DailiesModule({
     }
   };
   const deleteTask = async (taskOrId: any) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar esta tarea?')) return;
+
     preserveScroll();
     const task = typeof taskOrId === 'string'
       ? tasks.find((candidate) => candidate.id === taskOrId)
