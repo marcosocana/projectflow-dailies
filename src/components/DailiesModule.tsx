@@ -404,6 +404,7 @@ export default function DailiesModule({
     }
     let incidentIdToLink = taskForm.incidentId || null;
     const taskEnvironment = normalizeTaskEnvironment(taskForm.status, taskForm.environment);
+    const selectedPersonIds = Array.from(new Set(taskForm.personIds.filter(Boolean)));
 
     if (creationMode === 'manual') {
       const newIncidentId = crypto.randomUUID();
@@ -425,7 +426,7 @@ export default function DailiesModule({
         ].filter(Boolean).join('\n'),
         project_id: projectId,
         created_by: user?.id ?? null,
-        assigned_to: taskForm.personIds.length > 0 ? taskForm.personIds[0] : null,
+        assigned_to: selectedPersonIds.length > 0 ? selectedPersonIds[0] : null,
       } as any);
 
       if (incidentError) {
@@ -450,21 +451,24 @@ export default function DailiesModule({
         toStatus: mapTaskStatusToIncidentStatus(taskForm.status),
       });
 
-      if (taskForm.personIds.length > 0) {
-        await supabase.from('incident_assignments').insert({
+      if (selectedPersonIds.length > 0) {
+        await supabase.from('incident_assignments').insert(selectedPersonIds.map(personId => ({
           incident_id: newIncidentId,
-          assigned_to: taskForm.personIds[0],
+          assigned_to: personId,
           status: mapTaskStatusToIncidentStatus(taskForm.status),
-        } as any);
+        })) as any);
       }
     }
+
+    const primaryPersonId = selectedPersonIds[0] || null;
 
     const payload: TablesInsert<'tasks'> = {
       title: taskForm.title,
       description: taskForm.description || null,
       project_id: projectId,
       daily_id: dailyId,
-      person_id: taskForm.personIds.length > 0 ? taskForm.personIds[0] : null,
+      person_id: primaryPersonId,
+      assigned_to: primaryPersonId,
       incident_id: incidentIdToLink,
       status: taskForm.status ?? 'pending',
       environment: taskEnvironment || null,
@@ -495,6 +499,7 @@ export default function DailiesModule({
           status: mapTaskStatusToIncidentStatus(taskForm.status),
           epic: taskForm.epic || null,
           environment: taskEnvironment || null,
+          assigned_to: primaryPersonId,
         } as any)
         .eq('id', incidentIdToLink);
 
@@ -511,26 +516,25 @@ export default function DailiesModule({
       }
       
       // Si hay una persona asignada, crear asignación en incident_assignments
-      if (taskForm.personIds.length > 0) {
-        const personId = taskForm.personIds[0];
-        
+      if (selectedPersonIds.length > 0) {
         // Verificar si ya existe una asignación para esta persona
-        const { data: existingAssignment } = await supabase
+        const { data: existingAssignments } = await supabase
           .from('incident_assignments')
-          .select('id')
+          .select('assigned_to')
           .eq('incident_id', incidentIdToLink)
-          .eq('assigned_to', personId)
-          .maybeSingle();
+          .in('assigned_to', selectedPersonIds);
+        const existingPersonIds = new Set((existingAssignments || []).map((assignment: any) => assignment.assigned_to));
+        const missingPersonIds = selectedPersonIds.filter(personId => !existingPersonIds.has(personId));
         
         // Solo crear si no existe
-        if (!existingAssignment) {
+        if (missingPersonIds.length > 0) {
           await supabase
             .from('incident_assignments')
-            .insert({
+            .insert(missingPersonIds.map(personId => ({
               incident_id: incidentIdToLink,
               assigned_to: personId,
               status: mapTaskStatusToIncidentStatus(taskForm.status)
-            } as any);
+            })) as any);
         }
       }
     }
@@ -547,12 +551,43 @@ export default function DailiesModule({
       ? (existingTasks[0].order_position || 0) + 1 
       : 0;
     
-    // Map task to current daily with order position
-    await supabase.from('daily_tasks').upsert({
+    const additionalCreatedIds: string[] = [];
+    const additionalPersonIds = selectedPersonIds.slice(1);
+    if (additionalPersonIds.length > 0) {
+      const { data: additionalTasks, error: additionalError } = await supabase
+        .from('tasks')
+        .insert(additionalPersonIds.map(personId => ({
+          title: taskForm.title,
+          description: taskForm.description || null,
+          project_id: projectId,
+          daily_id: dailyId,
+          person_id: personId,
+          assigned_to: personId,
+          incident_id: incidentIdToLink,
+          status: taskForm.status ?? 'pending',
+          environment: taskEnvironment || null,
+          is_auto_linked: creationMode === 'linked' || creationMode === 'manual',
+          related_ticket: relatedTicket,
+        })) as any)
+        .select('id');
+
+      if (additionalError) {
+        return toast({
+          title: 'Error',
+          description: 'La tarea se creó, pero no se pudieron crear todas las asignaciones en Seguimiento diario',
+          variant: 'destructive',
+        });
+      }
+
+      additionalCreatedIds.push(...((additionalTasks || []).map((task: any) => task.id).filter(Boolean)));
+    }
+
+    const taskIdsToLink = [created.id, ...additionalCreatedIds];
+    await supabase.from('daily_tasks').upsert(taskIdsToLink.map((taskId, index) => ({
       daily_id: dailyId,
-      task_id: created.id,
-      order_position: nextPosition
-    } as any, {
+      task_id: taskId,
+      order_position: nextPosition + index
+    })) as any, {
       onConflict: 'daily_id,task_id'
     } as any);
     setTaskForm({
@@ -670,6 +705,35 @@ export default function DailiesModule({
       } : x));
     }
   };
+
+  const updateTaskEnvironment = async (task: any, environment: TaskEnvironment) => {
+    if (!isResolvedTask(task.status as TaskStatus)) return;
+    preserveScroll();
+    const { error } = await supabase
+      .from('tasks')
+      .update({ environment })
+      .eq('id', task.id);
+
+    if (error) {
+      return toast({
+        title: 'Error',
+        description: 'No se pudo actualizar el entorno',
+        variant: 'destructive',
+      });
+    }
+
+    if (task.incident_id) {
+      await supabase
+        .from('incidents')
+        .update({ environment })
+        .eq('id', task.incident_id);
+      setIncidents(prev => prev.map(incident => incident.id === task.incident_id ? { ...incident, environment } : incident));
+    }
+
+    setTasks(prev => prev.map(item => item.id === task.id ? { ...item, environment } : item));
+    setSelectedTask(prev => prev?.id === task.id ? { ...prev, environment } : prev);
+  };
+
   const deleteTask = async (taskOrId: any) => {
     if (!confirm('¿Estás seguro de que quieres eliminar esta tarea?')) return;
 
@@ -1136,7 +1200,21 @@ export default function DailiesModule({
           </Badge>
         </TableCell>
         <TableCell>
-          {task.environment ? (
+          {isResolvedTask(task.status as TaskStatus) ? (
+            <Select
+              value={(task.environment || '') as TaskEnvironment | ''}
+              onValueChange={(value) => updateTaskEnvironment(task, value as TaskEnvironment)}
+            >
+              <SelectTrigger className="h-8 w-24">
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DEV">DEV</SelectItem>
+                <SelectItem value="PRE">PRE</SelectItem>
+                <SelectItem value="PRO">PRO</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : task.environment ? (
             <Badge variant="outline" className="bg-muted/50 border-transparent">
               {task.environment}
             </Badge>
