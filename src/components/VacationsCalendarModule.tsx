@@ -223,7 +223,7 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <CardTitle>Gestión de ausencias</CardTitle>
             <div className="flex items-center gap-2">
               <Button variant="secondary" onClick={handleDeleteAllVacations}>
@@ -238,26 +238,28 @@ export default function VacationsCalendarModule({ projectId }: VacationsCalendar
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid min-w-0 gap-6 md:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
             {/* Calendar */}
-            <div>
+            <div className="min-w-0">
               <h3 className="text-lg font-semibold mb-4">Calendario</h3>
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={(date) => date && setSelectedDate(date)}
-                locale={es}
-                className="rounded-md border p-3 pointer-events-auto w-full mx-auto px-[50px]"
-                components={{ DayContent: DayContent as any }}
-                modifiers={{ mutedDay: isMutedCalendarDay }}
-                modifiersClassNames={{
-                  mutedDay: "bg-muted/50 text-muted-foreground hover:bg-muted/60"
-                }}
-              />
+              <div className="max-w-full overflow-x-auto">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => date && setSelectedDate(date)}
+                  locale={es}
+                  className="w-max rounded-md border p-3 pointer-events-auto"
+                  components={{ DayContent: DayContent as any }}
+                  modifiers={{ mutedDay: isMutedCalendarDay }}
+                  modifiersClassNames={{
+                    mutedDay: "bg-muted/50 text-muted-foreground hover:bg-muted/60"
+                  }}
+                />
+              </div>
             </div>
 
             {/* Selected date info */}
-            <div>
+            <div className="min-w-0">
               <h3 className="text-lg font-semibold mb-4">
                 {format(selectedDate, 'EEEE, d MMMM yyyy', { locale: es })}
               </h3>
