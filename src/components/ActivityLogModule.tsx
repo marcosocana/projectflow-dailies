@@ -53,6 +53,21 @@ const CATEGORY_META: Record<string, { label: string; className: string; icon: Re
   corrective_improvement: { label: 'Mejora correctiva', className: 'bg-purple-600 text-white', icon: <span>C</span> },
 };
 
+const MONTH_OPTIONS = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+];
+
 export default function ActivityLogModule({ projectId }: ActivityLogModuleProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -239,11 +254,13 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                 <SelectValue placeholder="Mes" />
               </SelectTrigger>
               <SelectContent>
-                {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                {MONTH_OPTIONS.map((monthName, index) => {
+                  const month = index + 1;
+                  return (
                   <SelectItem key={month} value={String(month)}>
-                    {month}
+                    {monthName}
                   </SelectItem>
-                ))}
+                )})}
               </SelectContent>
             </Select>
             <Select value={selectedYear} onValueChange={setSelectedYear}>

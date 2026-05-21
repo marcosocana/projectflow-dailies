@@ -25,10 +25,11 @@ import InternalConfigModule from '@/components/InternalConfigModule';
 import UsersModule from '@/components/UsersModule';
 import UserProfileModule from '@/components/UserProfileModule';
 import { AppSidebar } from '@/components/AppSidebar';
+import BacklogComparePanel from '@/components/BacklogComparePanel';
 import NoteDetail from '@/components/NoteDetail';
 import NoteCreate from '@/components/NoteCreate';
 import ScrollToTop from '@/components/ScrollToTop';
-import { LogOut, Menu, Shield, User } from 'lucide-react';
+import { GitCompareArrows, LogOut, Menu, Shield, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import vecturaLogo from '@/assets/vectura-logo.png';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -37,6 +38,7 @@ const Dashboard = () => {
   const [projectPassword, setProjectPassword] = useState('');
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [compareBacklogOpen, setCompareBacklogOpen] = useState(false);
   const [projectSelectionReady, setProjectSelectionReady] = useState(false);
   const [hasUnreadActivity, setHasUnreadActivity] = useState(false);
   const { user, signOut } = useAuth();
@@ -179,6 +181,10 @@ const Dashboard = () => {
     });
   };
 
+  const handleCompareIdSelect = (id: string) => {
+    navigate(`/tasks?search=${encodeURIComponent(id)}`);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-white h-[64px] flex items-center">
@@ -252,24 +258,24 @@ const Dashboard = () => {
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/config">Seguimiento</a>
                   </Button>
-                  {isSuperUser && (
-                    <Button asChild variant="ghost" className="justify-start">
-                      <a href="/admin">Admin</a>
+                  {currentProject && (
+                    <Button variant="ghost" className="justify-start" onClick={() => setCompareBacklogOpen(true)}>
+                      Comparar con backlog
                     </Button>
                   )}
                 </nav>
               </SheetContent>
             </Sheet>
 
-            {isSuperUser && (
+            {currentProject && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => navigate('/admin')}
+                onClick={() => setCompareBacklogOpen(true)}
                 className="hidden items-center gap-2 md:flex"
               >
-                <Shield className="h-4 w-4" />
-                Admin
+                <GitCompareArrows className="h-4 w-4" />
+                Comparar con backlog
               </Button>
             )}
 
@@ -283,6 +289,21 @@ const Dashboard = () => {
                 <SheetHeader>
                   <SheetTitle></SheetTitle>
                 </SheetHeader>
+                {isSuperUser && (
+                  <div className="mt-6">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsProfileOpen(false);
+                        navigate('/admin');
+                      }}
+                      className="w-full justify-start gap-2"
+                    >
+                      <Shield className="h-4 w-4" />
+                      Admin
+                    </Button>
+                  </div>
+                )}
                 <div className="mt-6">
                   {currentProject && <UserProfileModule projectId={currentProject.id} />}
                 </div>
@@ -302,7 +323,7 @@ const Dashboard = () => {
       </header>
 
 
-      <main className="container mx-auto pt-[94px] py-0 px-0">
+      <main className="w-full pt-[94px] py-0 px-0">
         {!currentProject ? (
           <div className="max-w-4xl mx-auto space-y-6 px-4 md:px-0">
             {!projectSelectionReady || loadingProjects ? (
@@ -403,23 +424,34 @@ const Dashboard = () => {
               </div>
             )}
             <AppSidebar currentProject={currentProject} />
-            <main className="ml-0 md:ml-16 p-4 md:p-6 pt-[64px]">
-              <ScrollToTop />
-              <Routes>
-                <Route path="/" element={<Navigate to="tasks" replace />} />
-                <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
-                <Route path="activity" element={<ActivityLogModule projectId={currentProject.id} />} />
-                <Route path="releases" element={<ReleasesModule projectId={currentProject.id} />} />
-                <Route path="vacations" element={<VacationsModule projectId={currentProject.id} />} />
-                <Route path="repository" element={<RepositoryModule projectId={currentProject.id} />} />
-                <Route path="notes" element={<NotesModule projectId={currentProject.id} />} />
-                <Route path="notes/new" element={<NoteCreate projectId={currentProject.id} />} />
-                <Route path="notes/:noteId" element={<NoteDetail projectId={currentProject.id} />} />
-                <Route path="contacts" element={<ContactsModule projectId={currentProject.id} />} />
-                <Route path="links" element={<InterestingLinksModule projectId={currentProject.id} />} />
-                <Route path="config" element={<InternalConfigModule projectId={currentProject.id} dailiesPassword={(currentProject as any).dailies_password || 'default'} />} />
-                <Route path="users" element={<UsersModule projectId={currentProject.id} />} />
-              </Routes>
+            <main className="ml-0 md:ml-16 p-4 md:p-6 2xl:px-10 pt-[64px]">
+              <div className="flex items-start gap-4">
+                <div className="min-w-0 flex-1">
+                  <ScrollToTop />
+                  <Routes>
+                    <Route path="/" element={<Navigate to="tasks" replace />} />
+                    <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
+                    <Route path="activity" element={<ActivityLogModule projectId={currentProject.id} />} />
+                    <Route path="releases" element={<ReleasesModule projectId={currentProject.id} />} />
+                    <Route path="vacations" element={<VacationsModule projectId={currentProject.id} />} />
+                    <Route path="repository" element={<RepositoryModule projectId={currentProject.id} />} />
+                    <Route path="notes" element={<NotesModule projectId={currentProject.id} />} />
+                    <Route path="notes/new" element={<NoteCreate projectId={currentProject.id} />} />
+                    <Route path="notes/:noteId" element={<NoteDetail projectId={currentProject.id} />} />
+                    <Route path="contacts" element={<ContactsModule projectId={currentProject.id} />} />
+                    <Route path="links" element={<InterestingLinksModule projectId={currentProject.id} />} />
+                    <Route path="config" element={<InternalConfigModule projectId={currentProject.id} dailiesPassword={(currentProject as any).dailies_password || 'default'} />} />
+                    <Route path="users" element={<UsersModule projectId={currentProject.id} />} />
+                  </Routes>
+                </div>
+                {compareBacklogOpen && (
+                  <BacklogComparePanel
+                    projectId={currentProject.id}
+                    onClose={() => setCompareBacklogOpen(false)}
+                    onSelectId={handleCompareIdSelect}
+                  />
+                )}
+              </div>
             </main>
           </div>
         )}

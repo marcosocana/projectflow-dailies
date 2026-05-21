@@ -438,6 +438,11 @@ export default function IncidentsModule({
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+    const searchParam = params.get('search');
+    if (searchParam) {
+      setSearch(searchParam);
+      setCurrentPage(1);
+    }
     if (params.get('openCreate') !== '1') return;
     resetForm();
     setEditingId(null);
@@ -1523,9 +1528,6 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
               setCreateOpen(true);
             }}>
                 <Plus className="h-4 w-4 mr-2" /> Crear tarea
-              </Button>
-              <Button variant="outline" onClick={() => setCompareBacklogOpen(true)}>
-                Comparar con backlog
               </Button>
               <Button variant="ghost" size="icon" onClick={fetchIncidents} aria-label="Actualizar" title="Actualizar">
                 <RefreshCcw className="h-4 w-4" />
