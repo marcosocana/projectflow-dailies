@@ -32,7 +32,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import BacklogImportDialog from '@/components/BacklogImportDialog';
 import { recordIncidentCreated, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
-import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, loadNextInternalTaskId } from '@/lib/internalTaskIds';
+import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 interface IncidentsModuleProps {
@@ -286,7 +286,7 @@ const SortableIncidentCard = ({
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           <CategoryIcon category={getDisplayCategory(incident)} />
-          <span className="font-medium text-sm">{incident.incident_number ?? 'Sin ID'}</span>
+          <span className="font-medium text-sm">{formatIncidentReference(incident) ?? 'Sin ID'}</span>
         </div>
         <Badge variant="outline" className={`text-xs ${getStatusColor(incident.status)} border-transparent`}>
           {STATUS_LABELS[incident.status]}
@@ -927,7 +927,7 @@ export default function IncidentsModule({
             description: updatePayload.description || null,
             person_id: updatePayload.assigned_to,
             assigned_to: updatePayload.assigned_to,
-            related_ticket: incidentNumber,
+            related_ticket: formatIncidentReference({ incident_number: incidentNumber, additional_comments: updatePayload.additional_comments }) || incidentNumber,
             status: mapIncidentStatusToTaskStatus(updatePayload.status)
           } as any)
           .eq('incident_id', id)
@@ -1017,7 +1017,7 @@ export default function IncidentsModule({
             description: updatePayload.description || null,
             person_id: updatePayload.assigned_to,
             assigned_to: updatePayload.assigned_to,
-            related_ticket: incidentNumber,
+            related_ticket: formatIncidentReference({ incident_number: incidentNumber, additional_comments: updatePayload.additional_comments }) || incidentNumber,
             status: mapIncidentStatusToTaskStatus(updatePayload.status)
           } as any)
           .eq('incident_id', editingId)
@@ -1061,7 +1061,7 @@ export default function IncidentsModule({
     setEvidenceFile(null);
   };
   const copyToClipboard = async (incident: any) => {
-    const basicInfo = `ID: ${incident.incident_number ?? 'Sin ID'}
+    const basicInfo = `ID: ${formatIncidentReference(incident) ?? 'Sin ID'}
 Nombre: ${incident.name}
 Descripción: ${incident.description || 'Sin descripción'}
 Épica: ${incident.epic || 'No asignada'}
@@ -1643,7 +1643,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                       <TableCell className="w-12">
                         <CategoryIcon category={getDisplayCategory(i)} />
                       </TableCell>
-                      <TableCell className="font-mono w-20">{i.incident_number ?? '—'}</TableCell>
+                      <TableCell className="font-mono w-20">{formatIncidentReference(i) ?? '—'}</TableCell>
                       <TableCell className="font-medium w-80">
                         <div className="max-w-[320px] break-words hyphens-auto leading-tight">
                           {i.name}

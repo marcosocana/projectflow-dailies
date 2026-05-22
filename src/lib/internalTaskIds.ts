@@ -7,6 +7,21 @@ export const formatInternalTaskId = (value: number) => `INT${value}`;
 export const cleanInternalTaskIdMarker = (value: string | null | undefined) =>
   String(value ?? '').replace(INTERNAL_TASK_ID_MARKER, '').trim();
 
+export const hasInternalTaskIdMarker = (value: string | null | undefined) =>
+  String(value ?? '').includes(INTERNAL_TASK_ID_MARKER);
+
+export const formatIncidentReference = (
+  incident: { incident_number?: string | number | null; additional_comments?: string | null } | null | undefined,
+) => {
+  const value = incident?.incident_number;
+  if (value === null || value === undefined) return null;
+  const number = Number(value);
+  if (hasInternalTaskIdMarker(incident?.additional_comments) && Number.isFinite(number)) {
+    return formatInternalTaskId(number);
+  }
+  return String(value);
+};
+
 const extractInternalTaskNumber = (value: string | number | null | undefined) => {
   const match = String(value ?? '').trim().match(/^INT(\d+)$/i);
   if (!match) return null;

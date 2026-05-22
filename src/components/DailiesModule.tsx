@@ -26,7 +26,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { recordIncidentCreated, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
-import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, loadNextInternalTaskId } from '@/lib/internalTaskIds';
+import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import {
   DndContext,
   closestCenter,
@@ -357,7 +357,7 @@ export default function DailiesModule({
         epic: incident.epic || '',
         status: incident.status === 'resolved' ? 'resolved' : incident.status === 'in_progress' ? 'in_progress' : 'pending',
         environment: incident.status === 'resolved' ? (incident.environment || '') : '',
-        relatedTicket: formatTaskManualId(incident.incident_number),
+        relatedTicket: formatIncidentReference(incident) || '',
         category: getDisplayCategory(incident) || 'incident'
       });
       setCreationMode('linked');
@@ -1288,9 +1288,7 @@ export default function DailiesModule({
 
   // Helpers para formatear etiqueta de incidencia
   const getTicketCode = (incident: any) => {
-    const num = incident?.incident_number ?? null;
-    if (num === null || num === undefined) return null;
-    return String(num);
+    return formatIncidentReference(incident);
   };
   const formatIncidentLabel = (incident: any) => {
     const code = getTicketCode(incident);
@@ -2432,7 +2430,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                                    setEditForm(f => ({
                                      ...f,
                                      incidentId: i.id,
-                                     relatedTicket: formatTaskManualId(i.incident_number),
+                                     relatedTicket: formatIncidentReference(i) || '',
                                      epic: i.epic || '',
                                      category: getDisplayCategory(i) || f.category,
                                    }));

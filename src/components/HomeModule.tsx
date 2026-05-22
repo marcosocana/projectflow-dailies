@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import IncidentDetailDialog from '@/components/IncidentDetailDialog';
+import { formatIncidentReference } from '@/lib/internalTaskIds';
 import { 
   DndContext, 
   closestCenter, 
@@ -69,6 +70,19 @@ interface Person {
   role: string;
   color: string;
 }
+
+const getDisplayCategory = (incident: Pick<Incident, 'category' | 'additional_comments'>) => {
+  if (incident.category === 'corrective_improvement' || String(incident.additional_comments ?? '').includes('[tipo:mejora_correctiva]')) {
+    return 'corrective_improvement';
+  }
+  return incident.category;
+};
+
+const getCategoryLabel = (category: string) => {
+  if (category === 'incident') return 'Incidencia';
+  if (category === 'corrective_improvement') return 'Mejora correctiva';
+  return 'Evolutivo';
+};
 
 interface SortableCardProps {
   incident: Incident;
@@ -152,7 +166,7 @@ const SortableCard = ({ incident }: SortableCardProps) => {
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           {getCategoryIcon(getDisplayCategory(incident))}
-          <span className="font-medium text-sm">{incident.incident_number ?? 'Sin ID'}</span>
+          <span className="font-medium text-sm">{formatIncidentReference(incident) ?? 'Sin ID'}</span>
         </div>
         <Badge className={`text-xs ${getStatusColor(incident.status)}`}>
           {getStatusLabel(incident.status)}
@@ -654,7 +668,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
                 const assignedPerson = people.find(p => p.id === incident.assigned_to);
                 return (
                   <TableRow key={incident.id}>
-                    <TableCell className="font-medium">{incident.incident_number ?? '—'}</TableCell>
+                    <TableCell className="font-medium">{formatIncidentReference(incident) ?? '—'}</TableCell>
                     <TableCell>{incident.name}</TableCell>
                     <TableCell>
                       <Badge className={`${getStatusColor(incident.status)}`}>

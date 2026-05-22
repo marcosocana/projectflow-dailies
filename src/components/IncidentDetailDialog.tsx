@@ -14,7 +14,7 @@ import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 import { syncSingleAssignmentStatus } from '@/hooks/useSyncTaskStatus';
 import { useTaskAssignments } from '@/hooks/useTaskAssignments';
 import { recordIncidentStatusChange } from '@/lib/incidentActivityLog';
-import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker } from '@/lib/internalTaskIds';
+import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference } from '@/lib/internalTaskIds';
 
 // Options same as IncidentsModule to keep UI identical
 const STATUS_OPTIONS = [
@@ -344,7 +344,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
   const handleDelete = async () => {
     if (!selected || !selected.id) return;
     
-    if (!confirm(`¿Estás seguro de que quieres eliminar la tarea ${selected.incident_number ?? 'sin ID'}?`)) {
+    if (!confirm(`¿Estás seguro de que quieres eliminar la tarea ${formatIncidentReference(selected) ?? 'sin ID'}?`)) {
       return;
     }
     
@@ -378,7 +378,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     const status = STATUS_OPTIONS.find(s => s.value === selected.status)?.label || selected.status;
     const category = CATEGORY_OPTIONS.find(c => c.value === selected.category)?.label || selected.category;
     
-    const info = `ID: ${selected.incident_number ?? 'Sin ID'}
+    const info = `ID: ${formatIncidentReference(selected) ?? 'Sin ID'}
 Nombre: ${selected.name || 'Sin nombre'}
 Categoría: ${category}
 Estado: ${status}
@@ -401,7 +401,7 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {selected ? `Detalle ${selected.incident_number ?? 'sin ID'}` : 'Detalle de incidencia'}
+            {selected ? `Detalle ${formatIncidentReference(selected) ?? 'sin ID'}` : 'Detalle de incidencia'}
             {selected && (
               <>
                 <Button variant="ghost" size="sm" onClick={handleCopyInfo} className="p-1" title="Copiar info">
