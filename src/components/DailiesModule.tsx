@@ -82,7 +82,7 @@ const normalizeTaskEnvironment = (status: TaskStatus, environment: TaskEnvironme
   return isResolvedTask(status) ? environment : '';
 };
 
-const DAILY_TASK_STATUS_OPTIONS = ASSIGNMENT_STATUS_OPTIONS.filter(option => option.value !== 'closed');
+const DAILY_TASK_FORM_STATUS_OPTIONS = ASSIGNMENT_STATUS_OPTIONS.filter(option => option.value !== 'closed');
 
 const cleanAdditionalComments = (value: string | null | undefined) =>
   cleanInternalTaskIdMarker(String(value ?? '').replace(CORRECTIVE_CATEGORY_MARKER, '')).trim();
@@ -802,6 +802,9 @@ export default function DailiesModule({
     const next = selectValueToAssignment(value);
     const nextTaskStatus = mapIncidentStatusToTaskStatus(next.status) as TaskStatus;
     const nextEnvironment = nextTaskStatus === 'resolved' ? next.environment || 'PRO' : null;
+    const nextIncidentStatus = next.status === 'closed'
+      ? 'closed'
+      : mapTaskStatusToIncidentStatus(nextTaskStatus);
 
     const { error } = await supabase
       .from('tasks')
@@ -821,7 +824,6 @@ export default function DailiesModule({
 
     if (task.incident_id) {
       const linkedIncident = incidents.find((incident) => incident.id === task.incident_id);
-      const nextIncidentStatus = mapTaskStatusToIncidentStatus(nextTaskStatus);
       await supabase
         .from('incidents')
         .update({
@@ -1502,14 +1504,14 @@ export default function DailiesModule({
         </TableCell>
         <TableCell>
           <Select
-            value={assignmentToSelectValue(task.status, task.status_environment)}
+            value={assignmentToSelectValue(incident?.status === 'closed' ? 'closed' : task.status, incident?.status === 'closed' ? incident.status_environment : task.status_environment)}
             onValueChange={(value) => updateTaskStatus(task, value as AssignmentStatusValue)}
           >
             <SelectTrigger className="h-8 w-[172px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {DAILY_TASK_STATUS_OPTIONS.map(option => (
+              {ASSIGNMENT_STATUS_OPTIONS.map(option => (
                 <SelectItem key={option.value} value={option.value}>
                   <Badge variant="outline" className={`${getAppStatusTone(option.value)} text-[10px] px-1 py-0.5`}>
                     {option.label}
@@ -2441,7 +2443,7 @@ export default function DailiesModule({
                 >
                   <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
                   <SelectContent>
-                    {DAILY_TASK_STATUS_OPTIONS.map(option => (
+                    {DAILY_TASK_FORM_STATUS_OPTIONS.map(option => (
                       <SelectItem key={option.value} value={option.value}>
                         <Badge variant="outline" className={`${getAppStatusTone(option.value)} text-[10px] px-1 py-0.5`}>
                           {option.label}
@@ -2692,7 +2694,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                    >
                      <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
                      <SelectContent>
-                       {DAILY_TASK_STATUS_OPTIONS.map(option => (
+                       {DAILY_TASK_FORM_STATUS_OPTIONS.map(option => (
                          <SelectItem key={option.value} value={option.value}>
                            <Badge variant="outline" className={`${getAppStatusTone(option.value)} text-[10px] px-1 py-0.5`}>
                              {option.label}
