@@ -18,6 +18,7 @@ import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, extractInternalTask
 import {
   getAppStatusTone,
   getIncidentStatusLabel,
+  getResolvedSubstatusLabel,
   mapIncidentStatusToTaskStatus,
   normalizeEnvironment,
   type IncidentStatus,
@@ -380,13 +381,14 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
   const handleCopyInfo = () => {
     if (!selected) return;
 
-    const status = getIncidentStatusLabel(selected.status, selected.environment);
+    const status = getIncidentStatusLabel(selected.status);
     const category = CATEGORY_OPTIONS.find(c => c.value === selected.category)?.label || selected.category;
     
     const info = `ID: ${formatIncidentReference(selected) ?? 'Sin ID'}
 Nombre: ${selected.name || 'Sin nombre'}
 Categoría: ${category}
 Estado: ${status}
+Sub-estado: ${getResolvedSubstatusLabel(selected.status, selected.environment)}
 Fecha: ${new Date(selected.occurred_at).toLocaleDateString()}
 Entorno: ${selected.environment || 'N/A'}
 Canal: ${selected.device || 'N/A'}
@@ -468,7 +470,7 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                       <SelectItem key={s.value} value={s.value}>
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className={`${getAppStatusTone(s.value)} text-[10px] px-1 py-0.5`}>
-                            {getIncidentStatusLabel(s.value, detailForm.env)}
+                            {getIncidentStatusLabel(s.value)}
                           </Badge>
                         </div>
                       </SelectItem>

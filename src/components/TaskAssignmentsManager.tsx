@@ -398,7 +398,7 @@ export default function TaskAssignmentsManager({
               </Select>
 
               <Badge variant="outline" className={`${getAppStatusTone(assignment.status)} border-transparent`}>
-                {getIncidentStatusLabel(assignment.status, assignment.environment)}
+                {getIncidentStatusLabel(assignment.status)}
               </Badge>
 
               <Button 

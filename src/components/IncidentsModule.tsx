@@ -34,7 +34,7 @@ import BacklogImportDialog from '@/components/BacklogImportDialog';
 import { recordIncidentCreated, recordIncidentDeleted, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference, formatInternalTaskIdFromValue, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getAppStatusTone, getIncidentStatusLabel, mapIncidentStatusToTaskStatus, normalizeEnvironment, type TaskEnvironment } from '@/lib/taskStatus';
+import { getAppStatusTone, getIncidentStatusLabel, getResolvedSubstatusLabel, mapIncidentStatusToTaskStatus, normalizeEnvironment, type TaskEnvironment } from '@/lib/taskStatus';
 
 interface IncidentsModuleProps {
   projectId: string;
@@ -91,7 +91,7 @@ const statusOrder = ['pending', 'in_progress', 'resolved', 'blocked', 'closed'] 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Pendiente',
   in_progress: 'WIP',
-  in_qa: 'Resuelta / En PRE',
+  in_qa: 'Resuelta',
   resolved: 'Resuelta',
   blocked: 'Block',
   closed: 'Cerrada'
@@ -175,7 +175,7 @@ function StatusBadge({
   status: IncidentStatus;
   environment?: string | null;
 }) {
-  return <Badge variant="outline" className={`${getAppStatusTone(status)} border-transparent`}>{getIncidentStatusLabel(status, environment)}</Badge>;
+  return <Badge variant="outline" className={`${getAppStatusTone(status)} border-transparent`}>{getIncidentStatusLabel(status)}</Badge>;
 }
 function CategoryIcon({
   category
@@ -266,7 +266,7 @@ const SortableIncidentCard = ({
           <span className="font-medium text-sm">{formatIncidentReference(incident) ?? 'Sin ID'}</span>
         </div>
         <Badge variant="outline" className={`text-xs ${getAppStatusTone(incident.status)} border-transparent`}>
-          {getIncidentStatusLabel(incident.status, incident.environment)}
+          {getIncidentStatusLabel(incident.status)}
         </Badge>
       </div>
       <h4 className="font-semibold text-sm mb-2 line-clamp-2">{incident.name}</h4>
@@ -1044,7 +1044,8 @@ Descripción: ${incident.description || 'Sin descripción'}
 Canal: ${incident.device || 'No especificado'}
 Entorno: ${incident.environment || 'No especificado'}
 Fecha: ${new Date(incident.occurred_at).toLocaleDateString('es-ES')}
-Estado: ${getIncidentStatusLabel(incident.status, incident.environment)}`;
+Estado: ${getIncidentStatusLabel(incident.status)}
+Sub-estado: ${getResolvedSubstatusLabel(incident.status, incident.environment)}`;
     try {
       await navigator.clipboard.writeText(basicInfo);
       toast({
@@ -1314,7 +1315,7 @@ Estado: ${getIncidentStatusLabel(incident.status, incident.environment)}`;
             id: String(idRaw || '').trim(),
             type,
             excelStatus,
-            vectoreaStatus: incident ? getIncidentStatusLabel(incident.status, incident.environment) : 'No existe en Vectorea',
+            vectoreaStatus: incident ? getIncidentStatusLabel(incident.status) : 'No existe en Vectorea',
             include: true,
           };
         })
@@ -1616,6 +1617,7 @@ Estado: ${getIncidentStatusLabel(incident.status, incident.environment)}`;
                     <TableHead className="w-32 cursor-pointer select-none" onClick={() => toggleSort('status')}>
                       Estado {sortKey === 'status' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
+                    <TableHead className="w-28">Sub-estado</TableHead>
                     <TableHead className="w-16 cursor-pointer select-none" onClick={() => toggleSort('assigned_to')}>
                       Asign. {sortKey === 'assigned_to' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
@@ -1641,6 +1643,7 @@ Estado: ${getIncidentStatusLabel(incident.status, incident.environment)}`;
                       <TableCell className="w-24">{i.environment || '-'}</TableCell>
                       <TableCell>{new Date(i.occurred_at).toLocaleDateString('es-ES')}</TableCell>
                       <TableCell className="w-32"><StatusBadge status={i.status} environment={i.environment} /></TableCell>
+                      <TableCell className="w-28">{getResolvedSubstatusLabel(i.status, i.environment)}</TableCell>
                       <TableCell className="w-16">
                         <TaskAssignmentCell taskId={i.id} teamMembers={teamMembers} />
                       </TableCell>
@@ -1661,7 +1664,7 @@ Estado: ${getIncidentStatusLabel(incident.status, incident.environment)}`;
                   );
                 })}
                 {paginatedIncidents.length === 0 && <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground">No hay incidencias</TableCell>
+                    <TableCell colSpan={11} className="text-center text-muted-foreground">No hay incidencias</TableCell>
                   </TableRow>}
               </TableBody>
             </Table>

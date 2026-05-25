@@ -29,6 +29,7 @@ import { recordDailyTaskCreated, recordDailyTasksPersisted, recordIncidentCreate
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, extractInternalTaskNumber, formatIncidentReference, formatInternalTaskIdFromValue, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import {
   getAppStatusTone,
+  getResolvedSubstatusLabel,
   getTaskStatusLabel as getSharedTaskStatusLabel,
   mapTaskStatusToIncidentStatus,
 } from '@/lib/taskStatus';
@@ -61,7 +62,7 @@ type DailyPersistenceSummary = {
 const NOTE_MARKER = '[tipo:nota_seguimiento]';
 const CORRECTIVE_CATEGORY_MARKER = '[tipo:mejora_correctiva]';
 
-const getTaskStatusLabel = (status: TaskStatus, environment?: string | null) => getSharedTaskStatusLabel(status, environment);
+const getTaskStatusLabel = (status: TaskStatus) => getSharedTaskStatusLabel(status);
 
 const getTaskStatusTone = (status: TaskStatus) => {
   return getAppStatusTone(status);
@@ -1400,12 +1401,12 @@ export default function DailiesModule({
               onValueChange={(value) => updateTaskEnvironment(task, value as TaskEnvironment)}
             >
               <SelectTrigger className="h-8 w-24">
-                <SelectValue placeholder="—" />
+	                <SelectValue placeholder="-" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="DEV">DEV</SelectItem>
-                <SelectItem value="PRE">PRE</SelectItem>
-                <SelectItem value="PRO">PRO</SelectItem>
+	                <SelectItem value="DEV">En DEV</SelectItem>
+	                <SelectItem value="PRE">En PRE</SelectItem>
+	                <SelectItem value="PRO">En PRO</SelectItem>
               </SelectContent>
             </Select>
           ) : task.environment ? (
@@ -1413,7 +1414,7 @@ export default function DailiesModule({
               {task.environment}
             </Badge>
           ) : (
-            <span className="text-muted-foreground">—</span>
+            <span className="text-muted-foreground">-</span>
           )}
         </TableCell>
         <TableCell>
@@ -2008,7 +2009,7 @@ export default function DailiesModule({
                     <TableRow>
                       <TableHead className="w-8"></TableHead>
                       <TableHead>Estado</TableHead>
-                      <TableHead>Entorno</TableHead>
+                      <TableHead>Sub-estado</TableHead>
                       <TableHead>ID</TableHead>
                       <TableHead>Tipo</TableHead>
                       <TableHead>Tarea</TableHead>
@@ -2769,7 +2770,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                             variant="outline"
                             className={getTaskStatusTone(task.status as TaskStatus)}
                           >
-                            {getTaskStatusLabel(task.status as TaskStatus, task.environment)}
+	            {getTaskStatusLabel(task.status as TaskStatus)}
                           </Badge>
                           {person && <div className="flex items-center gap-1">
                               <span className="h-2 w-2 rounded" style={{
@@ -2834,6 +2835,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                 <TableHeader>
                   <TableRow>
                     <SortableHeader field="status">Estado</SortableHeader>
+                    <TableHead>Sub-estado</TableHead>
                     <SortableHeader field="title">Tarea</SortableHeader>
                     <TableHead>ID</TableHead>
                     <TableHead>Tipo</TableHead>
@@ -2852,9 +2854,10 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                             variant="outline"
                             className={getTaskStatusTone(task.status as TaskStatus)}
                           >
-                            {getTaskStatusLabel(task.status as TaskStatus, task.environment)}
+                            {getTaskStatusLabel(task.status as TaskStatus)}
                           </Badge>
                         </TableCell>
+                        <TableCell>{getResolvedSubstatusLabel(task.status as TaskStatus, task.environment)}</TableCell>
                          <TableCell>
                            <div className="flex items-center gap-2">
                              {task.assigned_to && (
@@ -2889,7 +2892,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                       </TableRow>;
                 })}
                   {filteredTasks.length === 0 && <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center text-muted-foreground">
                         No se encontraron tareas
                       </TableCell>
                     </TableRow>}

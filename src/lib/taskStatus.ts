@@ -23,9 +23,9 @@ export const INCIDENT_STATUS_OPTIONS: Array<{ value: IncidentStatus; label: stri
 export const ASSIGNMENT_STATUS_OPTIONS: Array<{ value: AssignmentStatusValue; label: string }> = [
   { value: 'pending', label: 'Pendiente' },
   { value: 'in_progress', label: 'WIP' },
-  { value: 'resolved_DEV', label: 'Resuelta / En DEV' },
-  { value: 'resolved_PRE', label: 'Resuelta / En PRE' },
-  { value: 'resolved_PRO', label: 'Resuelta / En PRO' },
+  { value: 'resolved_DEV', label: 'Resuelta - En DEV' },
+  { value: 'resolved_PRE', label: 'Resuelta - En PRE' },
+  { value: 'resolved_PRO', label: 'Resuelta - En PRO' },
   { value: 'blocked', label: 'Block' },
   { value: 'closed', label: 'Cerrada' },
 ];
@@ -41,26 +41,31 @@ export const isResolvedStatus = (status: string | null | undefined) =>
 
 export const getIncidentStatusLabel = (
   status: IncidentStatus | string | null | undefined,
-  environment?: string | null,
 ) => {
   if (status === 'pending') return 'Pendiente';
   if (status === 'in_progress') return 'WIP';
   if (status === 'blocked') return 'Block';
   if (status === 'closed') return 'Cerrada';
-  if (status === 'in_qa') return 'Resuelta / En PRE';
-  if (status === 'resolved') return `Resuelta / En ${normalizeEnvironment(environment) || 'PRO'}`;
+  if (status === 'in_qa' || status === 'resolved') return 'Resuelta';
   return String(status || 'Pendiente');
 };
 
 export const getTaskStatusLabel = (
   status: TaskStatus | string | null | undefined,
-  environment?: string | null,
 ) => {
   if (status === 'in_progress') return 'WIP';
   if (status === 'blocked') return 'Block';
-  if (status === 'resolved') return `Resuelta / En ${normalizeEnvironment(environment) || 'PRO'}`;
-  if (status === 'resolved_yesterday') return `Resuelta ayer / En ${normalizeEnvironment(environment) || 'PRO'}`;
+  if (status === 'resolved') return 'Resuelta';
+  if (status === 'resolved_yesterday') return 'Resuelta ayer';
   return 'Pendiente';
+};
+
+export const getResolvedSubstatusLabel = (
+  status: IncidentStatus | TaskStatus | string | null | undefined,
+  environment?: string | null,
+) => {
+  if (!isResolvedStatus(status)) return '-';
+  return `En ${normalizeEnvironment(status === 'in_qa' ? 'PRE' : environment) || 'PRO'}`;
 };
 
 export const getIncidentStatusTone = (status: IncidentStatus | string | null | undefined) => {

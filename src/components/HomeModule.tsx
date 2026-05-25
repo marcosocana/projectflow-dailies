@@ -15,6 +15,7 @@ import { formatIncidentReference } from '@/lib/internalTaskIds';
 import {
   getIncidentStatusLabel,
   getIncidentStatusTone,
+  getResolvedSubstatusLabel,
   mapIncidentStatusToTaskStatus,
   normalizeEnvironment,
   type IncidentStatus,
@@ -153,7 +154,7 @@ const SortableCard = ({ incident }: SortableCardProps) => {
           <span className="font-medium text-sm">{formatIncidentReference(incident) ?? 'Sin ID'}</span>
         </div>
         <Badge className={`text-xs ${getIncidentStatusTone(incident.status)}`}>
-          {getIncidentStatusLabel(incident.status, incident.environment)}
+          {getIncidentStatusLabel(incident.status)}
         </Badge>
       </div>
       <h4 className="font-semibold text-sm mb-2 line-clamp-2">{incident.name}</h4>
@@ -620,6 +621,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
                 <TableHead>Número</TableHead>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead>Sub-estado</TableHead>
                 <TableHead>Categoría</TableHead>
                 <TableHead>Asignado a</TableHead>
                 <TableHead>Fecha</TableHead>
@@ -635,9 +637,10 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
                     <TableCell>{incident.name}</TableCell>
                     <TableCell>
                       <Badge className={`${getIncidentStatusTone(incident.status)}`}>
-                        {getIncidentStatusLabel(incident.status, incident.environment)}
+                        {getIncidentStatusLabel(incident.status)}
                       </Badge>
                     </TableCell>
+                    <TableCell>{getResolvedSubstatusLabel(incident.status, incident.environment)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         {getCategoryIcon(getDisplayCategory(incident))}

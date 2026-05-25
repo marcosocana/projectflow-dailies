@@ -39,7 +39,7 @@ const STATUS_LABELS: Record<string, string> = {
   deleted: 'Eliminada',
   pending: 'Pendiente',
   in_progress: 'WIP',
-  in_qa: 'Resuelta / En PRE',
+  in_qa: 'Resuelta',
   resolved: 'Resuelta',
   blocked: 'Block',
   closed: 'Cerrada',
