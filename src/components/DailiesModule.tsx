@@ -26,7 +26,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { recordDailyTaskCreated, recordDailyTasksPersisted, recordIncidentCreated, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
-import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference, loadNextInternalTaskId } from '@/lib/internalTaskIds';
+import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, extractInternalTaskNumber, formatIncidentReference, formatInternalTaskIdFromValue, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import {
   DndContext,
   closestCenter,
@@ -427,6 +427,10 @@ export default function DailiesModule({
       }
     } else if (!relatedTicket) {
       relatedTicket = await loadNextAutoTaskId();
+      setTaskForm(f => ({ ...f, relatedTicket }));
+    }
+    if (!manualTaskIdEnabled) {
+      relatedTicket = formatInternalTaskIdFromValue(relatedTicket);
       setTaskForm(f => ({ ...f, relatedTicket }));
     }
 
@@ -1510,6 +1514,13 @@ export default function DailiesModule({
     return String(value ?? '').replace(/\D/g, '').slice(0, 6);
   };
 
+  const formatDailyTaskRelatedTicket = (task: any, linkedIncident?: any) => {
+    const incidentReference = formatIncidentReference(linkedIncident);
+    if (incidentReference) return incidentReference;
+    const value = String(task?.related_ticket ?? '').trim();
+    return /^INT\d+$/i.test(value) ? formatInternalTaskIdFromValue(value) : formatTaskManualId(value);
+  };
+
   const loadNextAutoTaskId = async () => {
     return (await loadNextInternalTaskId(projectId)).label;
   };
@@ -1645,7 +1656,7 @@ export default function DailiesModule({
     }
     setEditForm({
       title: task.title || '',
-      relatedTicket: formatTaskManualId(task.related_ticket),
+      relatedTicket: formatDailyTaskRelatedTicket(task, linkedIncident),
       description: task.description || '',
       personIds,
       incidentId: task.incident_id || '',
@@ -1685,7 +1696,10 @@ export default function DailiesModule({
     if (!selectedTask) return;
     const handler = setTimeout(async () => {
       preserveScroll();
-      const relatedTicket = editForm.relatedTicket.trim() ? formatTaskManualId(editForm.relatedTicket) : '';
+      const linkedIncident = incidents.find(i => i.id === editForm.incidentId);
+      const relatedTicket = editForm.relatedTicket.trim()
+        ? formatDailyTaskRelatedTicket({ related_ticket: editForm.relatedTicket }, linkedIncident)
+        : '';
       const taskEnvironment = normalizeTaskEnvironment(editForm.status, editForm.environment);
       if (isResolvedTask(editForm.status) && !taskEnvironment) {
         return;
@@ -1714,10 +1728,12 @@ export default function DailiesModule({
 
           const nextIncidentStatus = mapTaskStatusToIncidentStatus(update.status);
           const nextCategory = serializeCategory(editForm.category, currentIncident?.additional_comments);
+          const nextIncidentNumber = extractInternalTaskNumber(relatedTicket);
+          if (!nextIncidentNumber) return;
           await supabase
             .from('incidents')
             .update({
-              incident_number: Number(relatedTicket),
+              incident_number: nextIncidentNumber,
               name: update.title,
               epic: editForm.epic || null,
               description: update.description,
@@ -1733,7 +1749,7 @@ export default function DailiesModule({
             await recordIncidentStatusChange({
               projectId,
               incidentId: update.incident_id,
-              incidentNumber: Number(relatedTicket),
+              incidentNumber: nextIncidentNumber,
               incidentName: update.title,
               incidentCategory: currentIncident.category,
               fromStatus: currentIncident.status,
@@ -2506,14 +2522,16 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                 <div>
                   <RequiredLabel>ID</RequiredLabel>
                   <Input
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                  maxLength={6}
-                  placeholder="Máx. 6 dígitos"
-                  value={editForm.relatedTicket}
+                    inputMode={/^INT/i.test(editForm.relatedTicket) ? 'text' : 'numeric'}
+                    pattern={/^INT/i.test(editForm.relatedTicket) ? undefined : '[0-9]*'}
+                    maxLength={/^INT/i.test(editForm.relatedTicket) ? undefined : 6}
+                    placeholder={/^INT/i.test(editForm.relatedTicket) ? 'INT1' : 'Máx. 6 dígitos'}
+                    value={editForm.relatedTicket}
                     onChange={e => setEditForm(f => ({
                       ...f,
-                      relatedTicket: formatTaskManualId(e.target.value)
+                      relatedTicket: /^INT/i.test(f.relatedTicket) || /^INT/i.test(e.target.value)
+                        ? formatInternalTaskIdFromValue(e.target.value)
+                        : formatTaskManualId(e.target.value)
                     }))}
                     required
                   />

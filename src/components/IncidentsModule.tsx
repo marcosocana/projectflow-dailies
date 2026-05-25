@@ -32,7 +32,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import BacklogImportDialog from '@/components/BacklogImportDialog';
 import { recordIncidentCreated, recordIncidentDeleted, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
-import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference, loadNextInternalTaskId } from '@/lib/internalTaskIds';
+import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference, formatInternalTaskIdFromValue, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 interface IncidentsModuleProps {
@@ -750,7 +750,7 @@ export default function IncidentsModule({
       const environmentValue = form.environment || '';
       const deviceValue = form.device || '';
       const categoryPayload = serializeCategory(form.category, form.additionalComments);
-      const incidentReference = manualIncidentIdEnabled ? incidentNumber : `INT${incidentNumber}`;
+      const incidentReference = manualIncidentIdEnabled ? incidentNumber : formatInternalTaskIdFromValue(incidentNumber);
       const additionalComments = [
         categoryPayload.additional_comments,
         !manualIncidentIdEnabled ? INTERNAL_TASK_ID_MARKER : '',

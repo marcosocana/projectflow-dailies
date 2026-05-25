@@ -4,6 +4,19 @@ export const INTERNAL_TASK_ID_MARKER = '[id:int]';
 
 export const formatInternalTaskId = (value: number) => `INT${value}`;
 
+export const extractInternalTaskNumber = (value: string | number | null | undefined) => {
+  const normalized = String(value ?? '').trim().replace(/^INT/i, '');
+  const match = normalized.match(/^\d+$/);
+  if (!match) return null;
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+export const formatInternalTaskIdFromValue = (value: string | number | null | undefined) => {
+  const number = extractInternalTaskNumber(String(value ?? '').replace(/\D/g, ''));
+  return Number.isFinite(number) && number > 0 ? formatInternalTaskId(number) : '';
+};
+
 export const cleanInternalTaskIdMarker = (value: string | null | undefined) =>
   String(value ?? '').replace(INTERNAL_TASK_ID_MARKER, '').trim();
 
@@ -22,7 +35,7 @@ export const formatIncidentReference = (
   return String(value);
 };
 
-const extractInternalTaskNumber = (value: string | number | null | undefined) => {
+const extractRelatedTicketInternalTaskNumber = (value: string | number | null | undefined) => {
   const match = String(value ?? '').trim().match(/^INT(\d+)$/i);
   if (!match) return null;
   const parsed = Number(match[1]);
@@ -43,7 +56,7 @@ export async function loadNextInternalTaskId(projectId: string) {
   ]);
 
   const taskNumbers = (taskRows || [])
-    .map(row => extractInternalTaskNumber(row.related_ticket))
+    .map(row => extractRelatedTicketInternalTaskNumber(row.related_ticket))
     .filter((value): value is number => value !== null);
 
   const incidentNumbers = (incidentRows || [])

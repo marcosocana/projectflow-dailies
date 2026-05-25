@@ -14,7 +14,7 @@ import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 import { syncSingleAssignmentStatus } from '@/hooks/useSyncTaskStatus';
 import { useTaskAssignments } from '@/hooks/useTaskAssignments';
 import { recordIncidentDeleted, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
-import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference } from '@/lib/internalTaskIds';
+import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, extractInternalTaskNumber, formatIncidentReference, formatInternalTaskIdFromValue } from '@/lib/internalTaskIds';
 
 // Options same as IncidentsModule to keep UI identical
 const STATUS_OPTIONS = [
@@ -227,7 +227,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         const pick = (raw: string, allowed: readonly string[]) =>
           (raw || '').split(',').map((s) => s.trim()).find((v) => (allowed as readonly string[]).includes(v)) || '';
         setDetailForm({
-          incidentNumber: formatManualId(data.incident_number),
+          incidentNumber: formatIncidentReference(data) || formatManualId(data.incident_number),
           name: data.name || '',
           description: data.description || '',
           occurredAt: data.occurred_at ? new Date(data.occurred_at).toISOString() : new Date().toISOString(),
@@ -262,8 +262,10 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     if (!open || !selected) return;
     if (isInitialDetailLoad.current) return;
     const handler = setTimeout(async () => {
-      const manualIncidentNumber = formatManualId(detailForm.incidentNumber);
-      if (!manualIncidentNumber) return;
+      const incidentNumber = extractInternalTaskNumber(detailForm.incidentNumber);
+      if (!incidentNumber) return;
+      const isInternalIncident = String(selected.additional_comments ?? '').includes(INTERNAL_TASK_ID_MARKER);
+      const incidentReference = isInternalIncident ? formatInternalTaskIdFromValue(incidentNumber) : String(incidentNumber);
       const categoryPayload = serializeCategory(
         detailForm.category,
         [
@@ -272,7 +274,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         ].filter(Boolean).join('\n'),
       );
       const payload: any = {
-        incident_number: Number(manualIncidentNumber),
+        incident_number: incidentNumber,
         name: detailForm.name,
         description: detailForm.description,
         environment: detailForm.env,
@@ -318,7 +320,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         .update({
           title: payload.name,
           description: payload.description || null,
-          related_ticket: manualIncidentNumber,
+          related_ticket: incidentReference,
           status: mapIncidentStatusToTaskStatus(payload.status)
         } as any)
         .eq('incident_id', selected.id)
@@ -440,12 +442,17 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
               <div>
                 <Label>ID</Label>
                 <Input
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={6}
-                  placeholder="Máx. 6 dígitos"
+                  inputMode={String(selected.additional_comments ?? '').includes(INTERNAL_TASK_ID_MARKER) ? 'text' : 'numeric'}
+                  pattern={String(selected.additional_comments ?? '').includes(INTERNAL_TASK_ID_MARKER) ? undefined : '[0-9]*'}
+                  maxLength={String(selected.additional_comments ?? '').includes(INTERNAL_TASK_ID_MARKER) ? undefined : 6}
+                  placeholder={String(selected.additional_comments ?? '').includes(INTERNAL_TASK_ID_MARKER) ? 'INT1' : 'Máx. 6 dígitos'}
                   value={detailForm.incidentNumber}
-                  onChange={(e) => setDetailForm((f) => ({ ...f, incidentNumber: formatManualId(e.target.value) }))}
+                  onChange={(e) => setDetailForm((f) => ({
+                    ...f,
+                    incidentNumber: String(selected.additional_comments ?? '').includes(INTERNAL_TASK_ID_MARKER)
+                      ? formatInternalTaskIdFromValue(e.target.value)
+                      : formatManualId(e.target.value)
+                  }))}
                   required
                 />
               </div>
