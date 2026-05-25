@@ -14,6 +14,7 @@ import { Plus, Loader2 } from 'lucide-react';
 import vecturaLogo from '@/assets/vectura-logo.png';
 import TaskAssignmentsInput, { type TaskAssignment } from '@/components/TaskAssignmentsInput';
 import type { Database } from '@/integrations/supabase/types';
+import { mapIncidentStatusToTaskStatus, normalizeEnvironment } from '@/lib/taskStatus';
 
 type IncidentStatus = Database['public']['Enums']['incident_status'];
 
@@ -23,8 +24,8 @@ const DEVICE_OPTIONS = ['APP', 'Web', 'Otro', 'N/A'] as const;
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
   { value: 'in_progress', label: 'En curso' },
-  { value: 'in_qa', label: 'En pruebas' },
   { value: 'resolved', label: 'Resuelta' },
+  { value: 'blocked', label: 'Block' },
   { value: 'closed', label: 'Cerrada' }
 ];
 
@@ -49,8 +50,8 @@ const serializeCategory = (category: string, additionalComments = '') => {
 const STATUS_BADGE_CLS: Record<string, string> = {
   pending: 'bg-muted text-muted-foreground',
   in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
-  in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]',
   resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
+  blocked: 'bg-destructive text-destructive-foreground',
   closed: 'bg-destructive text-destructive-foreground'
 };
 
@@ -234,7 +235,8 @@ export default function ExternalTaskCreate() {
         const assignmentsToInsert = assignments.map(a => ({
           incident_id: id,
           assigned_to: a.person,
-          status: a.status
+          status: a.status,
+          environment: normalizeEnvironment(a.environment)
         }));
         await supabase.from('incident_assignments').insert(assignmentsToInsert);
         
@@ -271,10 +273,7 @@ export default function ExternalTaskCreate() {
           if (daily) {
             // Create a task in the tasks table for each assignment
             const tasksToInsert = assignments.map(a => {
-              const taskStatus: 'pending' | 'in_progress' | 'resolved' = 
-                a.status === 'resolved' || a.status === 'closed' ? 'resolved' : 
-                a.status === 'in_progress' || a.status === 'in_qa' ? 'in_progress' : 
-                'pending';
+              const taskStatus = mapIncidentStatusToTaskStatus(a.status);
 
               return {
                 title: form.name,
@@ -284,6 +283,7 @@ export default function ExternalTaskCreate() {
                 person_id: a.person,
                 assigned_to: a.person,
                 status: taskStatus,
+                environment: taskStatus === 'resolved' ? normalizeEnvironment(a.environment) || 'PRO' : null,
                 is_auto_linked: true,
                 related_ticket: incidentNumber
               };

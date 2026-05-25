@@ -28,6 +28,11 @@ import { cn } from '@/lib/utils';
 import { recordDailyTaskCreated, recordDailyTasksPersisted, recordIncidentCreated, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, extractInternalTaskNumber, formatIncidentReference, formatInternalTaskIdFromValue, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import {
+  getAppStatusTone,
+  getTaskStatusLabel as getSharedTaskStatusLabel,
+  mapTaskStatusToIncidentStatus,
+} from '@/lib/taskStatus';
+import {
   DndContext,
   closestCenter,
   KeyboardSensor,
@@ -44,7 +49,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-type TaskStatus = 'pending' | 'in_progress' | 'resolved' | 'resolved_yesterday';
+type TaskStatus = 'pending' | 'in_progress' | 'resolved' | 'resolved_yesterday' | 'blocked';
 type IncidentCategory = 'incident' | 'improvement' | 'corrective_improvement';
 type TaskEnvironment = 'DEV' | 'PRE' | 'PRO';
 type DailyPersistenceSummary = {
@@ -56,30 +61,10 @@ type DailyPersistenceSummary = {
 const NOTE_MARKER = '[tipo:nota_seguimiento]';
 const CORRECTIVE_CATEGORY_MARKER = '[tipo:mejora_correctiva]';
 
-// Helper function to map task status to incident status
-const mapTaskStatusToIncidentStatus = (taskStatus: TaskStatus): 'pending' | 'in_progress' | 'resolved' => {
-  if (taskStatus === 'resolved_yesterday') return 'resolved';
-  return taskStatus as 'pending' | 'in_progress' | 'resolved';
-};
-
-const getTaskStatusLabel = (status: TaskStatus) => {
-  if (status === 'in_progress') return 'WIP';
-  if (status === 'resolved') return 'Resuelta';
-  if (status === 'resolved_yesterday') return 'Resuelta ayer';
-  return 'Pendiente';
-};
+const getTaskStatusLabel = (status: TaskStatus, environment?: string | null) => getSharedTaskStatusLabel(status, environment);
 
 const getTaskStatusTone = (status: TaskStatus) => {
-  if (status === 'in_progress') {
-    return 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent';
-  }
-  if (status === 'resolved') {
-    return 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent';
-  }
-  if (status === 'resolved_yesterday') {
-    return 'bg-[hsl(var(--success)/0.5)] text-[hsl(var(--success-foreground))] border-transparent';
-  }
-  return 'bg-muted text-muted-foreground border-transparent';
+  return getAppStatusTone(status);
 };
 
 const isResolvedTask = (status: TaskStatus) => status === 'resolved' || status === 'resolved_yesterday';
@@ -397,7 +382,7 @@ export default function DailiesModule({
         personIds: [],
         incidentId: incident.id,
         epic: incident.epic || '',
-        status: incident.status === 'resolved' ? 'resolved' : incident.status === 'in_progress' ? 'in_progress' : 'pending',
+        status: incident.status === 'resolved' ? 'resolved' : incident.status === 'in_progress' ? 'in_progress' : incident.status === 'blocked' ? 'blocked' : 'pending',
         environment: incident.status === 'resolved' ? (incident.environment || '') : '',
         relatedTicket: formatIncidentReference(incident) || '',
         category: getDisplayCategory(incident) || 'incident'
@@ -1004,7 +989,8 @@ export default function DailiesModule({
           const statusOrder = {
             'in_progress': 0,
             'pending': 1,
-            'resolved': 2
+            'blocked': 2,
+            'resolved': 3
           };
           const aOrder = statusOrder[a.status as keyof typeof statusOrder] ?? 3;
           const bOrder = statusOrder[b.status as keyof typeof statusOrder] ?? 3;
@@ -1047,7 +1033,7 @@ export default function DailiesModule({
       
       switch (sortField) {
         case 'status':
-          const statusOrder = { 'in_progress': 0, 'pending': 1, 'resolved': 2 };
+          const statusOrder = { 'in_progress': 0, 'pending': 1, 'blocked': 2, 'resolved': 3 };
           aValue = statusOrder[a.status as keyof typeof statusOrder] ?? 3;
           bValue = statusOrder[b.status as keyof typeof statusOrder] ?? 3;
           break;
@@ -1100,8 +1086,9 @@ export default function DailiesModule({
   const statusOrder: Record<TaskStatus, number> = {
     in_progress: 0,
     pending: 1,
-    resolved: 2,
-    resolved_yesterday: 3,
+    blocked: 2,
+    resolved: 3,
+    resolved_yesterday: 4,
   };
 
   // Daily list is always sorted by status: WIP, Pending, Resolved, Resolved yesterday.
@@ -1586,6 +1573,7 @@ export default function DailiesModule({
       pending: number;
       inProgress: number;
       resolved: number;
+      blocked: number;
     }>();
 
     activeDailyTasks.forEach(task => {
@@ -1598,10 +1586,12 @@ export default function DailiesModule({
         pending: 0,
         inProgress: 0,
         resolved: 0,
+        blocked: 0,
       };
       const next = { ...current };
       if (task.status === 'in_progress') next.inProgress += 1;
       else if (isResolvedTask(task.status)) next.resolved += 1;
+      else if (task.status === 'blocked') next.blocked += 1;
       else next.pending += 1;
       counts.set(key, {
         color: person?.color || current.color,
@@ -1997,6 +1987,12 @@ export default function DailiesModule({
                         >
                           {item.resolved}
                         </span>
+                        <span
+                          className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-semibold text-destructive-foreground"
+                          title={`Block: ${item.blocked}`}
+                        >
+                          {item.blocked}
+                        </span>
                       </span>
                     </Badge>
                   ))}
@@ -2336,6 +2332,7 @@ export default function DailiesModule({
                     <SelectItem value="pending">Pendiente</SelectItem>
                     <SelectItem value="in_progress">WIP</SelectItem>
                     <SelectItem value="resolved">Resuelta</SelectItem>
+                    <SelectItem value="blocked">Block</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -2598,6 +2595,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                        <SelectItem value="pending">Pendiente</SelectItem>
                        <SelectItem value="in_progress">WIP</SelectItem>
                        <SelectItem value="resolved">Resuelta</SelectItem>
+                       <SelectItem value="blocked">Block</SelectItem>
                      </SelectContent>
                    </Select>
                  </div>
@@ -2769,23 +2767,9 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                         <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                           <Badge 
                             variant="outline"
-                            className={
-                              task.status === 'in_progress' 
-                                ? 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent'
-                                : task.status === 'resolved' 
-                                ? 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent'
-                                : task.status === 'resolved_yesterday'
-                                ? 'bg-[hsl(var(--success)/0.5)] text-[hsl(var(--success-foreground))] border-transparent'
-                                : 'bg-muted text-muted-foreground border-transparent'
-                            }
+                            className={getTaskStatusTone(task.status as TaskStatus)}
                           >
-                            {task.status === 'in_progress' 
-                              ? 'WIP' 
-                              : task.status === 'resolved' 
-                              ? 'Resuelta' 
-                              : task.status === 'resolved_yesterday'
-                              ? 'Resuelta ayer'
-                              : 'Pendiente'}
+                            {getTaskStatusLabel(task.status as TaskStatus, task.environment)}
                           </Badge>
                           {person && <div className="flex items-center gap-1">
                               <span className="h-2 w-2 rounded" style={{
@@ -2840,6 +2824,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                   <SelectItem value="in_progress">WIP</SelectItem>
                   <SelectItem value="pending">Pendiente</SelectItem>
                   <SelectItem value="resolved">Resuelta</SelectItem>
+                  <SelectItem value="blocked">Block</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2865,23 +2850,9 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                         <TableCell>
                           <Badge 
                             variant="outline"
-                            className={
-                              task.status === 'in_progress' 
-                                ? 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent'
-                                : task.status === 'resolved' 
-                                ? 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent'
-                                : task.status === 'resolved_yesterday'
-                                ? 'bg-[hsl(var(--success)/0.5)] text-[hsl(var(--success-foreground))] border-transparent'
-                                : 'bg-muted text-muted-foreground border-transparent'
-                            }
+                            className={getTaskStatusTone(task.status as TaskStatus)}
                           >
-                            {task.status === 'in_progress' 
-                              ? 'WIP' 
-                              : task.status === 'resolved' 
-                              ? 'Resuelta' 
-                              : task.status === 'resolved_yesterday'
-                              ? 'Resuelta ayer'
-                              : 'Pendiente'}
+                            {getTaskStatusLabel(task.status as TaskStatus, task.environment)}
                           </Badge>
                         </TableCell>
                          <TableCell>

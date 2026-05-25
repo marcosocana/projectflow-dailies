@@ -15,23 +15,22 @@ import { syncSingleAssignmentStatus } from '@/hooks/useSyncTaskStatus';
 import { useTaskAssignments } from '@/hooks/useTaskAssignments';
 import { recordIncidentDeleted, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, extractInternalTaskNumber, formatIncidentReference, formatInternalTaskIdFromValue } from '@/lib/internalTaskIds';
+import {
+  getAppStatusTone,
+  getIncidentStatusLabel,
+  mapIncidentStatusToTaskStatus,
+  normalizeEnvironment,
+  type IncidentStatus,
+} from '@/lib/taskStatus';
 
 // Options same as IncidentsModule to keep UI identical
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
   { value: 'in_progress', label: 'WIP' },
-  { value: 'in_qa', label: 'En QA' },
-  { value: 'resolved', label: 'En PRO' },
+  { value: 'resolved', label: 'Resuelta' },
+  { value: 'blocked', label: 'Block' },
   { value: 'closed', label: 'Cerrada' },
 ] as const;
-
-const STATUS_BADGE_CLS: Record<string, string> = {
-  pending: 'bg-muted text-muted-foreground',
-  in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
-  in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]',
-  resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
-  closed: 'bg-destructive text-destructive-foreground',
-};
 
 const CATEGORY_OPTIONS = [
   { value: 'incident', label: 'Incidencia' },
@@ -43,12 +42,6 @@ const ENV_OPTIONS = ['DEV','PRE','PRO','Otro'] as const;
 const DEVICE_OPTIONS = ['Web','APP','Otro'] as const;
 
 const MADRID_TIME_ZONE = 'Europe/Madrid';
-
-const mapIncidentStatusToTaskStatus = (status: string): 'pending' | 'in_progress' | 'resolved' => {
-  if (status === 'closed') return 'resolved';
-  if (status === 'in_qa') return 'in_progress';
-  return status as 'pending' | 'in_progress' | 'resolved';
-};
 
 const formatManualId = (value: string | number | null | undefined) =>
   String(value ?? '').replace(/\D/g, '').slice(0, 6);
@@ -231,11 +224,11 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           name: data.name || '',
           description: data.description || '',
           occurredAt: data.occurred_at ? new Date(data.occurred_at).toISOString() : new Date().toISOString(),
-          status: data.status || 'pending',
+          status: data.status === 'in_qa' ? 'resolved' : data.status || 'pending',
           category: getDisplayCategory(data),
           epic: data.epic || '',
           additionalComments: cleanAdditionalComments(data.additional_comments),
-          env: pick(data.environment || '', ENV_OPTIONS),
+          env: data.status === 'in_qa' ? 'PRE' : pick(data.environment || '', ENV_OPTIONS),
           dev: pick(data.device || '', DEVICE_OPTIONS),
           evidenceLink: data.evidence && !String(data.evidence).startsWith('incidents/') ? data.evidence : '',
           assignedTo: data.assigned_to || 'unassigned',
@@ -277,10 +270,12 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         incident_number: incidentNumber,
         name: detailForm.name,
         description: detailForm.description,
-        environment: detailForm.env,
+        environment: detailForm.status === 'resolved' || detailForm.status === 'closed'
+          ? normalizeEnvironment(detailForm.env) || 'PRO'
+          : null,
         device: detailForm.dev,
         occurred_at: new Date(detailForm.occurredAt).toISOString(),
-        status: detailForm.status,
+        status: detailForm.status as IncidentStatus,
         category: categoryPayload.category,
         additional_comments: categoryPayload.additional_comments,
         epic: detailForm.epic,
@@ -385,7 +380,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
   const handleCopyInfo = () => {
     if (!selected) return;
 
-    const status = STATUS_OPTIONS.find(s => s.value === selected.status)?.label || selected.status;
+    const status = getIncidentStatusLabel(selected.status, selected.environment);
     const category = CATEGORY_OPTIONS.find(c => c.value === selected.category)?.label || selected.category;
     
     const info = `ID: ${formatIncidentReference(selected) ?? 'Sin ID'}
@@ -460,7 +455,11 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                 <Label>Estado</Label>
                 <Select 
                   value={detailForm.status} 
-                  onValueChange={(v) => setDetailForm((f) => ({ ...f, status: v }))}
+                  onValueChange={(v) => setDetailForm((f) => ({
+                    ...f,
+                    status: v,
+                    env: v === 'resolved' || v === 'closed' ? normalizeEnvironment(f.env) || 'PRO' : '',
+                  }))}
                   disabled={assignments.length > 1}
                 >
                   <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
@@ -468,8 +467,8 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                     {STATUS_OPTIONS.map((s) => (
                       <SelectItem key={s.value} value={s.value}>
                         <div className="flex items-center gap-2">
-                          <Badge variant="outline" className={`${STATUS_BADGE_CLS[s.value] || 'bg-accent text-accent-foreground'} border-transparent text-[10px] px-1 py-0.5`}>
-                            {s.label}
+                          <Badge variant="outline" className={`${getAppStatusTone(s.value)} text-[10px] px-1 py-0.5`}>
+                            {getIncidentStatusLabel(s.value, detailForm.env)}
                           </Badge>
                         </div>
                       </SelectItem>
@@ -504,7 +503,11 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
               </div>
               <div>
                 <Label>Entorno</Label>
-                <Select value={detailForm.env} onValueChange={(v) => setDetailForm((f) => ({ ...f, env: v }))}>
+                <Select
+                  value={detailForm.env}
+                  onValueChange={(v) => setDetailForm((f) => ({ ...f, env: v }))}
+                  disabled={detailForm.status !== 'resolved' && detailForm.status !== 'closed'}
+                >
                   <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
                     {ENV_OPTIONS.map((opt) => (<SelectItem key={opt} value={opt}>{opt}</SelectItem>))}
@@ -534,7 +537,8 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                         // Actualizar también el formulario para reflejar el nuevo estado
                         setDetailForm(prev => ({
                           ...prev,
-                          status: data.status
+                          status: data.status === 'in_qa' ? 'resolved' : data.status,
+                          env: data.status === 'in_qa' ? 'PRE' : prev.env,
                         }));
                         onPatched?.(selected.id, data);
                       }

@@ -18,6 +18,7 @@ const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
   { value: 'in_progress', label: 'En Progreso' },
   { value: 'resolved', label: 'Resuelta' },
+  { value: 'blocked', label: 'Block' },
   { value: 'closed', label: 'Cerrada' },
 ];
 
@@ -31,6 +32,7 @@ const STATUS_BADGE_CLS = {
   pending: 'bg-warning text-warning-foreground',
   in_progress: 'bg-info text-info-foreground', 
   resolved: 'bg-success text-success-foreground',
+  blocked: 'bg-destructive text-destructive-foreground',
   closed: 'bg-destructive text-destructive-foreground',
 } as const;
 

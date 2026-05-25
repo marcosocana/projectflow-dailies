@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import { recordIncidentStatusChange } from '@/lib/incidentActivityLog';
+import { mapIncidentStatusToTaskStatus, normalizeEnvironment, type TaskEnvironment } from '@/lib/taskStatus';
 
 type IncidentStatus = Database['public']['Enums']['incident_status'];
 // Map task_status for syncing with daily tasks
@@ -12,6 +13,7 @@ export interface TaskAssignment {
   incident_id: string;
   assigned_to: string;
   status: IncidentStatus;
+  environment: TaskEnvironment | null;
   created_at: string;
   updated_at: string;
 }
@@ -79,12 +81,12 @@ export const useTaskAssignments = (taskId: string | null) => {
     }
   };
 
-  const updateAssignmentStatus = async (assignmentId: string, status: IncidentStatus) => {
+  const updateAssignmentStatus = async (assignmentId: string, status: IncidentStatus, environment: TaskEnvironment | null = null) => {
     try {
       // 1) Actualizar el estado de la asignación
       const { error } = await supabase
         .from('incident_assignments')
-        .update({ status: status })
+        .update({ status, environment } as any)
         .eq('id', assignmentId);
 
       if (error) throw error;
@@ -99,20 +101,16 @@ export const useTaskAssignments = (taskId: string | null) => {
       if (assignmentRow?.incident_id && assignmentRow?.assigned_to) {
         const { data: currentIncident } = await supabase
           .from('incidents')
-          .select('status, incident_number, name, category, project_id')
+          .select('status, incident_number, name, category, project_id, environment')
           .eq('id', assignmentRow.incident_id)
           .maybeSingle();
 
         // 3) Sincronizar las tareas del seguimiento interno vinculadas con esta persona
-        const mapped: TaskStatus = status === 'closed' 
-          ? 'resolved' 
-          : status === 'in_qa' 
-            ? 'in_progress' 
-            : (status as TaskStatus);
+        const mapped: TaskStatus = mapIncidentStatusToTaskStatus(status);
 
         await supabase
           .from('tasks')
-          .update({ status: mapped })
+          .update({ status: mapped, environment: normalizeEnvironment(environment) } as any)
           .eq('incident_id', assignmentRow.incident_id)
           .or(`person_id.eq.${assignmentRow.assigned_to},assigned_to.eq.${assignmentRow.assigned_to}`);
 
@@ -126,19 +124,25 @@ export const useTaskAssignments = (taskId: string | null) => {
           let newIncidentStatus: IncidentStatus = 'pending';
 
           // Si al menos una está en progreso o en QA, la incidencia está en progreso
-          const hasInProgress = allAssignments.some(a => a.status === 'in_progress' || a.status === 'in_qa');
+          const hasInProgress = allAssignments.some(a => a.status === 'in_progress');
           if (hasInProgress) {
             newIncidentStatus = 'in_progress';
           } 
+          else if (allAssignments.some(a => a.status === 'blocked')) {
+            newIncidentStatus = 'blocked' as IncidentStatus;
+          }
           // Si todas están resueltas o cerradas, la incidencia está resuelta
-          else if (allAssignments.every(a => a.status === 'resolved' || a.status === 'closed')) {
+          else if (allAssignments.every(a => a.status === 'resolved' || a.status === 'closed' || a.status === 'in_qa')) {
             newIncidentStatus = 'resolved';
           }
 
           // 5) Actualizar el estado general de la incidencia
+          const incidentEnvironment = newIncidentStatus === 'resolved'
+            ? normalizeEnvironment(environment) || normalizeEnvironment(currentIncident?.environment) || 'PRO'
+            : null;
           await supabase
             .from('incidents')
-            .update({ status: newIncidentStatus })
+            .update({ status: newIncidentStatus, environment: incidentEnvironment } as any)
             .eq('id', assignmentRow.incident_id);
 
           if (currentIncident && currentIncident.status !== newIncidentStatus) {
@@ -181,10 +185,11 @@ export const useTaskAssignments = (taskId: string | null) => {
   const getOverallStatus = (): IncidentStatus => {
     if (assignments.length === 0) return 'pending';
     
-    const hasInProgress = assignments.some(a => a.status === 'in_progress' || a.status === 'in_qa');
+    const hasInProgress = assignments.some(a => a.status === 'in_progress');
     if (hasInProgress) return 'in_progress';
+    if (assignments.some(a => a.status === 'blocked')) return 'blocked' as IncidentStatus;
     
-    const allResolved = assignments.every(a => a.status === 'resolved' || a.status === 'closed');
+    const allResolved = assignments.every(a => a.status === 'resolved' || a.status === 'closed' || a.status === 'in_qa');
     if (allResolved) return 'resolved';
     
     return 'pending';

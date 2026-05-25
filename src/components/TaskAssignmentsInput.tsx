@@ -4,12 +4,22 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { X, Plus } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
+import {
+  ASSIGNMENT_STATUS_OPTIONS,
+  assignmentToSelectValue,
+  getAppStatusTone,
+  getIncidentStatusLabel,
+  selectValueToAssignment,
+  type AssignmentStatusValue,
+  type TaskEnvironment,
+} from '@/lib/taskStatus';
 
 type IncidentStatus = Database['public']['Enums']['incident_status'];
 
 export interface TaskAssignment {
   person: string;
   status: IncidentStatus;
+  environment?: TaskEnvironment | null;
 }
 
 interface TaskAssignmentsInputProps {
@@ -17,22 +27,6 @@ interface TaskAssignmentsInputProps {
   assignments: TaskAssignment[];
   onAssignmentsChange: (assignments: TaskAssignment[]) => void;
 }
-
-const STATUS_OPTIONS: Array<{ value: IncidentStatus; label: string }> = [
-  { value: 'pending', label: 'Pendiente' },
-  { value: 'in_progress', label: 'WIP' },
-  { value: 'in_qa', label: 'En QA' },
-  { value: 'resolved', label: 'En PRO' },
-  { value: 'closed', label: 'Cerrada' }
-];
-
-const STATUS_COLORS: Record<IncidentStatus, string> = {
-  pending: 'bg-muted text-muted-foreground',
-  in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
-  in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]',
-  resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
-  closed: 'bg-destructive text-destructive-foreground'
-};
 
 export default function TaskAssignmentsInput({ 
   teamMembers,
@@ -57,9 +51,10 @@ export default function TaskAssignmentsInput({
     onAssignmentsChange(assignments.filter((_, i) => i !== index));
   };
 
-  const handleUpdateStatus = (index: number, status: IncidentStatus) => {
+  const handleUpdateStatus = (index: number, value: AssignmentStatusValue) => {
+    const { status, environment } = selectValueToAssignment(value);
     onAssignmentsChange(
-      assignments.map((a, i) => (i === index ? { ...a, status } : a))
+      assignments.map((a, i) => (i === index ? { ...a, status, environment } : a))
     );
   };
 
@@ -122,17 +117,17 @@ export default function TaskAssignmentsInput({
               <span className="flex-1 font-medium">{member.name}</span>
               
               <Select 
-                value={assignment.status} 
-                onValueChange={(value: IncidentStatus) => handleUpdateStatus(index, value)}
+                value={assignmentToSelectValue(assignment.status, assignment.environment)} 
+                onValueChange={(value: AssignmentStatusValue) => handleUpdateStatus(index, value)}
               >
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-44">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {STATUS_OPTIONS.map(opt => (
+                  {ASSIGNMENT_STATUS_OPTIONS.map(opt => (
                     <SelectItem key={opt.value} value={opt.value}>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={`${STATUS_COLORS[opt.value]} border-transparent text-[10px] px-1 py-0.5`}>
+                        <Badge variant="outline" className={`${getAppStatusTone(selectValueToAssignment(opt.value).status)} text-[10px] px-1 py-0.5`}>
                           {opt.label}
                         </Badge>
                       </div>
@@ -141,8 +136,8 @@ export default function TaskAssignmentsInput({
                 </SelectContent>
               </Select>
 
-              <Badge variant="outline" className={`${STATUS_COLORS[assignment.status]} border-transparent`}>
-                {STATUS_OPTIONS.find(s => s.value === assignment.status)?.label}
+              <Badge variant="outline" className={`${getAppStatusTone(assignment.status)} border-transparent`}>
+                {getIncidentStatusLabel(assignment.status, assignment.environment)}
               </Badge>
 
               <Button 

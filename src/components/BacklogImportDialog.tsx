@@ -12,6 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import type { Database } from '@/integrations/supabase/types';
 import { recordIncidentCreated } from '@/lib/incidentActivityLog';
 import { useAuth } from '@/hooks/useAuth';
+import { mapIncidentStatusToTaskStatus, normalizeEnvironment } from '@/lib/taskStatus';
 
 type IncidentCategory = Database['public']['Enums']['incident_category'];
 
@@ -171,7 +172,8 @@ export default function BacklogImportDialog({
         const assignmentInserts = assignments.map(assignment => ({
           incident_id: incident.id,
           assigned_to: assignment.person,
-          status: assignment.status
+          status: assignment.status,
+          environment: normalizeEnvironment(assignment.environment),
         }));
 
         const { error: assignError } = await supabase
@@ -211,17 +213,21 @@ export default function BacklogImportDialog({
           }
 
           // Create tasks for each assignment
-          const taskInserts = assignments.map(assignment => ({
-            project_id: projectId,
-            person_id: assignment.person,
-            assigned_to: assignment.person,
-            title: current.name,
-            description: current.description || null,
-            status: 'pending' as const,
-            incident_id: incident.id,
-            is_auto_linked: true,
-            related_ticket: current.number
-          }));
+          const taskInserts = assignments.map(assignment => {
+            const taskStatus = mapIncidentStatusToTaskStatus(assignment.status);
+            return {
+              project_id: projectId,
+              person_id: assignment.person,
+              assigned_to: assignment.person,
+              title: current.name,
+              description: current.description || null,
+              status: taskStatus,
+              environment: taskStatus === 'resolved' ? normalizeEnvironment(assignment.environment) || 'PRO' : null,
+              incident_id: incident.id,
+              is_auto_linked: true,
+              related_ticket: current.number
+            };
+          });
 
           const { data: createdTasks, error: taskError } = await supabase
             .from('tasks')

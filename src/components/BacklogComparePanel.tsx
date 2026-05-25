@@ -23,8 +23,9 @@ type BacklogComparePanelProps = {
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Pendiente',
   in_progress: 'WIP',
-  in_qa: 'En QA',
-  resolved: 'En PRO',
+  in_qa: 'Resuelta / En PRE',
+  resolved: 'Resuelta',
+  blocked: 'Block',
   closed: 'Cerrada',
 };
 

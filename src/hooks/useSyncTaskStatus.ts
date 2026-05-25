@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
+import { normalizeEnvironment } from '@/lib/taskStatus';
 
 type IncidentStatus = Database['public']['Enums']['incident_status'];
 
@@ -30,6 +31,7 @@ export const syncTaskStatus = async (taskId: string): Promise<IncidentStatus | n
     // Si hay más de una asignación, aplicar la lógica de prioridad
     const hasInProgress = assignments.some(a => a.status === 'in_progress');
     if (hasInProgress) return 'in_progress';
+    if (assignments.some(a => a.status === 'blocked')) return 'blocked' as IncidentStatus;
 
     // Verificar si todas las asignaciones tienen el mismo estado
     const uniqueStatuses = [...new Set(assignments.map(a => a.status))];
@@ -68,7 +70,7 @@ export const syncSingleAssignmentStatus = async (taskId: string, taskStatus: Inc
     // Obtener todas las asignaciones
     const { data: assignments, error } = await supabase
       .from('incident_assignments')
-      .select('id, status')
+      .select('id, status, environment')
       .eq('incident_id', taskId);
 
     if (error) throw error;
@@ -81,7 +83,10 @@ export const syncSingleAssignmentStatus = async (taskId: string, taskStatus: Inc
       if (assignment.status !== taskStatus) {
         await supabase
           .from('incident_assignments')
-          .update({ status: taskStatus })
+          .update({
+            status: taskStatus,
+            environment: taskStatus === 'resolved' ? normalizeEnvironment((assignment as any).environment) || 'PRO' : null,
+          } as any)
           .eq('id', assignment.id);
       }
     }

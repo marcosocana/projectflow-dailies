@@ -39,8 +39,9 @@ const STATUS_LABELS: Record<string, string> = {
   deleted: 'Eliminada',
   pending: 'Pendiente',
   in_progress: 'WIP',
-  in_qa: 'En QA',
-  resolved: 'En PRO',
+  in_qa: 'Resuelta / En PRE',
+  resolved: 'Resuelta',
+  blocked: 'Block',
   closed: 'Cerrada',
 };
 
@@ -49,8 +50,9 @@ const STATUS_BADGE_CLS: Record<string, string> = {
   deleted: 'bg-destructive text-destructive-foreground border-transparent',
   pending: 'bg-muted text-muted-foreground border-transparent',
   in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent',
-  in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))] border-transparent',
+  in_qa: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent',
   resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent',
+  blocked: 'bg-destructive text-destructive-foreground border-transparent',
   closed: 'bg-destructive text-destructive-foreground border-transparent',
 };
 

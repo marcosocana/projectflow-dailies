@@ -125,6 +125,7 @@ export type Database = {
         Row: {
           assigned_to: string
           created_at: string
+          environment: string | null
           id: string
           incident_id: string
           status: Database["public"]["Enums"]["incident_status"]
@@ -133,6 +134,7 @@ export type Database = {
         Insert: {
           assigned_to: string
           created_at?: string
+          environment?: string | null
           id?: string
           incident_id: string
           status?: Database["public"]["Enums"]["incident_status"]
@@ -141,6 +143,7 @@ export type Database = {
         Update: {
           assigned_to?: string
           created_at?: string
+          environment?: string | null
           id?: string
           incident_id?: string
           status?: Database["public"]["Enums"]["incident_status"]
@@ -1024,6 +1027,7 @@ export type Database = {
         | "closed"
         | "in_qa"
         | "resolved"
+        | "blocked"
       project_section:
         | "home"
         | "tasks"
@@ -1036,7 +1040,7 @@ export type Database = {
         | "vacations"
         | "settings"
         | "users"
-      task_status: "pending" | "in_progress" | "resolved" | "resolved_yesterday"
+      task_status: "pending" | "in_progress" | "resolved" | "resolved_yesterday" | "blocked"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1172,6 +1176,7 @@ export const Constants = {
         "closed",
         "in_qa",
         "resolved",
+        "blocked",
       ],
       project_section: [
         "home",
@@ -1186,7 +1191,7 @@ export const Constants = {
         "settings",
         "users",
       ],
-      task_status: ["pending", "in_progress", "resolved", "resolved_yesterday"],
+      task_status: ["pending", "in_progress", "resolved", "resolved_yesterday", "blocked"],
     },
   },
 } as const

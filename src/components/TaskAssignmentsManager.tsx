@@ -8,12 +8,24 @@ import { updateTaskStatusFromAssignments } from '@/hooks/useSyncTaskStatus';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import { formatIncidentReference } from '@/lib/internalTaskIds';
+import {
+  ASSIGNMENT_STATUS_OPTIONS,
+  assignmentToSelectValue,
+  getAppStatusTone,
+  getIncidentStatusLabel,
+  mapIncidentStatusToTaskStatus,
+  normalizeEnvironment,
+  selectValueToAssignment,
+  type AssignmentStatusValue,
+  type TaskEnvironment,
+} from '@/lib/taskStatus';
 
 type IncidentStatus = Database['public']['Enums']['incident_status'];
 type TaskStatus = Database['public']['Enums']['task_status'];
 type AssignmentSnapshot = {
   assigned_to: string;
   status: IncidentStatus;
+  environment?: TaskEnvironment | null;
 };
 
 interface TaskAssignmentsManagerProps {
@@ -22,34 +34,12 @@ interface TaskAssignmentsManagerProps {
   onAssignmentsChange?: () => void;
 }
 
-const STATUS_OPTIONS: Array<{ value: IncidentStatus; label: string }> = [
-  { value: 'pending', label: 'Pendiente' },
-  { value: 'in_progress', label: 'WIP' },
-  { value: 'in_qa', label: 'En QA' },
-  { value: 'resolved', label: 'En PRO' },
-  { value: 'closed', label: 'Cerrada' }
-];
-
-const STATUS_COLORS: Record<IncidentStatus, string> = {
-  pending: 'bg-muted text-muted-foreground',
-  in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
-  in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]',
-  resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
-  closed: 'bg-destructive text-destructive-foreground'
-};
-
 const formatManualId = (value: string | number | null | undefined) =>
   String(value ?? '').replace(/\D/g, '').slice(0, 6);
 
 const getTodayDate = () => {
   const today = new Date();
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-};
-
-const mapIncidentStatusToTaskStatus = (status: IncidentStatus): TaskStatus => {
-  if (status === 'closed' || status === 'resolved') return 'resolved';
-  if (status === 'in_progress' || status === 'in_qa') return 'in_progress';
-  return 'pending';
 };
 
 export default function TaskAssignmentsManager({ 
@@ -80,6 +70,7 @@ export default function TaskAssignmentsManager({
         {
           assigned_to: memberId,
           status: (createdAssignment?.status as IncidentStatus | undefined) || 'pending',
+          environment: normalizeEnvironment((createdAssignment as any)?.environment),
         },
       ]);
       
@@ -107,7 +98,7 @@ export default function TaskAssignmentsManager({
 
     const { data: assignmentRows, error: assignmentsError } = await supabase
       .from('incident_assignments')
-      .select('assigned_to, status')
+      .select('assigned_to, status, environment')
       .eq('incident_id', incidentId)
       .order('created_at', { ascending: true });
 
@@ -120,6 +111,7 @@ export default function TaskAssignmentsManager({
           acc.push({
             assigned_to: assignment.assigned_to,
             status: assignment.status as IncidentStatus,
+            environment: normalizeEnvironment((assignment as any).environment),
           });
         }
         return acc;
@@ -208,6 +200,8 @@ export default function TaskAssignmentsManager({
 
     for (const personId of desiredPersonIds) {
       const assignmentStatus = desiredAssignments.find((assignment) => assignment.assigned_to === personId)?.status || incident.status;
+      const assignmentEnvironment = normalizeEnvironment(desiredAssignments.find((assignment) => assignment.assigned_to === personId)?.environment)
+        || normalizeEnvironment(incident.environment);
       const taskStatus = mapIncidentStatusToTaskStatus(assignmentStatus as IncidentStatus);
       const existingTask = existingTasksByPerson.get(personId);
       let taskIdToLink = existingTask?.id;
@@ -222,7 +216,7 @@ export default function TaskAssignmentsManager({
             person_id: personId,
             assigned_to: personId,
             status: taskStatus,
-            environment: incident.environment || null,
+            environment: taskStatus === 'resolved' ? assignmentEnvironment || 'PRO' : null,
             is_auto_linked: true,
           })
           .eq('id', taskIdToLink);
@@ -240,7 +234,7 @@ export default function TaskAssignmentsManager({
             person_id: personId,
             assigned_to: personId,
             status: taskStatus,
-            environment: incident.environment || null,
+            environment: taskStatus === 'resolved' ? assignmentEnvironment || 'PRO' : null,
             is_auto_linked: true,
             related_ticket: relatedTicket,
           })
@@ -303,10 +297,11 @@ export default function TaskAssignmentsManager({
     }
   };
 
-  const handleUpdateStatus = async (assignmentId: string, status: IncidentStatus) => {
+  const handleUpdateStatus = async (assignmentId: string, value: AssignmentStatusValue) => {
     try {
       const assignment = assignments.find((current) => current.id === assignmentId);
-      await updateAssignmentStatus(assignmentId, status);
+      const { status, environment } = selectValueToAssignment(value);
+      await updateAssignmentStatus(assignmentId, status, environment);
       
       // Sincronizar el estado general de la tarea
       if (taskId) {
@@ -315,7 +310,7 @@ export default function TaskAssignmentsManager({
 
       const projectId = taskId ? await syncDailyTasksForIncident(
         taskId,
-        assignment?.assigned_to ? [{ assigned_to: assignment.assigned_to, status }] : [],
+        assignment?.assigned_to ? [{ assigned_to: assignment.assigned_to, status, environment }] : [],
       ) : null;
       if (projectId) notifyDailiesChanged(projectId);
       
@@ -383,17 +378,17 @@ export default function TaskAssignmentsManager({
               <span className="flex-1 font-medium">{member.name}</span>
               
               <Select 
-                value={assignment.status} 
-                onValueChange={(value: IncidentStatus) => handleUpdateStatus(assignment.id, value)}
+                value={assignmentToSelectValue(assignment.status, assignment.environment)} 
+                onValueChange={(value: AssignmentStatusValue) => handleUpdateStatus(assignment.id, value)}
               >
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-44">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {STATUS_OPTIONS.map(opt => (
+                  {ASSIGNMENT_STATUS_OPTIONS.map(opt => (
                     <SelectItem key={opt.value} value={opt.value}>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={`${STATUS_COLORS[opt.value]} border-transparent text-[10px] px-1 py-0.5`}>
+                        <Badge variant="outline" className={`${getAppStatusTone(selectValueToAssignment(opt.value).status)} text-[10px] px-1 py-0.5`}>
                           {opt.label}
                         </Badge>
                       </div>
@@ -402,8 +397,8 @@ export default function TaskAssignmentsManager({
                 </SelectContent>
               </Select>
 
-              <Badge variant="outline" className={`${STATUS_COLORS[assignment.status]} border-transparent`}>
-                {STATUS_OPTIONS.find(s => s.value === assignment.status)?.label}
+              <Badge variant="outline" className={`${getAppStatusTone(assignment.status)} border-transparent`}>
+                {getIncidentStatusLabel(assignment.status, assignment.environment)}
               </Badge>
 
               <Button 

@@ -34,6 +34,7 @@ import BacklogImportDialog from '@/components/BacklogImportDialog';
 import { recordIncidentCreated, recordIncidentDeleted, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference, formatInternalTaskIdFromValue, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { getAppStatusTone, getIncidentStatusLabel, mapIncidentStatusToTaskStatus, normalizeEnvironment, type TaskEnvironment } from '@/lib/taskStatus';
 
 interface IncidentsModuleProps {
   projectId: string;
@@ -55,11 +56,6 @@ interface SortableIncidentCardProps {
 }
 type IncidentStatus = Database['public']['Enums']['incident_status'];
 type IncidentCategory = Database['public']['Enums']['incident_category'];
-const mapIncidentStatusToTaskStatus = (status: IncidentStatus): 'pending' | 'in_progress' | 'resolved' => {
-  if (status === 'closed') return 'resolved';
-  if (status === 'in_qa') return 'in_progress';
-  return status as 'pending' | 'in_progress' | 'resolved';
-};
 const STATUS_OPTIONS = [{
   value: 'pending',
   label: 'Pendiente'
@@ -67,11 +63,11 @@ const STATUS_OPTIONS = [{
   value: 'in_progress',
   label: 'WIP'
 }, {
-  value: 'in_qa',
-  label: 'En QA'
-}, {
   value: 'resolved',
-  label: 'En PRO'
+  label: 'Resuelta'
+}, {
+  value: 'blocked',
+  label: 'Block'
 }, {
   value: 'closed',
   label: 'Cerrada'
@@ -91,20 +87,14 @@ const DEVICE_OPTIONS = ['APP', 'Web', 'Otro', 'N/A'] as const;
 // Dynamic epic options will be calculated from database
 
 // Status constants available module-wide to avoid TDZ issues
-const statusOrder = ['pending', 'in_progress', 'in_qa', 'resolved', 'closed'] as const;
+const statusOrder = ['pending', 'in_progress', 'resolved', 'blocked', 'closed'] as const;
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Pendiente',
   in_progress: 'WIP',
-  in_qa: 'En QA',
-  resolved: 'En PRO',
+  in_qa: 'Resuelta / En PRE',
+  resolved: 'Resuelta',
+  blocked: 'Block',
   closed: 'Cerrada'
-};
-const STATUS_BADGE_CLS: Record<string, string> = {
-  pending: 'bg-muted text-muted-foreground',
-  in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
-  in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]',
-  resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
-  closed: 'bg-destructive text-destructive-foreground'
 };
 
 const MADRID_TIME_ZONE = 'Europe/Madrid';
@@ -179,23 +169,13 @@ const madridDateTimeLocalToIso = (value: string) => {
 
 /* UI helpers */
 function StatusBadge({
-  status
+  status,
+  environment,
 }: {
   status: IncidentStatus;
+  environment?: string | null;
 }) {
-  const label = STATUS_OPTIONS.find(s => s.value === status)?.label ?? status;
-  const classMap: Record<IncidentStatus, string> = {
-    pending: 'bg-muted text-muted-foreground',
-    // Gris
-    in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
-    // Naranja
-    in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]',
-    // Azul
-    resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
-    // Verde
-    closed: 'bg-destructive text-destructive-foreground' // Rojo
-  } as const;
-  return <Badge variant="outline" className={`${classMap[status]} border-transparent`}>{label}</Badge>;
+  return <Badge variant="outline" className={`${getAppStatusTone(status)} border-transparent`}>{getIncidentStatusLabel(status, environment)}</Badge>;
 }
 function CategoryIcon({
   category
@@ -279,17 +259,14 @@ const SortableIncidentCard = ({
     transform: CSS.Transform.toString(transform),
     transition
   };
-  const getStatusColor = (status: IncidentStatus) => {
-    return STATUS_BADGE_CLS[status] || 'bg-muted text-muted-foreground';
-  };
   return <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="bg-white p-4 rounded-lg border shadow-sm hover:shadow-md transition-shadow cursor-move">
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           <CategoryIcon category={getDisplayCategory(incident)} />
           <span className="font-medium text-sm">{formatIncidentReference(incident) ?? 'Sin ID'}</span>
         </div>
-        <Badge variant="outline" className={`text-xs ${getStatusColor(incident.status)} border-transparent`}>
-          {STATUS_LABELS[incident.status]}
+        <Badge variant="outline" className={`text-xs ${getAppStatusTone(incident.status)} border-transparent`}>
+          {getIncidentStatusLabel(incident.status, incident.environment)}
         </Badge>
       </div>
       <h4 className="font-semibold text-sm mb-2 line-clamp-2">{incident.name}</h4>
@@ -418,7 +395,7 @@ export default function IncidentsModule({
   const [selected, setSelected] = useState<any | null>(null);
   
   // Estado para asignaciones múltiples durante creación
-  const [createAssignments, setCreateAssignments] = useState<Array<{person: string, status: IncidentStatus}>>([]);
+  const [createAssignments, setCreateAssignments] = useState<Array<{person: string, status: IncidentStatus, environment?: TaskEnvironment | null}>>([]);
   const [createDailyTasks, setCreateDailyTasks] = useState(true);
   const [manualIncidentIdEnabled, setManualIncidentIdEnabled] = useState(true);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -797,7 +774,8 @@ export default function IncidentsModule({
           const assignmentsToInsert = createAssignments.map(a => ({
             incident_id: id,
             assigned_to: a.person,
-            status: a.status
+            status: a.status,
+            environment: normalizeEnvironment(a.environment),
           }));
           const { error: assignmentsError } = await supabase
             .from('incident_assignments')
@@ -838,10 +816,7 @@ export default function IncidentsModule({
             if (daily) {
               // Create a task in the tasks table for each assignment
               const tasksToInsert = createAssignments.map(a => {
-                const taskStatus: 'pending' | 'in_progress' | 'resolved' = 
-                  a.status === 'resolved' || a.status === 'closed' ? 'resolved' : 
-                  a.status === 'in_progress' || a.status === 'in_qa' ? 'in_progress' : 
-                  'pending';
+                const taskStatus = mapIncidentStatusToTaskStatus(a.status);
 
                 return {
                   title: form.name,
@@ -851,6 +826,7 @@ export default function IncidentsModule({
                   person_id: a.person,
                   assigned_to: a.person,
                   status: taskStatus,
+                  environment: taskStatus === 'resolved' ? normalizeEnvironment(a.environment) || 'PRO' : null,
                   is_auto_linked: true,
                   related_ticket: incidentReference
                 };
@@ -1068,7 +1044,7 @@ Descripción: ${incident.description || 'Sin descripción'}
 Canal: ${incident.device || 'No especificado'}
 Entorno: ${incident.environment || 'No especificado'}
 Fecha: ${new Date(incident.occurred_at).toLocaleDateString('es-ES')}
-Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
+Estado: ${getIncidentStatusLabel(incident.status, incident.environment)}`;
     try {
       await navigator.clipboard.writeText(basicInfo);
       toast({
@@ -1242,8 +1218,8 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
     return {
       pending: filtered.filter(inc => inc.status === 'pending'),
       in_progress: filtered.filter(inc => inc.status === 'in_progress'),
-      in_qa: filtered.filter(inc => inc.status === 'in_qa'),
       resolved: filtered.filter(inc => inc.status === 'resolved'),
+      blocked: filtered.filter(inc => inc.status === 'blocked'),
       closed: filtered.filter(inc => inc.status === 'closed')
     };
   }, [filtered]);
@@ -1338,7 +1314,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
             id: String(idRaw || '').trim(),
             type,
             excelStatus,
-            vectoreaStatus: incident ? (STATUS_LABELS[incident.status] || incident.status) : 'No existe en Vectorea',
+            vectoreaStatus: incident ? getIncidentStatusLabel(incident.status, incident.environment) : 'No existe en Vectorea',
             include: true,
           };
         })
@@ -1495,10 +1471,10 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                         <div className="text-lg font-bold leading-5">{group.counts[key] || 0}</div>
                         {compareBacklogOpen ? (
                           <div className="mt-1 flex justify-center">
-                            <span className={`h-3 w-3 rounded-full ${STATUS_BADGE_CLS[key] || 'bg-accent border-transparent'}`} />
+                            <span className={`h-3 w-3 rounded-full ${getAppStatusTone(key)} border-transparent`} />
                           </div>
                         ) : (
-                          <Badge variant="outline" className={`${STATUS_BADGE_CLS[key] || 'bg-accent text-accent-foreground'} border-transparent mt-1 text-[9px] px-1 py-0.5`}>
+                          <Badge variant="outline" className={`${getAppStatusTone(key)} border-transparent mt-1 text-[9px] px-1 py-0.5`}>
                             {STATUS_LABELS[key] || key}
                           </Badge>
                         )}
@@ -1664,7 +1640,7 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                       <TableCell className="w-20">{i.device || '-'}</TableCell>
                       <TableCell className="w-24">{i.environment || '-'}</TableCell>
                       <TableCell>{new Date(i.occurred_at).toLocaleDateString('es-ES')}</TableCell>
-                      <TableCell className="w-32"><StatusBadge status={i.status} /></TableCell>
+                      <TableCell className="w-32"><StatusBadge status={i.status} environment={i.environment} /></TableCell>
                       <TableCell className="w-16">
                         <TaskAssignmentCell taskId={i.id} teamMembers={teamMembers} />
                       </TableCell>
@@ -2049,8 +2025,8 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
                <SelectContent>
                  {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>
                      <div className="flex items-center gap-2">
-                       <Badge variant="outline" className={`${STATUS_BADGE_CLS[s.value] || 'bg-accent text-accent-foreground'} border-transparent text-[10px] px-1 py-0.5`}>
-                         {s.label}
+                       <Badge variant="outline" className={`${getAppStatusTone(s.value)} text-[10px] px-1 py-0.5`}>
+                         {getIncidentStatusLabel(s.value)}
                        </Badge>
                      </div>
                    </SelectItem>)}

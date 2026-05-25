@@ -12,6 +12,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 import { formatIncidentReference } from '@/lib/internalTaskIds';
+import {
+  getIncidentStatusLabel,
+  getIncidentStatusTone,
+  mapIncidentStatusToTaskStatus,
+  normalizeEnvironment,
+  type IncidentStatus,
+} from '@/lib/taskStatus';
 import { 
   DndContext, 
   closestCenter, 
@@ -38,7 +45,6 @@ interface HomeModuleProps {
   projectId: string;
 }
 
-type IncidentStatus = 'pending' | 'in_progress' | 'resolved' | 'closed' | 'in_qa';
 type ViewMode = 'list' | 'pipeline';
 
 interface Incident {
@@ -114,17 +120,6 @@ const SortableCard = ({ incident }: SortableCardProps) => {
     transition,
   };
 
-  const getStatusColor = (status: IncidentStatus) => {
-    switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'in_progress': return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'resolved': return 'bg-green-100 text-green-800 border-green-300';
-      case 'closed': return 'bg-gray-100 text-gray-800 border-gray-300';
-      case 'in_qa': return 'bg-purple-100 text-purple-800 border-purple-300';
-      default: return 'bg-gray-100 text-gray-800 border-gray-300';
-    }
-  };
-
   const getCategoryIcon = (category: string) => {
     if (category === 'incident') return <AlertTriangle className="h-4 w-4 text-red-500" />;
     if (category === 'corrective_improvement') return <Wrench className="h-4 w-4 text-purple-600" />;
@@ -144,17 +139,6 @@ const SortableCard = ({ incident }: SortableCardProps) => {
     return incident.category;
   };
 
-  const getStatusLabel = (status: IncidentStatus) => {
-    switch (status) {
-      case 'pending': return 'Pendiente';
-      case 'in_progress': return 'WIP';
-      case 'resolved': return 'En PRO';
-      case 'closed': return 'Cerrada';
-      case 'in_qa': return 'En QA';
-      default: return status;
-    }
-  };
-
   return (
     <div
       ref={setNodeRef}
@@ -168,8 +152,8 @@ const SortableCard = ({ incident }: SortableCardProps) => {
           {getCategoryIcon(getDisplayCategory(incident))}
           <span className="font-medium text-sm">{formatIncidentReference(incident) ?? 'Sin ID'}</span>
         </div>
-        <Badge className={`text-xs ${getStatusColor(incident.status)}`}>
-          {getStatusLabel(incident.status)}
+        <Badge className={`text-xs ${getIncidentStatusTone(incident.status)}`}>
+          {getIncidentStatusLabel(incident.status, incident.environment)}
         </Badge>
       </div>
       <h4 className="font-semibold text-sm mb-2 line-clamp-2">{incident.name}</h4>
@@ -294,25 +278,29 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
 
     const activeId = active.id as string;
     const overId = over.id as string;
+    const activeIncident = incidents.find(inc => inc.id === activeId);
+    if (!activeIncident) return;
 
     // If dropping on a column, extract the status
     let newStatus: IncidentStatus;
+    let newEnvironment: string | null | undefined;
     if (overId.startsWith('column-')) {
       newStatus = overId.replace('column-', '') as IncidentStatus;
+      newEnvironment = newStatus === 'resolved' ? normalizeEnvironment(activeIncident?.environment) || 'PRO' : null;
     } else {
       // If dropping on another card, find its status
       const overIncident = incidents.find(inc => inc.id === overId);
       if (!overIncident) return;
       newStatus = overIncident.status;
+      newEnvironment = newStatus === 'resolved' ? normalizeEnvironment(overIncident.environment) || normalizeEnvironment(activeIncident?.environment) || 'PRO' : null;
     }
 
-    const activeIncident = incidents.find(inc => inc.id === activeId);
-    if (!activeIncident || activeIncident.status === newStatus) return;
+    if (activeIncident.status === newStatus && activeIncident.environment === newEnvironment) return;
 
     // Update locally first for immediate feedback
     setIncidents(prev => 
       prev.map(inc => 
-        inc.id === activeId ? { ...inc, status: newStatus } : inc
+        inc.id === activeId ? { ...inc, status: newStatus, environment: newEnvironment ?? inc.environment } : inc
       )
     );
 
@@ -321,7 +309,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
       const previousStatus = activeIncident.status;
       const { error } = await supabase
         .from('incidents')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .update({ status: newStatus, environment: newEnvironment, updated_at: new Date().toISOString() } as any)
         .eq('id', activeId);
 
       if (error) throw error;
@@ -338,12 +326,9 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
       }
       
       // Sync auto-linked tasks with the new status (map incident status to task status)
-      const taskStatus = newStatus === 'closed' ? 'resolved' : 
-                        newStatus === 'in_qa' ? 'in_progress' : 
-                        newStatus;
       await supabase
         .from('tasks')
-        .update({ status: taskStatus })
+        .update({ status: mapIncidentStatusToTaskStatus(newStatus), environment: newEnvironment } as any)
         .eq('incident_id', activeId)
         .eq('is_auto_linked', true);
       
@@ -357,28 +342,6 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
           inc.id === activeId ? { ...inc, status: activeIncident.status } : inc
         )
       );
-    }
-  };
-
-  const getStatusLabel = (status: IncidentStatus) => {
-    switch (status) {
-      case 'pending': return 'Pendiente';
-      case 'in_progress': return 'WIP';
-      case 'resolved': return 'En PRO';
-      case 'closed': return 'Cerrada';
-      case 'in_qa': return 'En QA';
-      default: return status;
-    }
-  };
-
-  const getStatusColor = (status: IncidentStatus) => {
-    switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'in_progress': return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'resolved': return 'bg-green-100 text-green-800 border-green-300';
-      case 'closed': return 'bg-gray-100 text-gray-800 border-gray-300';
-      case 'in_qa': return 'bg-purple-100 text-purple-800 border-purple-300';
-      default: return 'bg-gray-100 text-gray-800 border-gray-300';
     }
   };
 
@@ -418,6 +381,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
       pending: filteredIncidents.filter(inc => inc.status === 'pending'),
       in_progress: filteredIncidents.filter(inc => inc.status === 'in_progress'),
       resolved: filteredIncidents.filter(inc => inc.status === 'resolved'),
+      blocked: filteredIncidents.filter(inc => inc.status === 'blocked'),
     };
   }, [filteredIncidents]);
 
@@ -437,9 +401,8 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
   const statusOptions = [
     { value: 'pending', label: 'Pendiente' },
     { value: 'in_progress', label: 'WIP' },
-    { value: 'resolved', label: 'En PRO' },
-    { value: 'closed', label: 'Cerrada' },
-    { value: 'in_qa', label: 'En QA' },
+    { value: 'resolved', label: 'Resuelta' },
+    { value: 'blocked', label: 'Block' },
   ];
 
   const categoryOptions = [
@@ -671,8 +634,8 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
                     <TableCell className="font-medium">{formatIncidentReference(incident) ?? '—'}</TableCell>
                     <TableCell>{incident.name}</TableCell>
                     <TableCell>
-                      <Badge className={`${getStatusColor(incident.status)}`}>
-                        {getStatusLabel(incident.status)}
+                      <Badge className={`${getIncidentStatusTone(incident.status)}`}>
+                        {getIncidentStatusLabel(incident.status, incident.environment)}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -733,11 +696,11 @@ const renderPipelineView = () => (
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {(['pending', 'in_progress', 'resolved'] as IncidentStatus[]).map((status) => (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {(['pending', 'in_progress', 'resolved', 'blocked'] as IncidentStatus[]).map((status) => (
                 <PipelineColumn key={status} status={status}>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold">{getStatusLabel(status)}</h3>
+                    <h3 className="font-semibold">{getIncidentStatusLabel(status)}</h3>
                     <Badge variant="secondary" className="ml-2">
                       {incidentsByStatus[status].length}
                     </Badge>
