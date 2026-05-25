@@ -25,7 +25,7 @@ type TaskStatus = Database['public']['Enums']['task_status'];
 type AssignmentSnapshot = {
   assigned_to: string;
   status: IncidentStatus;
-  environment?: TaskEnvironment | null;
+  status_environment?: TaskEnvironment | null;
 };
 
 interface TaskAssignmentsManagerProps {
@@ -70,7 +70,7 @@ export default function TaskAssignmentsManager({
         {
           assigned_to: memberId,
           status: (createdAssignment?.status as IncidentStatus | undefined) || 'pending',
-          environment: normalizeEnvironment((createdAssignment as any)?.environment),
+          status_environment: normalizeEnvironment((createdAssignment as any)?.status_environment),
         },
       ]);
       
@@ -87,7 +87,7 @@ export default function TaskAssignmentsManager({
   const syncDailyTasksForIncident = async (incidentId: string, optimisticAssignments: AssignmentSnapshot[] = []) => {
     const { data: incident, error: incidentError } = await supabase
       .from('incidents')
-      .select('id, project_id, incident_number, name, description, status, additional_comments, environment')
+      .select('id, project_id, incident_number, name, description, status, additional_comments, environment, status_environment')
       .eq('id', incidentId)
       .maybeSingle();
 
@@ -98,7 +98,7 @@ export default function TaskAssignmentsManager({
 
     const { data: assignmentRows, error: assignmentsError } = await supabase
       .from('incident_assignments')
-      .select('assigned_to, status, environment')
+      .select('assigned_to, status, status_environment')
       .eq('incident_id', incidentId)
       .order('created_at', { ascending: true });
 
@@ -111,7 +111,7 @@ export default function TaskAssignmentsManager({
           acc.push({
             assigned_to: assignment.assigned_to,
             status: assignment.status as IncidentStatus,
-            environment: normalizeEnvironment((assignment as any).environment),
+            status_environment: normalizeEnvironment((assignment as any).status_environment),
           });
         }
         return acc;
@@ -200,8 +200,8 @@ export default function TaskAssignmentsManager({
 
     for (const personId of desiredPersonIds) {
       const assignmentStatus = desiredAssignments.find((assignment) => assignment.assigned_to === personId)?.status || incident.status;
-      const assignmentEnvironment = normalizeEnvironment(desiredAssignments.find((assignment) => assignment.assigned_to === personId)?.environment)
-        || normalizeEnvironment(incident.environment);
+      const assignmentEnvironment = normalizeEnvironment(desiredAssignments.find((assignment) => assignment.assigned_to === personId)?.status_environment)
+        || normalizeEnvironment(incident.status_environment);
       const taskStatus = mapIncidentStatusToTaskStatus(assignmentStatus as IncidentStatus);
       const existingTask = existingTasksByPerson.get(personId);
       let taskIdToLink = existingTask?.id;
@@ -216,7 +216,7 @@ export default function TaskAssignmentsManager({
             person_id: personId,
             assigned_to: personId,
             status: taskStatus,
-            environment: taskStatus === 'resolved' ? assignmentEnvironment || 'PRO' : null,
+            status_environment: taskStatus === 'resolved' ? assignmentEnvironment || 'PRO' : null,
             is_auto_linked: true,
           })
           .eq('id', taskIdToLink);
@@ -234,7 +234,7 @@ export default function TaskAssignmentsManager({
             person_id: personId,
             assigned_to: personId,
             status: taskStatus,
-            environment: taskStatus === 'resolved' ? assignmentEnvironment || 'PRO' : null,
+            status_environment: taskStatus === 'resolved' ? assignmentEnvironment || 'PRO' : null,
             is_auto_linked: true,
             related_ticket: relatedTicket,
           })
@@ -310,7 +310,7 @@ export default function TaskAssignmentsManager({
 
       const projectId = taskId ? await syncDailyTasksForIncident(
         taskId,
-        assignment?.assigned_to ? [{ assigned_to: assignment.assigned_to, status, environment }] : [],
+        assignment?.assigned_to ? [{ assigned_to: assignment.assigned_to, status, status_environment: environment }] : [],
       ) : null;
       if (projectId) notifyDailiesChanged(projectId);
       
@@ -378,7 +378,7 @@ export default function TaskAssignmentsManager({
               <span className="flex-1 font-medium">{member.name}</span>
               
               <Select 
-                value={assignmentToSelectValue(assignment.status, assignment.environment)} 
+                value={assignmentToSelectValue(assignment.status, assignment.status_environment)} 
                 onValueChange={(value: AssignmentStatusValue) => handleUpdateStatus(assignment.id, value)}
               >
                 <SelectTrigger className="w-44">

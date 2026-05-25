@@ -59,6 +59,7 @@ interface Incident {
   occurred_at: string;
   created_at: string;
   environment: string | null;
+  status_environment: string | null;
   device: string | null;
   assigned_to: string | null;
 }
@@ -284,24 +285,24 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
 
     // If dropping on a column, extract the status
     let newStatus: IncidentStatus;
-    let newEnvironment: string | null | undefined;
+    let newStatusEnvironment: string | null | undefined;
     if (overId.startsWith('column-')) {
       newStatus = overId.replace('column-', '') as IncidentStatus;
-      newEnvironment = newStatus === 'resolved' ? normalizeEnvironment(activeIncident?.environment) || 'PRO' : null;
+      newStatusEnvironment = newStatus === 'resolved' ? normalizeEnvironment(activeIncident?.status_environment) || 'PRO' : null;
     } else {
       // If dropping on another card, find its status
       const overIncident = incidents.find(inc => inc.id === overId);
       if (!overIncident) return;
       newStatus = overIncident.status;
-      newEnvironment = newStatus === 'resolved' ? normalizeEnvironment(overIncident.environment) || normalizeEnvironment(activeIncident?.environment) || 'PRO' : null;
+      newStatusEnvironment = newStatus === 'resolved' ? normalizeEnvironment(overIncident.status_environment) || normalizeEnvironment(activeIncident?.status_environment) || 'PRO' : null;
     }
 
-    if (activeIncident.status === newStatus && activeIncident.environment === newEnvironment) return;
+    if (activeIncident.status === newStatus && activeIncident.status_environment === newStatusEnvironment) return;
 
     // Update locally first for immediate feedback
     setIncidents(prev => 
       prev.map(inc => 
-        inc.id === activeId ? { ...inc, status: newStatus, environment: newEnvironment ?? inc.environment } : inc
+        inc.id === activeId ? { ...inc, status: newStatus, status_environment: newStatusEnvironment ?? inc.status_environment } : inc
       )
     );
 
@@ -310,11 +311,11 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
       const previousStatus = activeIncident.status;
       const { error } = await supabase
         .from('incidents')
-        .update({ status: newStatus, environment: newEnvironment, updated_at: new Date().toISOString() } as any)
+        .update({ status: newStatus, status_environment: newStatusEnvironment, updated_at: new Date().toISOString() } as any)
         .eq('id', activeId);
 
       if (error) throw error;
-      if (previousStatus !== newStatus || normalizeEnvironment(activeIncident.environment) !== normalizeEnvironment(newEnvironment)) {
+      if (previousStatus !== newStatus || normalizeEnvironment(activeIncident.status_environment) !== normalizeEnvironment(newStatusEnvironment)) {
         await recordIncidentStatusChange({
           projectId,
           incidentId: activeId,
@@ -323,15 +324,15 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
           incidentCategory: activeIncident.category,
           fromStatus: previousStatus,
           toStatus: newStatus,
-          fromEnvironment: activeIncident.environment,
-          toEnvironment: newEnvironment,
+          fromEnvironment: activeIncident.status_environment,
+          toEnvironment: newStatusEnvironment,
         });
       }
       
       // Sync auto-linked tasks with the new status (map incident status to task status)
       await supabase
         .from('tasks')
-        .update({ status: mapIncidentStatusToTaskStatus(newStatus), environment: newEnvironment } as any)
+        .update({ status: mapIncidentStatusToTaskStatus(newStatus), status_environment: newStatusEnvironment } as any)
         .eq('incident_id', activeId)
         .eq('is_auto_linked', true);
       
@@ -642,7 +643,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
                         {getIncidentStatusLabel(incident.status)}
                       </Badge>
                     </TableCell>
-                    <TableCell>{getResolvedSubstatusLabel(incident.status, incident.environment)}</TableCell>
+                    <TableCell>{getResolvedSubstatusLabel(incident.status, incident.status_environment)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         {getCategoryIcon(getDisplayCategory(incident))}

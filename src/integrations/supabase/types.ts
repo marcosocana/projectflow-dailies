@@ -129,6 +129,7 @@ export type Database = {
           id: string
           incident_id: string
           status: Database["public"]["Enums"]["incident_status"]
+          status_environment: string | null
           updated_at: string
         }
         Insert: {
@@ -138,6 +139,7 @@ export type Database = {
           id?: string
           incident_id: string
           status?: Database["public"]["Enums"]["incident_status"]
+          status_environment?: string | null
           updated_at?: string
         }
         Update: {
@@ -147,6 +149,7 @@ export type Database = {
           id?: string
           incident_id?: string
           status?: Database["public"]["Enums"]["incident_status"]
+          status_environment?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -213,6 +216,7 @@ export type Database = {
           order_position: number | null
           project_id: string
           status: Database["public"]["Enums"]["incident_status"]
+          status_environment: string | null
           updated_at: string
         }
         Insert: {
@@ -233,6 +237,7 @@ export type Database = {
           order_position?: number | null
           project_id: string
           status?: Database["public"]["Enums"]["incident_status"]
+          status_environment?: string | null
           updated_at?: string
         }
         Update: {
@@ -253,6 +258,7 @@ export type Database = {
           order_position?: number | null
           project_id?: string
           status?: Database["public"]["Enums"]["incident_status"]
+          status_environment?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -766,6 +772,7 @@ export type Database = {
           project_id: string
           related_ticket: string | null
           status: Database["public"]["Enums"]["task_status"]
+          status_environment: string | null
           title: string
           updated_at: string
         }
@@ -784,6 +791,7 @@ export type Database = {
           project_id: string
           related_ticket?: string | null
           status?: Database["public"]["Enums"]["task_status"]
+          status_environment?: string | null
           title: string
           updated_at?: string
         }
@@ -802,6 +810,7 @@ export type Database = {
           project_id?: string
           related_ticket?: string | null
           status?: Database["public"]["Enums"]["task_status"]
+          status_environment?: string | null
           title?: string
           updated_at?: string
         }

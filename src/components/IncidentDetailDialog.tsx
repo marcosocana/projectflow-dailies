@@ -145,6 +145,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     epic: '',
     additionalComments: '',
     env: '',
+    statusEnv: '',
     dev: '',
     evidenceLink: '',
     assignedTo: '',
@@ -180,7 +181,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     setDetailEvidenceFile(null);
     isInitialDetailLoad.current = true;
     setDetailForm({
-      incidentNumber: '', name: '', description: '', occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', epic: '', additionalComments: '', env: '', dev: '', evidenceLink: '', assignedTo: 'unassigned'
+      incidentNumber: '', name: '', description: '', occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', epic: '', additionalComments: '', env: '', statusEnv: '', dev: '', evidenceLink: '', assignedTo: 'unassigned'
     });
   };
 
@@ -229,7 +230,8 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           category: getDisplayCategory(data),
           epic: data.epic || '',
           additionalComments: cleanAdditionalComments(data.additional_comments),
-          env: data.status === 'in_qa' ? 'PRE' : pick(data.environment || '', ENV_OPTIONS),
+          env: pick(data.environment || '', ENV_OPTIONS),
+          statusEnv: data.status === 'in_qa' ? 'PRE' : pick(data.status_environment || '', ENV_OPTIONS),
           dev: pick(data.device || '', DEVICE_OPTIONS),
           evidenceLink: data.evidence && !String(data.evidence).startsWith('incidents/') ? data.evidence : '',
           assignedTo: data.assigned_to || 'unassigned',
@@ -271,8 +273,9 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         incident_number: incidentNumber,
         name: detailForm.name,
         description: detailForm.description,
-        environment: detailForm.status === 'resolved' || detailForm.status === 'closed'
-          ? normalizeEnvironment(detailForm.env) || 'PRO'
+        environment: detailForm.env,
+        status_environment: detailForm.status === 'resolved' || detailForm.status === 'closed'
+          ? normalizeEnvironment(detailForm.statusEnv) || 'PRO'
           : null,
         device: detailForm.dev,
         occurred_at: new Date(detailForm.occurredAt).toISOString(),
@@ -293,9 +296,9 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         }
       }
       const previousStatus = selected.status;
-      const previousEnvironment = selected.environment;
+      const previousEnvironment = selected.status_environment;
       await supabase.from('incidents').update(payload).eq('id', selected.id);
-      if (previousStatus !== payload.status || normalizeEnvironment(previousEnvironment) !== normalizeEnvironment(payload.environment)) {
+      if (previousStatus !== payload.status || normalizeEnvironment(previousEnvironment) !== normalizeEnvironment(payload.status_environment)) {
         await recordIncidentStatusChange({
           projectId: selected.project_id,
           incidentId: selected.id,
@@ -305,7 +308,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           fromStatus: previousStatus,
           toStatus: payload.status,
           fromEnvironment: previousEnvironment,
-          toEnvironment: payload.environment,
+          toEnvironment: payload.status_environment,
         });
       }
       
@@ -320,7 +323,8 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           title: payload.name,
           description: payload.description || null,
           related_ticket: incidentReference,
-          status: mapIncidentStatusToTaskStatus(payload.status)
+          status: mapIncidentStatusToTaskStatus(payload.status),
+          status_environment: payload.status_environment,
         } as any)
         .eq('incident_id', selected.id)
         .eq('is_auto_linked', true);
@@ -391,7 +395,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
 Nombre: ${selected.name || 'Sin nombre'}
 Categoría: ${category}
 Estado: ${status}
-Sub-estado: ${getResolvedSubstatusLabel(selected.status, selected.environment)}
+Sub-estado: ${getResolvedSubstatusLabel(selected.status, selected.status_environment)}
 Fecha: ${new Date(selected.occurred_at).toLocaleDateString()}
 Entorno: ${selected.environment || 'N/A'}
 Canal: ${selected.device || 'N/A'}
@@ -463,7 +467,7 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                   onValueChange={(v) => setDetailForm((f) => ({
                     ...f,
                     status: v,
-                    env: v === 'resolved' || v === 'closed' ? normalizeEnvironment(f.env) || 'PRO' : '',
+                    statusEnv: v === 'resolved' || v === 'closed' ? normalizeEnvironment(f.statusEnv) || 'PRO' : '',
                   }))}
                   disabled={assignments.length > 1}
                 >
@@ -511,7 +515,6 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                 <Select
                   value={detailForm.env}
                   onValueChange={(v) => setDetailForm((f) => ({ ...f, env: v }))}
-                  disabled={detailForm.status !== 'resolved' && detailForm.status !== 'closed'}
                 >
                   <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
@@ -519,6 +522,19 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                   </SelectContent>
                 </Select>
               </div>
+              {(detailForm.status === 'resolved' || detailForm.status === 'closed') && (
+                <div>
+                  <Label>Sub-estado</Label>
+                  <Select value={detailForm.statusEnv} onValueChange={(v) => setDetailForm((f) => ({ ...f, statusEnv: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DEV">En DEV</SelectItem>
+                      <SelectItem value="PRE">En PRE</SelectItem>
+                      <SelectItem value="PRO">En PRO</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div>
                 <Label>Canal</Label>
                 <Select value={detailForm.dev} onValueChange={(v) => setDetailForm((f) => ({ ...f, dev: v }))}>
@@ -543,7 +559,7 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                         setDetailForm(prev => ({
                           ...prev,
                           status: data.status === 'in_qa' ? 'resolved' : data.status,
-                          env: data.status === 'in_qa' ? 'PRE' : prev.env,
+                          statusEnv: data.status === 'in_qa' ? 'PRE' : data.status_environment || prev.statusEnv,
                         }));
                         onPatched?.(selected.id, data);
                       }

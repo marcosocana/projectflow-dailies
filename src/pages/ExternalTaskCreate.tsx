@@ -211,9 +211,10 @@ export default function ExternalTaskCreate() {
         environment: form.environment,
         device: form.device,
         epic: form.epic,
-        occurred_at: new Date(form.occurredAt).toISOString(),
-        status: form.status,
-        category: categoryPayload.category,
+	        occurred_at: new Date(form.occurredAt).toISOString(),
+	        status: form.status,
+	        status_environment: form.status === 'resolved' || form.status === 'closed' ? 'PRO' : null,
+	        category: categoryPayload.category,
         additional_comments: categoryPayload.additional_comments,
         project_id: projectId,
         assigned_to: null
@@ -236,7 +237,7 @@ export default function ExternalTaskCreate() {
           incident_id: id,
           assigned_to: a.person,
           status: a.status,
-          environment: normalizeEnvironment(a.environment)
+          status_environment: normalizeEnvironment(a.environment)
         }));
         await supabase.from('incident_assignments').insert(assignmentsToInsert);
         
@@ -283,7 +284,7 @@ export default function ExternalTaskCreate() {
                 person_id: a.person,
                 assigned_to: a.person,
                 status: taskStatus,
-                environment: taskStatus === 'resolved' ? normalizeEnvironment(a.environment) || 'PRO' : null,
+                status_environment: taskStatus === 'resolved' ? normalizeEnvironment(a.environment) || 'PRO' : null,
                 is_auto_linked: true,
                 related_ticket: incidentNumber
               };

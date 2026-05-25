@@ -365,6 +365,7 @@ export default function IncidentsModule({
     description: '',
     evidenceLink: '',
     environment: '',
+    statusEnvironment: '',
     device: '',
     epic: '',
     occurredAt: new Date().toISOString(),
@@ -636,6 +637,7 @@ export default function IncidentsModule({
       description: '',
       evidenceLink: '',
       environment: 'N/A',
+      statusEnvironment: '',
       device: 'N/A',
       epic: '',
       occurredAt: new Date().toISOString(),
@@ -741,6 +743,7 @@ export default function IncidentsModule({
           name: form.name,
           description: form.description,
           environment: environmentValue,
+          status_environment: form.status === 'resolved' || form.status === 'closed' ? normalizeEnvironment(form.statusEnvironment) || 'PRO' : null,
           device: deviceValue,
           epic: form.epic,
           occurred_at: new Date(form.occurredAt).toISOString(),
@@ -764,10 +767,11 @@ export default function IncidentsModule({
           projectId,
           incidentId: id,
           incidentNumber: Number(incidentNumber),
-          incidentName: form.name,
-          incidentCategory: categoryPayload.category,
-          toStatus: form.status,
-        });
+	          incidentName: form.name,
+	          incidentCategory: categoryPayload.category,
+	          toStatus: form.status,
+	          toEnvironment: insertPayload.status_environment,
+	        });
         
         // Create multiple assignments
         if (createAssignments.length > 0) {
@@ -775,7 +779,7 @@ export default function IncidentsModule({
             incident_id: id,
             assigned_to: a.person,
             status: a.status,
-            environment: normalizeEnvironment(a.environment),
+          status_environment: normalizeEnvironment(a.environment),
           }));
           const { error: assignmentsError } = await supabase
             .from('incident_assignments')
@@ -826,7 +830,7 @@ export default function IncidentsModule({
                   person_id: a.person,
                   assigned_to: a.person,
                   status: taskStatus,
-                  environment: taskStatus === 'resolved' ? normalizeEnvironment(a.environment) || 'PRO' : null,
+                  status_environment: taskStatus === 'resolved' ? normalizeEnvironment(a.environment) || 'PRO' : null,
                   is_auto_linked: true,
                   related_ticket: incidentReference
                 };
@@ -885,7 +889,7 @@ export default function IncidentsModule({
           error
         } = await supabase.from('incidents').update(updatePayload).eq('id', id);
         if (error) throw error;
-        if (fromStatus && (fromStatus !== updatePayload.status || normalizeEnvironment(previousIncident?.environment) !== normalizeEnvironment(updatePayload.environment))) {
+        if (fromStatus && (fromStatus !== updatePayload.status || normalizeEnvironment(previousIncident?.status_environment) !== normalizeEnvironment(updatePayload.status_environment))) {
           await recordIncidentStatusChange({
             projectId,
             incidentId: id,
@@ -894,8 +898,8 @@ export default function IncidentsModule({
             incidentCategory: updatePayload.category,
             fromStatus,
             toStatus: updatePayload.status,
-            fromEnvironment: previousIncident?.environment,
-            toEnvironment: updatePayload.environment,
+            fromEnvironment: previousIncident?.status_environment,
+            toEnvironment: updatePayload.status_environment,
           });
         }
         
@@ -960,6 +964,7 @@ export default function IncidentsModule({
           name: form.name,
           description: form.description,
           environment: form.environment || '',
+          status_environment: form.status === 'resolved' || form.status === 'closed' ? normalizeEnvironment(form.statusEnvironment) || 'PRO' : null,
           device: form.device || '',
           epic: form.epic,
           occurred_at: new Date(form.occurredAt).toISOString(),
@@ -978,7 +983,7 @@ export default function IncidentsModule({
         const fromStatus = previousIncident?.status;
         const { error } = await supabase.from('incidents').update(updatePayload).eq('id', editingId);
         if (error) throw error;
-        if (fromStatus && (fromStatus !== updatePayload.status || normalizeEnvironment(previousIncident?.environment) !== normalizeEnvironment(updatePayload.environment))) {
+        if (fromStatus && (fromStatus !== updatePayload.status || normalizeEnvironment(previousIncident?.status_environment) !== normalizeEnvironment(updatePayload.status_environment))) {
           await recordIncidentStatusChange({
             projectId,
             incidentId: editingId,
@@ -987,8 +992,8 @@ export default function IncidentsModule({
             incidentCategory: updatePayload.category,
             fromStatus,
             toStatus: updatePayload.status,
-            fromEnvironment: previousIncident?.environment,
-            toEnvironment: updatePayload.environment,
+            fromEnvironment: previousIncident?.status_environment,
+            toEnvironment: updatePayload.status_environment,
           });
         }
 
@@ -1031,6 +1036,7 @@ export default function IncidentsModule({
       description: incident.description || '',
       evidenceLink: incident.evidence && !incident.evidence.startsWith('incidents/') ? incident.evidence : '',
       environment: incident.environment || '',
+      statusEnvironment: incident.status_environment || '',
       device: incident.device || '',
       epic: incident.epic || '',
       occurredAt: incident.occurred_at ? new Date(incident.occurred_at).toISOString() : new Date().toISOString(),
@@ -1051,7 +1057,7 @@ Canal: ${incident.device || 'No especificado'}
 Entorno: ${incident.environment || 'No especificado'}
 Fecha: ${new Date(incident.occurred_at).toLocaleDateString('es-ES')}
 Estado: ${getIncidentStatusLabel(incident.status)}
-Sub-estado: ${getResolvedSubstatusLabel(incident.status, incident.environment)}`;
+Sub-estado: ${getResolvedSubstatusLabel(incident.status, incident.status_environment)}`;
     try {
       await navigator.clipboard.writeText(basicInfo);
       toast({
@@ -1186,8 +1192,8 @@ Sub-estado: ${getResolvedSubstatusLabel(incident.status, incident.environment)}`
           incidentCategory: activeIncident.category,
           fromStatus,
           toStatus,
-          fromEnvironment: activeIncident.environment,
-          toEnvironment: toStatus === 'resolved' ? normalizeEnvironment(activeIncident.environment) || 'PRO' : null,
+          fromEnvironment: activeIncident.status_environment,
+          toEnvironment: toStatus === 'resolved' ? normalizeEnvironment(activeIncident.status_environment) || 'PRO' : null,
         });
       }
       
@@ -1616,9 +1622,6 @@ Sub-estado: ${getResolvedSubstatusLabel(incident.status, incident.environment)}`
                     <TableHead className="w-20 cursor-pointer select-none" onClick={() => toggleSort('device')}>
                       Canal {sortKey === 'device' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
-                    <TableHead className="w-24 cursor-pointer select-none" onClick={() => toggleSort('environment')}>
-                      Entorno {sortKey === 'environment' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
-                    </TableHead>
                     <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('occurred_at')}>
                       Fecha {sortKey === 'occurred_at' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
@@ -1648,10 +1651,9 @@ Sub-estado: ${getResolvedSubstatusLabel(incident.status, incident.environment)}`
                       </TableCell>
                       <TableCell>{i.epic || '-'}</TableCell>
                       <TableCell className="w-20">{i.device || '-'}</TableCell>
-                      <TableCell className="w-24">{i.environment || '-'}</TableCell>
                       <TableCell>{new Date(i.occurred_at).toLocaleDateString('es-ES')}</TableCell>
                       <TableCell className="w-32"><StatusBadge status={i.status} environment={i.environment} /></TableCell>
-                      <TableCell className="w-28">{getResolvedSubstatusLabel(i.status, i.environment)}</TableCell>
+                      <TableCell className="w-28">{getResolvedSubstatusLabel(i.status, i.status_environment)}</TableCell>
                       <TableCell className="w-16">
                         <TaskAssignmentCell taskId={i.id} teamMembers={teamMembers} />
                       </TableCell>
@@ -1672,7 +1674,7 @@ Sub-estado: ${getResolvedSubstatusLabel(incident.status, incident.environment)}`
                   );
                 })}
                 {paginatedIncidents.length === 0 && <TableRow>
-                    <TableCell colSpan={11} className="text-center text-muted-foreground">No hay incidencias</TableCell>
+                    <TableCell colSpan={10} className="text-center text-muted-foreground">No hay incidencias</TableCell>
                   </TableRow>}
               </TableBody>
             </Table>
@@ -2028,10 +2030,11 @@ Sub-estado: ${getResolvedSubstatusLabel(incident.status, incident.environment)}`
           </div>
            <div className="space-y-2">
              <Label>Estado</Label>
-             <Select value={form.status} onValueChange={v => setForm(f => ({
-              ...f,
-              status: v
-            }))}>
+	             <Select value={form.status} onValueChange={v => setForm(f => ({
+	              ...f,
+	              status: v,
+	              statusEnvironment: v === 'resolved' || v === 'closed' ? normalizeEnvironment(f.statusEnvironment) || 'PRO' : '',
+	            }))}>
                <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
                <SelectContent>
                  {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>
@@ -2042,8 +2045,21 @@ Sub-estado: ${getResolvedSubstatusLabel(incident.status, incident.environment)}`
                      </div>
                    </SelectItem>)}
                </SelectContent>
-             </Select>
-           </div>
+	             </Select>
+	           </div>
+	           {(form.status === 'resolved' || form.status === 'closed') && (
+	            <div className="space-y-2">
+	              <Label>Sub-estado</Label>
+	              <Select value={form.statusEnvironment} onValueChange={v => setForm(f => ({ ...f, statusEnvironment: v }))}>
+	                <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+	                <SelectContent>
+	                  <SelectItem value="DEV">En DEV</SelectItem>
+	                  <SelectItem value="PRE">En PRE</SelectItem>
+	                  <SelectItem value="PRO">En PRO</SelectItem>
+	                </SelectContent>
+	              </Select>
+	            </div>
+	           )}
            {!editingId ? (
               <>
                 <div className="space-y-2 md:col-span-2">

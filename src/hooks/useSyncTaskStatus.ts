@@ -70,7 +70,7 @@ export const syncSingleAssignmentStatus = async (taskId: string, taskStatus: Inc
     // Obtener todas las asignaciones
     const { data: assignments, error } = await supabase
       .from('incident_assignments')
-      .select('id, status, environment')
+      .select('id, status, status_environment')
       .eq('incident_id', taskId);
 
     if (error) throw error;
@@ -85,7 +85,7 @@ export const syncSingleAssignmentStatus = async (taskId: string, taskStatus: Inc
           .from('incident_assignments')
           .update({
             status: taskStatus,
-            environment: taskStatus === 'resolved' ? normalizeEnvironment((assignment as any).environment) || 'PRO' : null,
+            status_environment: taskStatus === 'resolved' ? normalizeEnvironment((assignment as any).status_environment) || 'PRO' : null,
           } as any)
           .eq('id', assignment.id);
       }

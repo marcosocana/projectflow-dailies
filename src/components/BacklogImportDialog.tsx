@@ -173,7 +173,7 @@ export default function BacklogImportDialog({
           incident_id: incident.id,
           assigned_to: assignment.person,
           status: assignment.status,
-          environment: normalizeEnvironment(assignment.environment),
+          status_environment: normalizeEnvironment(assignment.environment),
         }));
 
         const { error: assignError } = await supabase
@@ -222,7 +222,7 @@ export default function BacklogImportDialog({
               title: current.name,
               description: current.description || null,
               status: taskStatus,
-              environment: taskStatus === 'resolved' ? normalizeEnvironment(assignment.environment) || 'PRO' : null,
+              status_environment: taskStatus === 'resolved' ? normalizeEnvironment(assignment.environment) || 'PRO' : null,
               incident_id: incident.id,
               is_auto_linked: true,
               related_ticket: current.number

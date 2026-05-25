@@ -267,7 +267,7 @@ export default function DailiesModule({
       data: vacs
     }] = await Promise.all([supabase.from('people').select('*').eq('project_id', projectId).order('created_at', {
       ascending: true
-    }), supabase.from('incidents').select('id,name,description,incident_number,status,category,epic,additional_comments,environment').eq('project_id', projectId).order('incident_number', {
+    }), supabase.from('incidents').select('id,name,description,incident_number,status,category,epic,additional_comments,environment,status_environment').eq('project_id', projectId).order('incident_number', {
       ascending: false
     }), supabase.from('vacations').select('*').eq('project_id', projectId).order('start_date', {
       ascending: true
@@ -385,7 +385,7 @@ export default function DailiesModule({
         incidentId: incident.id,
         epic: incident.epic || '',
         status: incident.status === 'resolved' ? 'resolved' : incident.status === 'in_progress' ? 'in_progress' : incident.status === 'blocked' ? 'blocked' : 'pending',
-        environment: incident.status === 'resolved' ? (incident.environment || '') : '',
+        environment: incident.status === 'resolved' ? (incident.status_environment || '') : '',
         relatedTicket: formatIncidentReference(incident) || '',
         category: getDisplayCategory(incident) || 'incident'
       });
@@ -447,7 +447,7 @@ export default function DailiesModule({
         incident_number: incidentNumber,
         name: taskForm.title,
         description: taskForm.description || null,
-        environment: taskEnvironment || null,
+        status_environment: taskEnvironment || null,
         device: '',
         occurred_at: date.toISOString(),
         status: mapTaskStatusToIncidentStatus(taskForm.status),
@@ -479,10 +479,11 @@ export default function DailiesModule({
         projectId,
         incidentId: newIncidentId,
         incidentNumber,
-        incidentName: taskForm.title,
-        incidentCategory: taskForm.category,
-        toStatus: mapTaskStatusToIncidentStatus(taskForm.status),
-      });
+	        incidentName: taskForm.title,
+	        incidentCategory: taskForm.category,
+	        toStatus: mapTaskStatusToIncidentStatus(taskForm.status),
+	        toEnvironment: taskEnvironment || null,
+	      });
 
     }
 
@@ -497,7 +498,7 @@ export default function DailiesModule({
       assigned_to: primaryPersonId,
       incident_id: incidentIdToLink,
       status: taskForm.status ?? 'pending',
-      environment: taskEnvironment || null,
+      status_environment: taskEnvironment || null,
       is_auto_linked: creationMode === 'linked' || creationMode === 'manual',
       related_ticket: relatedTicket
     };
@@ -515,7 +516,7 @@ export default function DailiesModule({
     if (incidentIdToLink && creationMode === 'linked') {
       const { data: currentIncident } = await supabase
         .from('incidents')
-        .select('status, incident_number, name, category, environment')
+        .select('status, incident_number, name, category, status_environment')
         .eq('id', incidentIdToLink)
         .maybeSingle();
 
@@ -524,7 +525,7 @@ export default function DailiesModule({
         .update({
           status: mapTaskStatusToIncidentStatus(taskForm.status),
           epic: taskForm.epic || null,
-          environment: taskEnvironment || null,
+          status_environment: taskEnvironment || null,
           assigned_to: primaryPersonId,
         } as any)
         .eq('id', incidentIdToLink);
@@ -532,7 +533,7 @@ export default function DailiesModule({
       if (
         currentIncident &&
         (currentIncident.status !== mapTaskStatusToIncidentStatus(taskForm.status) ||
-          normalizeTaskEnvironment(mapIncidentStatusToTaskStatus(currentIncident.status) as TaskStatus, currentIncident.environment || '') !== taskEnvironment)
+          normalizeTaskEnvironment(mapIncidentStatusToTaskStatus(currentIncident.status) as TaskStatus, currentIncident.status_environment || '') !== taskEnvironment)
       ) {
         await recordIncidentStatusChange({
           projectId,
@@ -542,7 +543,7 @@ export default function DailiesModule({
           incidentCategory: currentIncident.category,
           fromStatus: currentIncident.status,
           toStatus: mapTaskStatusToIncidentStatus(taskForm.status),
-          fromEnvironment: currentIncident.environment,
+          fromEnvironment: currentIncident.status_environment,
           toEnvironment: taskEnvironment || null,
         });
       }
@@ -575,7 +576,7 @@ export default function DailiesModule({
           assigned_to: personId,
           incident_id: incidentIdToLink,
           status: taskForm.status ?? 'pending',
-          environment: taskEnvironment || null,
+          status_environment: taskEnvironment || null,
           is_auto_linked: creationMode === 'linked' || creationMode === 'manual',
           related_ticket: relatedTicket,
         })) as any)
@@ -749,7 +750,7 @@ export default function DailiesModule({
     preserveScroll();
     const { error } = await supabase
       .from('tasks')
-      .update({ environment })
+      .update({ status_environment: environment })
       .eq('id', task.id);
 
     if (error) {
@@ -764,9 +765,9 @@ export default function DailiesModule({
       const linkedIncident = incidents.find((incident) => incident.id === task.incident_id);
       await supabase
         .from('incidents')
-        .update({ environment })
+        .update({ status_environment: environment })
         .eq('id', task.incident_id);
-      if (linkedIncident && normalizeTaskEnvironment(task.status as TaskStatus, linkedIncident.environment || '') !== environment) {
+      if (linkedIncident && normalizeTaskEnvironment(task.status as TaskStatus, linkedIncident.status_environment || '') !== environment) {
         await recordIncidentStatusChange({
           projectId,
           incidentId: task.incident_id,
@@ -775,15 +776,15 @@ export default function DailiesModule({
           incidentCategory: linkedIncident.category,
           fromStatus: linkedIncident.status,
           toStatus: linkedIncident.status,
-          fromEnvironment: linkedIncident.environment,
+          fromEnvironment: linkedIncident.status_environment,
           toEnvironment: environment,
         });
       }
-      setIncidents(prev => prev.map(incident => incident.id === task.incident_id ? { ...incident, environment } : incident));
+      setIncidents(prev => prev.map(incident => incident.id === task.incident_id ? { ...incident, status_environment: environment } : incident));
     }
 
-    setTasks(prev => prev.map(item => item.id === task.id ? { ...item, environment } : item));
-    setSelectedTask(prev => prev?.id === task.id ? { ...prev, environment } : prev);
+    setTasks(prev => prev.map(item => item.id === task.id ? { ...item, status_environment: environment } : item));
+    setSelectedTask(prev => prev?.id === task.id ? { ...prev, status_environment: environment } : prev);
   };
 
   const deleteTask = async (taskOrId: any) => {
@@ -1418,7 +1419,7 @@ export default function DailiesModule({
         <TableCell>
           {isResolvedTask(task.status as TaskStatus) ? (
             <Select
-              value={(task.environment || '') as TaskEnvironment | ''}
+              value={(task.status_environment || '') as TaskEnvironment | ''}
               onValueChange={(value) => updateTaskEnvironment(task, value as TaskEnvironment)}
             >
               <SelectTrigger className="h-8 w-24">
@@ -1430,9 +1431,9 @@ export default function DailiesModule({
 	                <SelectItem value="PRO">En PRO</SelectItem>
               </SelectContent>
             </Select>
-          ) : task.environment ? (
+          ) : task.status_environment ? (
             <Badge variant="outline" className="bg-muted/50 border-transparent">
-              {task.environment}
+              {task.status_environment}
             </Badge>
           ) : (
             <span className="text-muted-foreground">-</span>
@@ -1666,7 +1667,7 @@ export default function DailiesModule({
       incidentId: task.incident_id || '',
       epic: linkedIncident?.epic || '',
       status: task.status as TaskStatus || 'pending',
-      environment: task.environment || '',
+      environment: task.status_environment || '',
       category: getDisplayCategory(linkedIncident) || 'incident'
     });
     setEditing(false);
@@ -1715,7 +1716,7 @@ export default function DailiesModule({
         person_id: editForm.personIds.length > 0 ? editForm.personIds[0] : null,
         incident_id: editForm.incidentId || null,
         status: editForm.status,
-        environment: taskEnvironment || null,
+        status_environment: taskEnvironment || null,
         is_auto_linked: Boolean(editForm.incidentId || selectedTask.is_auto_linked),
       };
       const {
@@ -1726,7 +1727,7 @@ export default function DailiesModule({
         if (update.incident_id && relatedTicket) {
           const { data: currentIncident } = await supabase
             .from('incidents')
-            .select('status, incident_number, name, category, additional_comments, environment')
+            .select('status, incident_number, name, category, additional_comments, status_environment')
             .eq('id', update.incident_id)
             .maybeSingle();
 
@@ -1743,7 +1744,7 @@ export default function DailiesModule({
               description: update.description,
               status: nextIncidentStatus,
               assigned_to: update.person_id,
-              environment: taskEnvironment || null,
+              status_environment: taskEnvironment || null,
               category: nextCategory.category,
               additional_comments: nextCategory.additional_comments,
             } as any)
@@ -1751,7 +1752,7 @@ export default function DailiesModule({
 
           if (
             currentIncident &&
-            (currentIncident.status !== nextIncidentStatus || normalizeTaskEnvironment(mapIncidentStatusToTaskStatus(currentIncident.status) as TaskStatus, currentIncident.environment || '') !== taskEnvironment)
+            (currentIncident.status !== nextIncidentStatus || normalizeTaskEnvironment(mapIncidentStatusToTaskStatus(currentIncident.status) as TaskStatus, currentIncident.status_environment || '') !== taskEnvironment)
           ) {
             await recordIncidentStatusChange({
               projectId,
@@ -1761,7 +1762,7 @@ export default function DailiesModule({
               incidentCategory: currentIncident.category,
               fromStatus: currentIncident.status,
               toStatus: nextIncidentStatus,
-              fromEnvironment: currentIncident.environment,
+              fromEnvironment: currentIncident.status_environment,
               toEnvironment: taskEnvironment || null,
             });
           }
@@ -1836,7 +1837,7 @@ export default function DailiesModule({
                   description: update.description || null,
                   related_ticket: relatedTicket || null,
                   status: update.status,
-                  environment: taskEnvironment || null,
+                  status_environment: taskEnvironment || null,
                   person_id: personId,
                   assigned_to: personId,
                 } as any)
@@ -1853,7 +1854,7 @@ export default function DailiesModule({
                   person_id: personId,
                   assigned_to: personId,
                   status: update.status,
-                  environment: taskEnvironment || null,
+                  status_environment: taskEnvironment || null,
                   is_auto_linked: true,
                   related_ticket: relatedTicket || null,
                 } as any)
@@ -2490,7 +2491,7 @@ export default function DailiesModule({
                       
                       const info = `Título: ${selectedTask.title || 'Sin título'}
 Estado: ${getTaskStatusLabel(selectedTask.status as TaskStatus)}
-Entorno: ${selectedTask.environment || 'Sin definir'}
+Sub-estado: ${getResolvedSubstatusLabel(selectedTask.status as TaskStatus, selectedTask.status_environment)}
 ${taskIdInfo}
 Descripción: ${selectedTask.description || 'Sin descripción'}`;
                       
@@ -2883,7 +2884,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                             {getTaskStatusLabel(task.status as TaskStatus)}
                           </Badge>
                         </TableCell>
-                        <TableCell>{getResolvedSubstatusLabel(task.status as TaskStatus, task.environment)}</TableCell>
+                        <TableCell>{getResolvedSubstatusLabel(task.status as TaskStatus, task.status_environment)}</TableCell>
                          <TableCell>
                            <div className="flex items-center gap-2">
                              {task.assigned_to && (

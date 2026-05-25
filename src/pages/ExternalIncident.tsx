@@ -192,9 +192,10 @@ export default function ExternalIncident() {
         environment: form.environment,
         device: form.device,
         epic: form.epic || null,
-        occurred_at: form.occurredAt,
-        status: form.status as any,
-        category: categoryPayload.category as any,
+	        occurred_at: form.occurredAt,
+	        status: form.status as any,
+	        status_environment: form.status === 'resolved' || form.status === 'closed' ? 'PRO' : null,
+	        category: categoryPayload.category as any,
         additional_comments: categoryPayload.additional_comments,
         evidence: evidenceUrl,
         created_by: null, // External submission

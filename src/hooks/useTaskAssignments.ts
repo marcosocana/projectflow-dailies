@@ -13,7 +13,7 @@ export interface TaskAssignment {
   incident_id: string;
   assigned_to: string;
   status: IncidentStatus;
-  environment: TaskEnvironment | null;
+  status_environment: TaskEnvironment | null;
   created_at: string;
   updated_at: string;
 }
@@ -81,12 +81,12 @@ export const useTaskAssignments = (taskId: string | null) => {
     }
   };
 
-  const updateAssignmentStatus = async (assignmentId: string, status: IncidentStatus, environment: TaskEnvironment | null = null) => {
+  const updateAssignmentStatus = async (assignmentId: string, status: IncidentStatus, statusEnvironment: TaskEnvironment | null = null) => {
     try {
       // 1) Actualizar el estado de la asignación
       const { error } = await supabase
         .from('incident_assignments')
-        .update({ status, environment } as any)
+        .update({ status, status_environment: statusEnvironment } as any)
         .eq('id', assignmentId);
 
       if (error) throw error;
@@ -101,7 +101,7 @@ export const useTaskAssignments = (taskId: string | null) => {
       if (assignmentRow?.incident_id && assignmentRow?.assigned_to) {
         const { data: currentIncident } = await supabase
           .from('incidents')
-          .select('status, incident_number, name, category, project_id, environment')
+          .select('status, incident_number, name, category, project_id, status_environment')
           .eq('id', assignmentRow.incident_id)
           .maybeSingle();
 
@@ -110,7 +110,7 @@ export const useTaskAssignments = (taskId: string | null) => {
 
         await supabase
           .from('tasks')
-          .update({ status: mapped, environment: normalizeEnvironment(environment) } as any)
+          .update({ status: mapped, status_environment: normalizeEnvironment(statusEnvironment) } as any)
           .eq('incident_id', assignmentRow.incident_id)
           .or(`person_id.eq.${assignmentRow.assigned_to},assigned_to.eq.${assignmentRow.assigned_to}`);
 
@@ -138,16 +138,16 @@ export const useTaskAssignments = (taskId: string | null) => {
 
           // 5) Actualizar el estado general de la incidencia
           const incidentEnvironment = newIncidentStatus === 'resolved'
-            ? normalizeEnvironment(environment) || normalizeEnvironment(currentIncident?.environment) || 'PRO'
+            ? normalizeEnvironment(statusEnvironment) || normalizeEnvironment(currentIncident?.status_environment) || 'PRO'
             : null;
           await supabase
             .from('incidents')
-            .update({ status: newIncidentStatus, environment: incidentEnvironment } as any)
+            .update({ status: newIncidentStatus, status_environment: incidentEnvironment } as any)
             .eq('id', assignmentRow.incident_id);
 
           if (
             currentIncident &&
-            (currentIncident.status !== newIncidentStatus || normalizeEnvironment(currentIncident.environment) !== normalizeEnvironment(incidentEnvironment))
+            (currentIncident.status !== newIncidentStatus || normalizeEnvironment(currentIncident.status_environment) !== normalizeEnvironment(incidentEnvironment))
           ) {
             await recordIncidentStatusChange({
               projectId: currentIncident.project_id,
@@ -157,7 +157,7 @@ export const useTaskAssignments = (taskId: string | null) => {
               incidentCategory: currentIncident.category,
               fromStatus: currentIncident.status,
               toStatus: newIncidentStatus,
-              fromEnvironment: currentIncident.environment,
+              fromEnvironment: currentIncident.status_environment,
               toEnvironment: incidentEnvironment,
             });
           }
