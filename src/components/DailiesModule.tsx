@@ -31,7 +31,8 @@ import {
   ASSIGNMENT_STATUS_OPTIONS,
   assignmentToSelectValue,
   getAppStatusTone,
-  getResolvedSubstatusLabel,
+  getStatusLogLabel,
+  getStatusLogValue,
   getTaskStatusLabel as getSharedTaskStatusLabel,
   mapIncidentStatusToTaskStatus,
   mapTaskStatusToIncidentStatus,
@@ -73,10 +74,15 @@ const getTaskStatusTone = (status: TaskStatus) => {
   return getAppStatusTone(status);
 };
 
+const getTaskCompositeStatusLabel = (status: TaskStatus | string, environment?: string | null) =>
+  getStatusLogLabel(getStatusLogValue(status, environment));
+
 const isResolvedTask = (status: TaskStatus) => status === 'resolved' || status === 'resolved_yesterday';
 const normalizeTaskEnvironment = (status: TaskStatus, environment: TaskEnvironment | '') => {
   return isResolvedTask(status) ? environment : '';
 };
+
+const DAILY_TASK_STATUS_OPTIONS = ASSIGNMENT_STATUS_OPTIONS.filter(option => option.value !== 'closed');
 
 const cleanAdditionalComments = (value: string | null | undefined) =>
   cleanInternalTaskIdMarker(String(value ?? '').replace(CORRECTIVE_CATEGORY_MARKER, '')).trim();
@@ -791,6 +797,88 @@ export default function DailiesModule({
     setSelectedTask(prev => prev?.id === task.id ? { ...prev, status_environment: environment } : prev);
   };
 
+  const updateTaskStatus = async (task: any, value: AssignmentStatusValue) => {
+    preserveScroll();
+    const next = selectValueToAssignment(value);
+    const nextTaskStatus = mapIncidentStatusToTaskStatus(next.status) as TaskStatus;
+    const nextEnvironment = nextTaskStatus === 'resolved' ? next.environment || 'PRO' : null;
+
+    const { error } = await supabase
+      .from('tasks')
+      .update({
+        status: nextTaskStatus,
+        status_environment: nextEnvironment,
+      } as any)
+      .eq('id', task.id);
+
+    if (error) {
+      return toast({
+        title: 'Error',
+        description: 'No se pudo actualizar el estado',
+        variant: 'destructive',
+      });
+    }
+
+    if (task.incident_id) {
+      const linkedIncident = incidents.find((incident) => incident.id === task.incident_id);
+      const nextIncidentStatus = mapTaskStatusToIncidentStatus(nextTaskStatus);
+      await supabase
+        .from('incidents')
+        .update({
+          status: nextIncidentStatus,
+          status_environment: nextEnvironment,
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq('id', task.incident_id);
+
+      const assignedPersonId = task.person_id || task.assigned_to;
+      if (assignedPersonId) {
+        await supabase
+          .from('incident_assignments')
+          .update({
+            status: nextIncidentStatus,
+            status_environment: nextEnvironment,
+          } as any)
+          .eq('incident_id', task.incident_id)
+          .eq('assigned_to', assignedPersonId);
+      }
+
+      if (
+        linkedIncident &&
+        (linkedIncident.status !== nextIncidentStatus || normalizeTaskEnvironment(mapIncidentStatusToTaskStatus(linkedIncident.status) as TaskStatus, linkedIncident.status_environment || '') !== (nextEnvironment || ''))
+      ) {
+        await recordIncidentStatusChange({
+          projectId,
+          incidentId: task.incident_id,
+          incidentNumber: Number(linkedIncident.incident_number),
+          incidentName: linkedIncident.name,
+          incidentCategory: linkedIncident.category,
+          fromStatus: linkedIncident.status,
+          toStatus: nextIncidentStatus,
+          fromEnvironment: linkedIncident.status_environment,
+          toEnvironment: nextEnvironment,
+        });
+      }
+
+      setIncidents(prev => prev.map(incident => incident.id === task.incident_id ? {
+        ...incident,
+        status: nextIncidentStatus,
+        status_environment: nextEnvironment,
+      } : incident));
+    }
+
+    setTasks(prev => prev.map(item => item.id === task.id ? {
+      ...item,
+      status: nextTaskStatus,
+      status_environment: nextEnvironment,
+    } : item));
+    setSelectedTask(prev => prev?.id === task.id ? {
+      ...prev,
+      status: nextTaskStatus,
+      status_environment: nextEnvironment,
+    } : prev);
+  };
+
   const deleteTask = async (taskOrId: any) => {
     if (!confirm('¿Estás seguro de que quieres eliminar esta tarea?')) return;
 
@@ -1413,35 +1501,23 @@ export default function DailiesModule({
           </div>
         </TableCell>
         <TableCell>
-          <Badge 
-            variant="outline"
-            className={getTaskStatusTone(task.status)}
+          <Select
+            value={assignmentToSelectValue(task.status, task.status_environment)}
+            onValueChange={(value) => updateTaskStatus(task, value as AssignmentStatusValue)}
           >
-            {getTaskStatusLabel(task.status)}
-          </Badge>
-        </TableCell>
-        <TableCell>
-          {isResolvedTask(task.status as TaskStatus) ? (
-            <Select
-              value={(task.status_environment || '') as TaskEnvironment | ''}
-              onValueChange={(value) => updateTaskEnvironment(task, value as TaskEnvironment)}
-            >
-              <SelectTrigger className="h-8 w-24">
-	                <SelectValue placeholder="-" />
-              </SelectTrigger>
-              <SelectContent>
-	                <SelectItem value="DEV">En DEV</SelectItem>
-	                <SelectItem value="PRE">En PRE</SelectItem>
-	                <SelectItem value="PRO">En PRO</SelectItem>
-              </SelectContent>
-            </Select>
-          ) : task.status_environment ? (
-            <Badge variant="outline" className="bg-muted/50 border-transparent">
-              {task.status_environment}
-            </Badge>
-          ) : (
-            <span className="text-muted-foreground">-</span>
-          )}
+            <SelectTrigger className="h-8 w-[172px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DAILY_TASK_STATUS_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  <Badge variant="outline" className={`${getAppStatusTone(option.value)} text-[10px] px-1 py-0.5`}>
+                    {option.label}
+                  </Badge>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </TableCell>
         <TableCell>
           {task.related_ticket ? (
@@ -1796,13 +1872,17 @@ export default function DailiesModule({
             if (existing) {
               await supabase
                 .from('incident_assignments')
-                .update({ status: mapTaskStatusToIncidentStatus(update.status) } as any)
+                .update({
+                  status: mapTaskStatusToIncidentStatus(update.status),
+                  status_environment: taskEnvironment || null,
+                } as any)
                 .eq('id', existing.id);
             } else {
               await supabase.from('incident_assignments').insert({
                 incident_id: update.incident_id,
                 assigned_to: personId,
                 status: mapTaskStatusToIncidentStatus(update.status),
+                status_environment: taskEnvironment || null,
               } as any);
             }
           }
@@ -2040,7 +2120,6 @@ export default function DailiesModule({
                     <TableRow>
                       <TableHead className="w-8"></TableHead>
                       <TableHead>Estado</TableHead>
-                      <TableHead>Sub-estado</TableHead>
                       <TableHead>ID</TableHead>
                       <TableHead>Tipo</TableHead>
                       <TableHead>Tarea</TableHead>
@@ -2068,7 +2147,7 @@ export default function DailiesModule({
                     </SortableContext>
                       {sortedTasks.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center text-muted-foreground">
                           Sin tareas para este día
                         </TableCell>
                       </TableRow>
@@ -2362,8 +2441,12 @@ export default function DailiesModule({
                 >
                   <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
                   <SelectContent>
-                    {ASSIGNMENT_STATUS_OPTIONS.filter(option => option.value !== 'closed').map(option => (
-                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    {DAILY_TASK_STATUS_OPTIONS.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        <Badge variant="outline" className={`${getAppStatusTone(option.value)} text-[10px] px-1 py-0.5`}>
+                          {option.label}
+                        </Badge>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -2479,8 +2562,7 @@ export default function DailiesModule({
                         : 'ID: Sin completar';
                       
                       const info = `Título: ${selectedTask.title || 'Sin título'}
-Estado: ${getTaskStatusLabel(selectedTask.status as TaskStatus)}
-Sub-estado: ${getResolvedSubstatusLabel(selectedTask.status as TaskStatus, selectedTask.status_environment)}
+Estado: ${getTaskCompositeStatusLabel(selectedTask.status as TaskStatus, selectedTask.status_environment)}
 ${taskIdInfo}
 Descripción: ${selectedTask.description || 'Sin descripción'}`;
                       
@@ -2597,40 +2679,29 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                  <div>
                    <Label>Estado</Label>
                    <Select
-                     value={editForm.status}
+                     value={assignmentToSelectValue(editForm.status, editForm.environment)}
                      onValueChange={v => setEditForm(f => {
-                       const nextStatus = v as TaskStatus;
+                       const next = selectValueToAssignment(v as AssignmentStatusValue);
+                       const nextStatus = mapIncidentStatusToTaskStatus(next.status) as TaskStatus;
                        return {
                          ...f,
                          status: nextStatus,
-                         environment: normalizeTaskEnvironment(nextStatus, f.environment),
+                         environment: next.environment || '',
                        };
                      })}
                    >
                      <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
                      <SelectContent>
-                       <SelectItem value="pending">Pendiente</SelectItem>
-                       <SelectItem value="in_progress">WIP</SelectItem>
-                       <SelectItem value="resolved">Resuelta</SelectItem>
-                       <SelectItem value="blocked">Block</SelectItem>
+                       {DAILY_TASK_STATUS_OPTIONS.map(option => (
+                         <SelectItem key={option.value} value={option.value}>
+                           <Badge variant="outline" className={`${getAppStatusTone(option.value)} text-[10px] px-1 py-0.5`}>
+                             {option.label}
+                           </Badge>
+                         </SelectItem>
+                       ))}
                      </SelectContent>
                    </Select>
                  </div>
-                 {isResolvedTask(editForm.status) && (
-                   <div>
-                     <RequiredLabel>Entorno</RequiredLabel>
-                     <Select value={editForm.environment} onValueChange={value => setEditForm(f => ({ ...f, environment: value as TaskEnvironment }))}>
-                       <SelectTrigger>
-                         <SelectValue placeholder="Seleccionar entorno" />
-                       </SelectTrigger>
-                       <SelectContent>
-                         <SelectItem value="DEV">DEV</SelectItem>
-                         <SelectItem value="PRE">PRE</SelectItem>
-                         <SelectItem value="PRO">PRO</SelectItem>
-                       </SelectContent>
-                     </Select>
-                   </div>
-                 )}
                  <div className="md:col-span-2">
                    <Label>Descripción</Label>
                    <Textarea value={editForm.description} onChange={e => setEditForm(f => ({
@@ -2786,7 +2857,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                             variant="outline"
                             className={getTaskStatusTone(task.status as TaskStatus)}
                           >
-	            {getTaskStatusLabel(task.status as TaskStatus)}
+	            {getTaskCompositeStatusLabel(task.status as TaskStatus, task.status_environment)}
                           </Badge>
                           {person && <div className="flex items-center gap-1">
                               <span className="h-2 w-2 rounded" style={{
@@ -2851,7 +2922,6 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                 <TableHeader>
                   <TableRow>
                     <SortableHeader field="status">Estado</SortableHeader>
-                    <TableHead>Sub-estado</TableHead>
                     <SortableHeader field="title">Tarea</SortableHeader>
                     <TableHead>ID</TableHead>
                     <TableHead>Tipo</TableHead>
@@ -2870,10 +2940,9 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                             variant="outline"
                             className={getTaskStatusTone(task.status as TaskStatus)}
                           >
-                            {getTaskStatusLabel(task.status as TaskStatus)}
+                            {getTaskCompositeStatusLabel(task.status as TaskStatus, task.status_environment)}
                           </Badge>
                         </TableCell>
-                        <TableCell>{getResolvedSubstatusLabel(task.status as TaskStatus, task.status_environment)}</TableCell>
                          <TableCell>
                            <div className="flex items-center gap-2">
                              {task.assigned_to && (

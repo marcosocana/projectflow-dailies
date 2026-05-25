@@ -140,7 +140,7 @@ export const getIncidentStatusTone = (status: IncidentStatus | string | null | u
 
 export const getAppStatusTone = (status: IncidentStatus | TaskStatus | string | null | undefined) => {
   if (status === 'in_progress') return 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent';
-  if (status === 'resolved' || status === 'resolved_yesterday' || status === 'in_qa') return 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent';
+  if (status === 'resolved' || status === 'resolved_yesterday' || status === 'in_qa' || String(status || '').startsWith('resolved_')) return 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent';
   if (status === 'blocked') return 'bg-destructive text-destructive-foreground border-transparent';
   if (status === 'closed') return 'bg-slate-700 text-white border-transparent';
   return 'bg-muted text-muted-foreground border-transparent';
