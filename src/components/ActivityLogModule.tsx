@@ -21,7 +21,7 @@ interface ActivityLogModuleProps {
 type ActivityLogRow = {
   id: string;
   created_at: string;
-  incident_id: string;
+  incident_id: string | null;
   actor_name: string;
   actor_color: string;
   incident_name: string;
@@ -29,10 +29,14 @@ type ActivityLogRow = {
   incident_category: string;
   from_status: string;
   to_status: string;
+  event_type: string;
+  message: string | null;
+  metadata: Record<string, unknown> | null;
 };
 
 const STATUS_LABELS: Record<string, string> = {
   created: 'Creada',
+  deleted: 'Eliminada',
   pending: 'Pendiente',
   in_progress: 'WIP',
   in_qa: 'En QA',
@@ -42,6 +46,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_BADGE_CLS: Record<string, string> = {
   created: 'bg-primary text-primary-foreground border-transparent',
+  deleted: 'bg-destructive text-destructive-foreground border-transparent',
   pending: 'bg-muted text-muted-foreground border-transparent',
   in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent',
   in_qa: 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))] border-transparent',
@@ -53,6 +58,7 @@ const CATEGORY_META: Record<string, { label: string; className: string; icon: Re
   incident: { label: 'Incidencia', className: 'bg-destructive text-destructive-foreground', icon: <span>I</span> },
   improvement: { label: 'Evolutivo', className: 'bg-primary text-primary-foreground', icon: <span>E</span> },
   corrective_improvement: { label: 'Mejora correctiva', className: 'bg-purple-600 text-white', icon: <span>C</span> },
+  daily: { label: 'Seguimiento diario', className: 'bg-slate-600 text-white', icon: <span>S</span> },
 };
 
 const MONTH_OPTIONS = [
@@ -149,6 +155,13 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
   }, [projectId, loadLogs]);
 
   const formatEntry = (log: ActivityLogRow) => {
+    if (log.event_type === 'daily_task_created' || log.event_type === 'daily_tasks_persisted') {
+      return log.message || '';
+    }
+    if (log.event_type === 'incident_deleted') {
+      const category = CATEGORY_META[log.incident_category] || CATEGORY_META.incident;
+      return log.message || `${log.actor_name} eliminó ${category.label} - ${log.incident_number} - ${log.incident_name}.`;
+    }
     const category = CATEGORY_META[log.incident_category] || CATEGORY_META.incident;
     if (log.from_status === 'created') {
       return `${log.actor_name} creó ${category.label} - ${log.incident_number} - ${log.incident_name} con estado ${STATUS_LABELS[log.to_status] || log.to_status}.`;
@@ -157,6 +170,16 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
   };
 
   const formatAnonymousEntry = (log: ActivityLogRow) => {
+    if (log.event_type === 'daily_task_created') {
+      return log.message?.replace(/^.+? creó/, 'Se creó') || '';
+    }
+    if (log.event_type === 'daily_tasks_persisted') {
+      return log.message || '';
+    }
+    if (log.event_type === 'incident_deleted') {
+      const category = CATEGORY_META[log.incident_category] || CATEGORY_META.incident;
+      return `Se ha eliminado ${category.label} - ${log.incident_number} - ${log.incident_name}.`;
+    }
     const category = CATEGORY_META[log.incident_category] || CATEGORY_META.incident;
     if (log.from_status === 'created') {
       return `Se ha creado ${category.label} - ${log.incident_number} - ${log.incident_name} con estado ${STATUS_LABELS[log.to_status] || log.to_status}.`;
@@ -350,6 +373,8 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                   const entityLabel = `${category.label} - ${log.incident_number} - ${log.incident_name}`;
                   const isUnread = isUnreadLog(log);
                   const isCreation = log.from_status === 'created';
+                  const isDailyEvent = log.event_type === 'daily_task_created' || log.event_type === 'daily_tasks_persisted';
+                  const isDeletedEvent = log.event_type === 'incident_deleted';
                   return (
                     <div key={log.id} className="relative flex items-start justify-between gap-3 rounded-md border p-3">
                       {isUnread && (
@@ -366,30 +391,38 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                           {category.icon}
                         </div>
                         <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5 text-sm">
-                            <span>{log.actor_name} {isCreation ? 'creó' : 'cambió el estado de'}</span>
-                            <Button
-                              variant="link"
-                              className="h-auto p-0 align-baseline text-sm font-bold"
-                              onClick={() => openIncidentDetails(log.incident_id)}
-                            >
-                              {entityLabel}
-                            </Button>
-                            {!isCreation && (
-                              <>
-                                <span>de</span>
-                                <Badge variant="outline" className={STATUS_BADGE_CLS[log.from_status] || 'border-transparent'}>
-                                  {STATUS_LABELS[log.from_status] || log.from_status}
-                                </Badge>
-                                <span>a</span>
-                              </>
-                            )}
-                            {isCreation && <span>con estado</span>}
-                            <Badge variant="outline" className={STATUS_BADGE_CLS[log.to_status] || 'border-transparent'}>
-                              {STATUS_LABELS[log.to_status] || log.to_status}
-                            </Badge>
-                            <span>.</span>
-                          </div>
+                          {isDailyEvent || isDeletedEvent ? (
+                            <div className="text-sm">{log.message}</div>
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                              <span>{log.actor_name} {isCreation ? 'creó' : 'cambió el estado de'}</span>
+                              {log.incident_id ? (
+                                <Button
+                                  variant="link"
+                                  className="h-auto p-0 align-baseline text-sm font-bold"
+                                  onClick={() => openIncidentDetails(log.incident_id!)}
+                                >
+                                  {entityLabel}
+                                </Button>
+                              ) : (
+                                <span className="font-bold">{entityLabel}</span>
+                              )}
+                              {!isCreation && (
+                                <>
+                                  <span>de</span>
+                                  <Badge variant="outline" className={STATUS_BADGE_CLS[log.from_status] || 'border-transparent'}>
+                                    {STATUS_LABELS[log.from_status] || log.from_status}
+                                  </Badge>
+                                  <span>a</span>
+                                </>
+                              )}
+                              {isCreation && <span>con estado</span>}
+                              <Badge variant="outline" className={STATUS_BADGE_CLS[log.to_status] || 'border-transparent'}>
+                                {STATUS_LABELS[log.to_status] || log.to_status}
+                              </Badge>
+                              <span>.</span>
+                            </div>
+                          )}
                           <div className="text-xs text-muted-foreground mt-1">
                             {log.actor_name} • {format(parseISO(log.created_at), 'HH:mm')}
                           </div>

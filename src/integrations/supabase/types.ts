@@ -390,12 +390,15 @@ export type Database = {
           actor_name: string
           actor_user_id: string | null
           created_at: string
+          event_type: string
           from_status: string
           id: string
           incident_category: string
-          incident_id: string
+          incident_id: string | null
           incident_name: string
           incident_number: number
+          message: string | null
+          metadata: Json
           project_id: string
           to_status: string
         }
@@ -404,12 +407,15 @@ export type Database = {
           actor_name: string
           actor_user_id?: string | null
           created_at?: string
+          event_type?: string
           from_status: string
           id?: string
           incident_category: string
-          incident_id: string
+          incident_id?: string | null
           incident_name: string
           incident_number: number
+          message?: string | null
+          metadata?: Json
           project_id: string
           to_status: string
         }
@@ -418,12 +424,15 @@ export type Database = {
           actor_name?: string
           actor_user_id?: string | null
           created_at?: string
+          event_type?: string
           from_status?: string
           id?: string
           incident_category?: string
-          incident_id?: string
+          incident_id?: string | null
           incident_name?: string
           incident_number?: number
+          message?: string | null
+          metadata?: Json
           project_id?: string
           to_status?: string
         }

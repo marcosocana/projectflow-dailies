@@ -7,9 +7,14 @@ import { useTaskAssignments } from '@/hooks/useTaskAssignments';
 import { updateTaskStatusFromAssignments } from '@/hooks/useSyncTaskStatus';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
+import { formatIncidentReference } from '@/lib/internalTaskIds';
 
 type IncidentStatus = Database['public']['Enums']['incident_status'];
 type TaskStatus = Database['public']['Enums']['task_status'];
+type AssignmentSnapshot = {
+  assigned_to: string;
+  status: IncidentStatus;
+};
 
 interface TaskAssignmentsManagerProps {
   taskId: string | null;
@@ -55,6 +60,10 @@ export default function TaskAssignmentsManager({
   const { assignments, addAssignment, updateAssignmentStatus, removeAssignment } = useTaskAssignments(taskId);
   const [selectedMember, setSelectedMember] = useState<string>('');
 
+  const notifyDailiesChanged = (projectId: string) => {
+    window.dispatchEvent(new CustomEvent('dailies-task-created', { detail: { projectId } }));
+  };
+
   const handleAddAssignment = async () => {
     if (!selectedMember || !taskId) return;
 
@@ -65,33 +74,61 @@ export default function TaskAssignmentsManager({
 
     try {
       const memberId = selectedMember;
-      await addAssignment(selectedMember);
+      const createdAssignment = await addAssignment(memberId);
       setSelectedMember('');
-      await syncDailyTaskForAssignment(taskId, memberId);
+      const projectId = await syncDailyTasksForIncident(taskId, [
+        {
+          assigned_to: memberId,
+          status: (createdAssignment?.status as IncidentStatus | undefined) || 'pending',
+        },
+      ]);
       
       // Sincronizar el estado general de la tarea
       await updateTaskStatusFromAssignments(taskId);
       
+      if (projectId) notifyDailiesChanged(projectId);
       onAssignmentsChange?.();
     } catch (error) {
       console.error('Error adding assignment:', error);
     }
   };
 
-  const syncDailyTaskForAssignment = async (incidentId: string, personId: string) => {
+  const syncDailyTasksForIncident = async (incidentId: string, optimisticAssignments: AssignmentSnapshot[] = []) => {
     const { data: incident, error: incidentError } = await supabase
       .from('incidents')
-      .select('id, project_id, incident_number, name, description, status')
+      .select('id, project_id, incident_number, name, description, status, additional_comments, environment')
       .eq('id', incidentId)
       .maybeSingle();
 
     if (incidentError || !incident) {
       if (incidentError) throw incidentError;
-      return;
+      return null;
     }
 
+    const { data: assignmentRows, error: assignmentsError } = await supabase
+      .from('incident_assignments')
+      .select('assigned_to, status')
+      .eq('incident_id', incidentId)
+      .order('created_at', { ascending: true });
+
+    if (assignmentsError) throw assignmentsError;
+
+    const desiredAssignments = [...optimisticAssignments, ...(assignmentRows || [])]
+      .filter((assignment) => assignment.assigned_to)
+      .reduce<AssignmentSnapshot[]>((acc, assignment) => {
+        if (!acc.some((current) => current.assigned_to === assignment.assigned_to)) {
+          acc.push({
+            assigned_to: assignment.assigned_to,
+            status: assignment.status as IncidentStatus,
+          });
+        }
+        return acc;
+      }, []);
+    const desiredPersonIds = Array.from(new Set(desiredAssignments.map((assignment) => assignment.assigned_to)));
+    const desiredSet = new Set(desiredPersonIds);
+
     const today = getTodayDate();
-    let { data: daily, error: dailyError } = await supabase
+    let { data: todayDaily, error: dailyError } = await supabase
       .from('dailies')
       .select('id')
       .eq('project_id', incident.project_id)
@@ -100,7 +137,7 @@ export default function TaskAssignmentsManager({
 
     if (dailyError) throw dailyError;
 
-    if (!daily) {
+    if (!todayDaily) {
       const { data: createdDaily, error: createDailyError } = await supabase
         .from('dailies')
         .insert({ project_id: incident.project_id, date: today, content: {} })
@@ -108,102 +145,158 @@ export default function TaskAssignmentsManager({
         .single();
 
       if (createDailyError) throw createDailyError;
-      daily = createdDaily;
+      todayDaily = createdDaily;
     }
 
-    const relatedTicket = formatManualId(incident.incident_number) || null;
-    const taskStatus = mapIncidentStatusToTaskStatus(incident.status as IncidentStatus);
+    const relatedTicket = formatIncidentReference(incident) || formatManualId(incident.incident_number) || null;
 
-    const { data: existingTask, error: existingTaskError } = await supabase
+    const { data: linkedTasks, error: linkedTasksError } = await supabase
       .from('tasks')
-      .select('id')
+      .select('id, person_id, assigned_to')
       .eq('project_id', incident.project_id)
-      .eq('incident_id', incidentId)
-      .or(`person_id.eq.${personId},assigned_to.eq.${personId}`)
-      .maybeSingle();
+      .eq('incident_id', incidentId);
 
-    if (existingTaskError) throw existingTaskError;
+    if (linkedTasksError) throw linkedTasksError;
 
-    let taskIdToLink = existingTask?.id;
-
-    if (taskIdToLink) {
-      const { error: updateTaskError } = await supabase
-        .from('tasks')
-        .update({
-          related_ticket: relatedTicket,
-          title: incident.name,
-          description: incident.description,
-          person_id: personId,
-          assigned_to: personId,
-          status: taskStatus,
-          is_auto_linked: true,
-        })
-        .eq('id', taskIdToLink);
-
-      if (updateTaskError) throw updateTaskError;
-    } else {
-      const { data: createdTask, error: createTaskError } = await supabase
-        .from('tasks')
-        .insert({
-          title: incident.name,
-          description: incident.description,
-          project_id: incident.project_id,
-          daily_id: daily.id,
-          incident_id: incidentId,
-          person_id: personId,
-          assigned_to: personId,
-          status: taskStatus,
-          is_auto_linked: true,
-          related_ticket: relatedTicket,
-        })
-        .select('id')
-        .single();
-
-      if (createTaskError) throw createTaskError;
-      taskIdToLink = createdTask.id;
-    }
-
-    if (taskIdToLink) {
-      const { error: linkError } = await supabase
+    const linkedTaskIds = (linkedTasks || []).map((task) => task.id);
+    const { data: existingDailyLinks, error: existingDailyLinksError } = linkedTaskIds.length > 0
+      ? await supabase
         .from('daily_tasks')
-        .upsert({
-          daily_id: daily.id,
-          task_id: taskIdToLink,
-        }, {
-          onConflict: 'daily_id,task_id',
-        });
+        .select('daily_id, task_id')
+        .in('task_id', linkedTaskIds)
+      : { data: [], error: null };
 
-      if (linkError) throw linkError;
+    if (existingDailyLinksError) throw existingDailyLinksError;
+
+    const targetDailyIds = Array.from(new Set([
+      todayDaily.id,
+      ...((existingDailyLinks || []).map((link) => link.daily_id).filter(Boolean)),
+    ]));
+
+    const existingTasksByPerson = new Map<string, { id: string }>();
+    (linkedTasks || []).forEach((task) => {
+      const personId = task.person_id || task.assigned_to;
+      if (personId) existingTasksByPerson.set(personId, task);
+    });
+
+    const tasksToDelete = (linkedTasks || [])
+      .filter((task) => {
+        const personId = task.person_id || task.assigned_to;
+        return !personId || !desiredSet.has(personId);
+      })
+      .map((task) => task.id);
+
+    if (tasksToDelete.length > 0) {
+      await supabase.from('daily_tasks').delete().in('task_id', tasksToDelete);
+      await supabase.from('tasks').delete().in('id', tasksToDelete);
     }
+
+    const { data: maxOrderRows, error: maxOrderError } = await supabase
+      .from('daily_tasks')
+      .select('daily_id, order_position')
+      .in('daily_id', targetDailyIds);
+
+    if (maxOrderError) throw maxOrderError;
+
+    const nextOrderPositionByDaily = new Map<string, number>();
+    targetDailyIds.forEach((dailyId) => nextOrderPositionByDaily.set(dailyId, 0));
+    (maxOrderRows || []).forEach((row) => {
+      const current = nextOrderPositionByDaily.get(row.daily_id) ?? 0;
+      const next = (row.order_position ?? -1) + 1;
+      if (next > current) nextOrderPositionByDaily.set(row.daily_id, next);
+    });
+
+    for (const personId of desiredPersonIds) {
+      const assignmentStatus = desiredAssignments.find((assignment) => assignment.assigned_to === personId)?.status || incident.status;
+      const taskStatus = mapIncidentStatusToTaskStatus(assignmentStatus as IncidentStatus);
+      const existingTask = existingTasksByPerson.get(personId);
+      let taskIdToLink = existingTask?.id;
+
+      if (taskIdToLink) {
+        const { error: updateTaskError } = await supabase
+          .from('tasks')
+          .update({
+            related_ticket: relatedTicket,
+            title: incident.name,
+            description: incident.description,
+            person_id: personId,
+            assigned_to: personId,
+            status: taskStatus,
+            environment: incident.environment || null,
+            is_auto_linked: true,
+          })
+          .eq('id', taskIdToLink);
+
+        if (updateTaskError) throw updateTaskError;
+      } else {
+        const { data: createdTask, error: createTaskError } = await supabase
+          .from('tasks')
+          .insert({
+            title: incident.name,
+            description: incident.description,
+            project_id: incident.project_id,
+            daily_id: todayDaily.id,
+            incident_id: incidentId,
+            person_id: personId,
+            assigned_to: personId,
+            status: taskStatus,
+            environment: incident.environment || null,
+            is_auto_linked: true,
+            related_ticket: relatedTicket,
+          })
+          .select('id')
+          .single();
+
+        if (createTaskError) throw createTaskError;
+        taskIdToLink = createdTask.id;
+      }
+
+      if (taskIdToLink) {
+        const { data: existingDailyLinksForTask, error: existingDailyLinkError } = await supabase
+          .from('daily_tasks')
+          .select('daily_id')
+          .eq('task_id', taskIdToLink)
+          .in('daily_id', targetDailyIds);
+
+        if (existingDailyLinkError) throw existingDailyLinkError;
+
+        const linkedDailyIds = new Set((existingDailyLinksForTask || []).map((link) => link.daily_id));
+        const linksToInsert = targetDailyIds
+          .filter((dailyId) => !linkedDailyIds.has(dailyId))
+          .map((dailyId) => {
+            const orderPosition = nextOrderPositionByDaily.get(dailyId) ?? 0;
+            nextOrderPositionByDaily.set(dailyId, orderPosition + 1);
+            return {
+              daily_id: dailyId,
+              task_id: taskIdToLink,
+              order_position: orderPosition,
+            };
+          });
+
+        if (linksToInsert.length > 0) {
+          const { error: linkError } = await supabase
+            .from('daily_tasks')
+            .upsert(linksToInsert, { onConflict: 'daily_id,task_id' });
+          if (linkError) throw linkError;
+        }
+      }
+    }
+
+    return incident.project_id;
   };
 
   const handleRemoveAssignment = async (assignmentId: string) => {
     try {
-      const assignment = assignments.find((current) => current.id === assignmentId);
       await removeAssignment(assignmentId);
 
-      if (taskId && assignment?.assigned_to) {
-        const { data: linkedTasks, error: linkedTasksError } = await supabase
-          .from('tasks')
-          .select('id')
-          .eq('incident_id', taskId)
-          .eq('is_auto_linked', true)
-          .or(`person_id.eq.${assignment.assigned_to},assigned_to.eq.${assignment.assigned_to}`);
-
-        if (linkedTasksError) throw linkedTasksError;
-
-        const linkedTaskIds = (linkedTasks || []).map((task) => task.id);
-        if (linkedTaskIds.length > 0) {
-          await supabase.from('daily_tasks').delete().in('task_id', linkedTaskIds);
-          await supabase.from('tasks').delete().in('id', linkedTaskIds);
-        }
-      }
+      const projectId = taskId ? await syncDailyTasksForIncident(taskId) : null;
       
       // Sincronizar el estado general de la tarea
       if (taskId) {
         await updateTaskStatusFromAssignments(taskId);
       }
       
+      if (projectId) notifyDailiesChanged(projectId);
       onAssignmentsChange?.();
     } catch (error) {
       console.error('Error removing assignment:', error);
@@ -212,12 +305,19 @@ export default function TaskAssignmentsManager({
 
   const handleUpdateStatus = async (assignmentId: string, status: IncidentStatus) => {
     try {
+      const assignment = assignments.find((current) => current.id === assignmentId);
       await updateAssignmentStatus(assignmentId, status);
       
       // Sincronizar el estado general de la tarea
       if (taskId) {
         await updateTaskStatusFromAssignments(taskId);
       }
+
+      const projectId = taskId ? await syncDailyTasksForIncident(
+        taskId,
+        assignment?.assigned_to ? [{ assigned_to: assignment.assigned_to, status }] : [],
+      ) : null;
+      if (projectId) notifyDailiesChanged(projectId);
       
       onAssignmentsChange?.();
     } catch (error) {

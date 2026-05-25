@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 import { syncSingleAssignmentStatus } from '@/hooks/useSyncTaskStatus';
 import { useTaskAssignments } from '@/hooks/useTaskAssignments';
-import { recordIncidentStatusChange } from '@/lib/incidentActivityLog';
+import { recordIncidentDeleted, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference } from '@/lib/internalTaskIds';
 
 // Options same as IncidentsModule to keep UI identical
@@ -349,6 +349,14 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     }
     
     try {
+      await recordIncidentDeleted({
+        projectId: selected.project_id,
+        incidentId: selected.id,
+        incidentNumber: Number(selected.incident_number),
+        incidentName: selected.name,
+        incidentCategory: getDisplayCategory(selected),
+      });
+
       const { error: linkedTasksError } = await supabase
         .from('tasks')
         .delete()

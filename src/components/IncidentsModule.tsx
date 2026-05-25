@@ -31,7 +31,7 @@ import TaskAssignmentsInput from '@/components/TaskAssignmentsInput';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import BacklogImportDialog from '@/components/BacklogImportDialog';
-import { recordIncidentCreated, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
+import { recordIncidentCreated, recordIncidentDeleted, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -1083,6 +1083,17 @@ Estado: ${STATUS_LABELS[incident.status] || incident.status}`;
   };
   const onDelete = async (id: string) => {
     try {
+      const incident = incidents.find((current) => current.id === id);
+      if (incident) {
+        await recordIncidentDeleted({
+          projectId,
+          incidentId: id,
+          incidentNumber: Number(incident.incident_number),
+          incidentName: incident.name,
+          incidentCategory: getDisplayCategory(incident),
+        });
+      }
+
       const { error: linkedTasksError } = await supabase.from('tasks').delete().eq('incident_id', id);
       if (linkedTasksError) throw linkedTasksError;
 

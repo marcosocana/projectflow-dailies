@@ -25,7 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { recordIncidentCreated, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
+import { recordDailyTaskCreated, recordDailyTasksPersisted, recordIncidentCreated, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import {
   DndContext,
@@ -47,6 +47,12 @@ import { CSS } from '@dnd-kit/utilities';
 type TaskStatus = 'pending' | 'in_progress' | 'resolved' | 'resolved_yesterday';
 type IncidentCategory = 'incident' | 'improvement' | 'corrective_improvement';
 type TaskEnvironment = 'DEV' | 'PRE' | 'PRO';
+type DailyPersistenceSummary = {
+  tasksPersisted: number;
+  persistedAt: string;
+  sourceDate?: string;
+  targetDate?: string;
+};
 const NOTE_MARKER = '[tipo:nota_seguimiento]';
 const CORRECTIVE_CATEGORY_MARKER = '[tipo:mejora_correctiva]';
 
@@ -98,6 +104,33 @@ const serializeCategory = (category: IncidentCategory, additionalComments: strin
 
 const dateToLocalInputValue = (value: Date) =>
   `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+
+const getCurrentTimeLabel = () => {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+};
+
+const getPreviousBusinessDate = (value: Date) => {
+  const previous = new Date(value);
+  const day = previous.getDay();
+  const daysToSubtract = day === 1 ? 3 : day === 0 ? 2 : 1;
+  previous.setDate(previous.getDate() - daysToSubtract);
+  return previous;
+};
+
+const getDailyPersistenceSummary = (content: unknown): DailyPersistenceSummary | null => {
+  if (!content || typeof content !== 'object' || !('lastPersistence' in content)) return null;
+  const value = (content as { lastPersistence?: unknown }).lastPersistence;
+  if (!value || typeof value !== 'object') return null;
+  const summary = value as Partial<DailyPersistenceSummary>;
+  if (typeof summary.tasksPersisted !== 'number' || typeof summary.persistedAt !== 'string') return null;
+  return {
+    tasksPersisted: summary.tasksPersisted,
+    persistedAt: summary.persistedAt,
+    sourceDate: typeof summary.sourceDate === 'string' ? summary.sourceDate : undefined,
+    targetDate: typeof summary.targetDate === 'string' ? summary.targetDate : undefined,
+  };
+};
 
 const RequiredLabel = ({ children }: { children: React.ReactNode }) => (
   <Label className="inline-flex items-center gap-1">
@@ -159,11 +192,13 @@ export default function DailiesModule({
   const [persistModalOpen, setPersistModalOpen] = useState(false);
   const [lastDayTasks, setLastDayTasks] = useState<any[]>([]);
   const [selectedTasksForPersist, setSelectedTasksForPersist] = useState<string[]>([]);
+  const [persistSourceDate, setPersistSourceDate] = useState<string | null>(null);
   const [viewAllTasksOpen, setViewAllTasksOpen] = useState(false);
   const [allTasks, setAllTasks] = useState<any[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showResolvedYesterdayInPersist, setShowResolvedYesterdayInPersist] = useState(false);
   
   // Sorting state
   const [sortField, setSortField] = useState<'status' | 'title' | 'person'>('status');
@@ -188,6 +223,7 @@ export default function DailiesModule({
     return () => window.removeEventListener('dailies-task-created', handler as EventListener);
   }, [projectId, date]);
   const [dailyId, setDailyId] = useState<string | null>(null);
+  const [dailyPersistenceSummary, setDailyPersistenceSummary] = useState<DailyPersistenceSummary | null>(null);
   const [people, setPeople] = useState<any[]>([]);
   const [linkedProfiles, setLinkedProfiles] = useState<Record<string, { full_name: string; email: string | null }>>({});
   const [tasks, setTasks] = useState<any[]>([]);
@@ -290,6 +326,12 @@ export default function DailiesModule({
   const loadTasks = async (d: Date) => {
     const id = await ensureDaily(d);
     setDailyId(id);
+    const { data: daily } = await supabase
+      .from('dailies')
+      .select('content')
+      .eq('id', id)
+      .maybeSingle();
+    setDailyPersistenceSummary(getDailyPersistenceSummary(daily?.content));
     const {
       data,
       error
@@ -590,6 +632,13 @@ export default function DailiesModule({
     })) as any, {
       onConflict: 'daily_id,task_id'
     } as any);
+    await recordDailyTaskCreated({
+      projectId,
+      taskId: created.id,
+      title: taskForm.title,
+      relatedTicket,
+      taskCount: taskIdsToLink.length,
+    });
     setTaskForm({
       title: '',
       description: '',
@@ -777,30 +826,19 @@ export default function DailiesModule({
   const openPersistModal = async () => {
     try {
       if (!date) return;
-      const todayStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const sourceDate = dateToLocalInputValue(getPreviousBusinessDate(date));
 
-      // Find the most recent previous day with tasks
-      const {
-        data: prevDays
-      } = await supabase.from('dailies').select('id, date').eq('project_id', projectId).lt('date', todayStr).order('date', {
-        ascending: false
-      });
-      let sourceDailyId: string | null = null;
-      if (prevDays && prevDays.length) {
-        for (const d of prevDays) {
-          const {
-            data: links
-          } = await supabase.from('daily_tasks').select('task_id').eq('daily_id', d.id);
-          if (links && links.length) {
-            sourceDailyId = d.id as string;
-            break;
-          }
-        }
-      }
-      if (!sourceDailyId) {
+      const { data: sourceDaily } = await supabase
+        .from('dailies')
+        .select('id, date')
+        .eq('project_id', projectId)
+        .eq('date', sourceDate)
+        .maybeSingle();
+
+      if (!sourceDaily) {
         toast({
           title: 'Sin tareas previas',
-          description: 'No se encontraron tareas en días anteriores'
+          description: `No se encontraron tareas para el día laborable anterior (${sourceDate}).`
         });
         return;
       }
@@ -811,7 +849,7 @@ export default function DailiesModule({
       } = await supabase
         .from('daily_tasks')
         .select('tasks(*), order_position')
-        .eq('daily_id', sourceDailyId)
+        .eq('daily_id', sourceDaily.id)
         .order('order_position');
       
       const tasksWithOrder = (taskData || [])
@@ -822,7 +860,9 @@ export default function DailiesModule({
         }));
       
       setLastDayTasks(tasksWithOrder);
-      setSelectedTasksForPersist(tasksWithOrder.map((t: any) => t.id)); // All selected by default
+      setSelectedTasksForPersist(tasksWithOrder.filter((t: any) => t.status !== 'resolved_yesterday').map((t: any) => t.id));
+      setShowResolvedYesterdayInPersist(false);
+      setPersistSourceDate(sourceDaily.date);
       setPersistModalOpen(true);
     } catch (e) {
       toast({
@@ -862,7 +902,12 @@ export default function DailiesModule({
         : 0;
       
       // Sort selected tasks by their original order before assigning new positions
-      const tasksWithOriginalOrder = selectedTasksForPersist
+      const persistableSelectedTaskIds = selectedTasksForPersist.filter(taskId => {
+        const task = lastDayTasks.find((t: any) => t.id === taskId);
+        return task?.status !== 'resolved_yesterday';
+      });
+
+      const tasksWithOriginalOrder = persistableSelectedTaskIds
         .filter((taskId) => !existingIds.includes(taskId))
         .map(taskId => {
           const task = lastDayTasks.find((t: any) => t.id === taskId);
@@ -883,22 +928,53 @@ export default function DailiesModule({
         const { error: insertErr } = await supabase.from('daily_tasks').insert(rows as any);
         if (insertErr) throw insertErr;
         
-        // Update status of resolved tasks to resolved_yesterday (only in Internal Config)
-        if (enableResolvedYesterday) {
-          const resolvedTaskIds = selectedTasksForPersist.filter(taskId => {
-            const task = lastDayTasks.find((t: any) => t.id === taskId);
-            return task?.status === 'resolved';
-          });
-          
-          if (resolvedTaskIds.length > 0) {
-            const { error: updateErr } = await supabase
-              .from('tasks')
-              .update({ status: 'resolved_yesterday' })
-              .in('id', resolvedTaskIds);
-            if (updateErr) throw updateErr;
-          }
+        const resolvedTaskIds = persistableSelectedTaskIds.filter(taskId => {
+          const task = lastDayTasks.find((t: any) => t.id === taskId);
+          return task?.status === 'resolved';
+        });
+        
+        if (resolvedTaskIds.length > 0) {
+          const { error: updateErr } = await supabase
+            .from('tasks')
+            .update({ status: 'resolved_yesterday' })
+            .in('id', resolvedTaskIds);
+          if (updateErr) throw updateErr;
         }
       }
+
+      const persistedAt = getCurrentTimeLabel();
+      const targetDate = dateToLocalInputValue(date);
+      const sourceDate = persistSourceDate || dateToLocalInputValue(getPreviousBusinessDate(date));
+      const persistenceSummary = {
+        tasksPersisted: rows.length,
+        persistedAt,
+        sourceDate,
+        targetDate,
+      };
+
+      const { data: currentDaily } = await supabase
+        .from('dailies')
+        .select('content')
+        .eq('id', todayId)
+        .maybeSingle();
+      const currentContent = currentDaily?.content && typeof currentDaily.content === 'object'
+        ? currentDaily.content
+        : {};
+
+      await supabase
+        .from('dailies')
+        .update({
+          content: {
+            ...(currentContent as Record<string, unknown>),
+            lastPersistence: persistenceSummary,
+          },
+        })
+        .eq('id', todayId);
+
+      await recordDailyTasksPersisted({
+        projectId,
+        ...persistenceSummary,
+      });
 
       await loadTasks(date);
       setPersistModalOpen(false);
@@ -1013,11 +1089,17 @@ export default function DailiesModule({
     }
   };
 
+  const activeDailyTasks = useMemo(() => {
+    const selectedDateKey = dateToLocalInputValue(date);
+    const shouldShowResolvedYesterday = dailyPersistenceSummary?.targetDate === selectedDateKey;
+    return tasks.filter(task => task.status !== 'resolved_yesterday' || shouldShowResolvedYesterday);
+  }, [tasks, dailyPersistenceSummary, date]);
+
   const visibleDailyTasks = useMemo(() => {
     return selectedPersonFilter === 'all'
-      ? tasks
-      : tasks.filter(task => (task.person_id || task.assigned_to || 'unassigned') === selectedPersonFilter);
-  }, [tasks, selectedPersonFilter]);
+      ? activeDailyTasks
+      : activeDailyTasks.filter(task => (task.person_id || task.assigned_to || 'unassigned') === selectedPersonFilter);
+  }, [activeDailyTasks, selectedPersonFilter]);
 
   const statusOrder: Record<TaskStatus, number> = {
     in_progress: 0,
@@ -1374,7 +1456,7 @@ export default function DailiesModule({
       resolved: number;
     }>();
 
-    tasks.forEach(task => {
+    activeDailyTasks.forEach(task => {
       const person = people.find(p => p.id === (task.person_id || task.assigned_to));
       const key = person?.id || 'unassigned';
       const current = counts.get(key) || {
@@ -1396,7 +1478,7 @@ export default function DailiesModule({
     });
 
     return Array.from(counts.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [people, tasks]);
+  }, [people, activeDailyTasks]);
 
   const taskCreationIncidents = useMemo(() => {
     const query = incidentSearchQuery.trim().toLowerCase();
@@ -1731,6 +1813,11 @@ export default function DailiesModule({
                   <RefreshCcw className="h-4 w-4" />
                 </Button>
               </div>
+              {dailyPersistenceSummary && (
+                <div className="mb-3 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-primary">
+                  {dailyPersistenceSummary.tasksPersisted} tareas persistidas a las {dailyPersistenceSummary.persistedAt} horas.
+                </div>
+              )}
               {taskCountSummary.length > 0 && (
                 <div className="mb-3 flex flex-wrap gap-2 text-sm">
                   {taskCountSummary.map(item => (
@@ -1751,16 +1838,16 @@ export default function DailiesModule({
                       <span className="mr-2">{item.name}</span>
                       <span className="flex items-center gap-1">
                         <span
-                          className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground"
-                          title={`Pendientes: ${item.pending}`}
-                        >
-                          {item.pending}
-                        </span>
-                        <span
                           className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[hsl(var(--warning))] text-[10px] font-semibold text-[hsl(var(--warning-foreground))]"
                           title={`WIP: ${item.inProgress}`}
                         >
                           {item.inProgress}
+                        </span>
+                        <span
+                          className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground"
+                          title={`Pendientes: ${item.pending}`}
+                        >
+                          {item.pending}
                         </span>
                         <span
                           className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[hsl(var(--success))] text-[10px] font-semibold text-[hsl(var(--success-foreground))]"
@@ -2509,13 +2596,23 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
             <DialogDescription>Selecciona las tareas del último día que quieres persistir</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Checkbox
+                checked={showResolvedYesterdayInPersist}
+                onCheckedChange={(checked) => setShowResolvedYesterdayInPersist(Boolean(checked))}
+              />
+              Mostrar tareas resueltas ayer
+            </label>
             <ScrollArea className="h-[400px] pr-4">
               <div className="space-y-3">
-                {lastDayTasks.map(task => {
+                {lastDayTasks
+                  .filter(task => showResolvedYesterdayInPersist || task.status !== 'resolved_yesterday')
+                  .map(task => {
                 const person = people.find(p => p.id === (task.person_id || task.assigned_to));
                 const isSelected = selectedTasksForPersist.includes(task.id);
+                const isPersistable = task.status !== 'resolved_yesterday';
                 return <div key={task.id} className="flex items-start gap-3 p-3 border rounded">
-                      <Checkbox checked={isSelected} onCheckedChange={checked => {
+                      <Checkbox checked={isSelected} disabled={!isPersistable} onCheckedChange={checked => {
                     if (checked) {
                       setSelectedTasksForPersist(prev => [...prev, task.id]);
                     } else {
@@ -2563,7 +2660,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
             </ScrollArea>
             
             <div className="flex gap-2 pt-4 border-t">
-              <Button variant="outline" onClick={() => setSelectedTasksForPersist(lastDayTasks.map(t => t.id))} disabled={lastDayTasks.length === 0}>
+              <Button variant="outline" onClick={() => setSelectedTasksForPersist(lastDayTasks.filter(t => t.status !== 'resolved_yesterday').map(t => t.id))} disabled={lastDayTasks.length === 0}>
                 Seleccionar todas
               </Button>
               <Button variant="outline" onClick={() => setSelectedTasksForPersist([])}>
