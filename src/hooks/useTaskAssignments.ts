@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import { recordIncidentStatusChange } from '@/lib/incidentActivityLog';
-import { mapIncidentStatusToTaskStatus, normalizeEnvironment, type TaskEnvironment } from '@/lib/taskStatus';
+import { getMinimumIncidentAssignmentState, mapIncidentStatusToTaskStatus, normalizeEnvironment, type TaskEnvironment } from '@/lib/taskStatus';
 
 type IncidentStatus = Database['public']['Enums']['incident_status'];
 // Map task_status for syncing with daily tasks
@@ -117,29 +117,13 @@ export const useTaskAssignments = (taskId: string | null) => {
         // 4) Obtener TODAS las asignaciones de esta incidencia para calcular el estado general
         const { data: allAssignments } = await supabase
           .from('incident_assignments')
-          .select('status')
+          .select('status, status_environment')
           .eq('incident_id', assignmentRow.incident_id);
 
           if (allAssignments && allAssignments.length > 0) {
-          let newIncidentStatus: IncidentStatus = 'pending';
-
-          // Si al menos una está en progreso o en QA, la incidencia está en progreso
-          const hasInProgress = allAssignments.some(a => a.status === 'in_progress');
-          if (hasInProgress) {
-            newIncidentStatus = 'in_progress';
-          } 
-          else if (allAssignments.some(a => a.status === 'blocked')) {
-            newIncidentStatus = 'blocked' as IncidentStatus;
-          }
-          // Si todas están resueltas o cerradas, la incidencia está resuelta
-          else if (allAssignments.every(a => a.status === 'resolved' || a.status === 'closed' || a.status === 'in_qa')) {
-            newIncidentStatus = 'resolved';
-          }
-
-          // 5) Actualizar el estado general de la incidencia
-          const incidentEnvironment = newIncidentStatus === 'resolved'
-            ? normalizeEnvironment(statusEnvironment) || normalizeEnvironment(currentIncident?.status_environment) || 'PRO'
-            : null;
+          const nextState = getMinimumIncidentAssignmentState(allAssignments);
+          const newIncidentStatus = nextState.status as IncidentStatus;
+          const incidentEnvironment = nextState.statusEnvironment;
           await supabase
             .from('incidents')
             .update({ status: newIncidentStatus, status_environment: incidentEnvironment } as any)
@@ -190,14 +174,7 @@ export const useTaskAssignments = (taskId: string | null) => {
   const getOverallStatus = (): IncidentStatus => {
     if (assignments.length === 0) return 'pending';
     
-    const hasInProgress = assignments.some(a => a.status === 'in_progress');
-    if (hasInProgress) return 'in_progress';
-    if (assignments.some(a => a.status === 'blocked')) return 'blocked' as IncidentStatus;
-    
-    const allResolved = assignments.every(a => a.status === 'resolved' || a.status === 'closed' || a.status === 'in_qa');
-    if (allResolved) return 'resolved';
-    
-    return 'pending';
+    return getMinimumIncidentAssignmentState(assignments).status as IncidentStatus;
   };
 
   return {

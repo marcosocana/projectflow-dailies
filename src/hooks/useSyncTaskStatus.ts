@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
-import { normalizeEnvironment } from '@/lib/taskStatus';
+import { getMinimumIncidentAssignmentState, normalizeEnvironment } from '@/lib/taskStatus';
 
 type IncidentStatus = Database['public']['Enums']['incident_status'];
 
@@ -17,30 +17,13 @@ export const syncTaskStatus = async (taskId: string): Promise<IncidentStatus | n
     // Obtener todas las asignaciones
     const { data: assignments, error } = await supabase
       .from('incident_assignments')
-      .select('status')
+      .select('status, status_environment')
       .eq('incident_id', taskId);
 
     if (error) throw error;
     if (!assignments || assignments.length === 0) return null;
 
-    // Si hay una sola asignación, devolver su estado directamente
-    if (assignments.length === 1) {
-      return assignments[0].status;
-    }
-
-    // Si hay más de una asignación, aplicar la lógica de prioridad
-    const hasInProgress = assignments.some(a => a.status === 'in_progress');
-    if (hasInProgress) return 'in_progress';
-    if (assignments.some(a => a.status === 'blocked')) return 'blocked' as IncidentStatus;
-
-    // Verificar si todas las asignaciones tienen el mismo estado
-    const uniqueStatuses = [...new Set(assignments.map(a => a.status))];
-    if (uniqueStatuses.length === 1) {
-      return uniqueStatuses[0];
-    }
-
-    // Si hay estados mixtos (sin "in_progress"), mantener "pending"
-    return 'pending';
+    return getMinimumIncidentAssignmentState(assignments).status as IncidentStatus;
   } catch (error) {
     console.error('Error syncing task status:', error);
     return null;

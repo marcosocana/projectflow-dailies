@@ -87,6 +87,49 @@ export const getStatusLogLabel = (status: string | null | undefined) => {
   return getIncidentStatusLabel(status);
 };
 
+const INCIDENT_STATUS_RANK: Record<string, number> = {
+  pending: 0,
+  in_progress: 1,
+  blocked: 2,
+  resolved: 3,
+  in_qa: 3,
+  closed: 4,
+};
+
+const ENVIRONMENT_RANK: Record<TaskEnvironment, number> = {
+  DEV: 0,
+  PRE: 1,
+  PRO: 2,
+};
+
+export const getMinimumIncidentAssignmentState = <T extends { status: string; status_environment?: string | null }>(
+  assignments: T[],
+) => {
+  if (assignments.length === 0) {
+    return { status: 'pending' as IncidentStatus, statusEnvironment: null as TaskEnvironment | null };
+  }
+
+  const minimum = assignments.reduce((current, assignment) => {
+    const currentRank = INCIDENT_STATUS_RANK[current.status] ?? INCIDENT_STATUS_RANK.pending;
+    const assignmentRank = INCIDENT_STATUS_RANK[assignment.status] ?? INCIDENT_STATUS_RANK.pending;
+    return assignmentRank < currentRank ? assignment : current;
+  }, assignments[0]);
+
+  if (minimum.status === 'resolved' || minimum.status === 'in_qa') {
+    const minimumEnvironment = assignments
+      .filter((assignment) => assignment.status === 'resolved' || assignment.status === 'in_qa')
+      .map((assignment) => normalizeEnvironment(assignment.status === 'in_qa' ? 'PRE' : assignment.status_environment) || 'PRO')
+      .sort((a, b) => ENVIRONMENT_RANK[a] - ENVIRONMENT_RANK[b])[0] || 'PRO';
+
+    return { status: 'resolved' as IncidentStatus, statusEnvironment: minimumEnvironment };
+  }
+
+  return {
+    status: minimum.status as IncidentStatus,
+    statusEnvironment: null,
+  };
+};
+
 export const getIncidentStatusTone = (status: IncidentStatus | string | null | undefined) => {
   if (status === 'pending') return 'bg-yellow-100 text-yellow-800 border-yellow-300';
   if (status === 'in_progress') return 'bg-blue-100 text-blue-800 border-blue-300';
