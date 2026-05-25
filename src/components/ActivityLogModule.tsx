@@ -385,14 +385,14 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                   const isDailyEvent = log.event_type === 'daily_task_created' || log.event_type === 'daily_tasks_persisted';
                   const isDeletedEvent = log.event_type === 'incident_deleted';
                   return (
-                    <div key={log.id} className="relative flex items-start justify-between gap-3 rounded-md border p-3">
+	                    <div key={log.id} className="relative flex items-start justify-between gap-3 rounded-md border p-3 min-w-0">
                       {isUnread && (
                         <span
                           className="absolute left-2 top-2 h-2.5 w-2.5 rounded-full bg-destructive"
                           aria-label="Cambio nuevo"
                         />
                       )}
-                      <div className="flex min-w-0 items-start gap-3">
+	                      <div className="flex min-w-0 flex-1 items-start gap-3">
                         <div className="mt-0.5 h-8 w-8 rounded-full flex items-center justify-center text-white shrink-0" style={{ backgroundColor: log.actor_color }}>
                           {log.actor_name.slice(0, 1).toUpperCase()}
                         </div>
@@ -401,21 +401,21 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                         </div>
                         <div className="min-w-0">
                           {isDailyEvent || isDeletedEvent ? (
-                            <div className="text-sm">{log.message}</div>
+	                            <div className="text-sm break-words">{log.message}</div>
                           ) : (
                             <div className="flex flex-wrap items-center gap-1.5 text-sm">
                               <span>{log.actor_name} {isCreation ? 'creó' : 'cambió el estado de'}</span>
                               {log.incident_id ? (
-                                <Button
-                                  variant="link"
-                                  className="h-auto p-0 align-baseline text-sm font-bold"
-                                  onClick={() => openIncidentDetails(log.incident_id!)}
-                                >
-                                  {entityLabel}
-                                </Button>
-                              ) : (
-                                <span className="font-bold">{entityLabel}</span>
-                              )}
+	                                <Button
+	                                  variant="link"
+	                                  className="h-auto min-w-0 max-w-full whitespace-normal break-words p-0 text-left align-baseline text-sm font-bold leading-snug"
+	                                  onClick={() => openIncidentDetails(log.incident_id!)}
+	                                >
+	                                  {entityLabel}
+	                                </Button>
+	                              ) : (
+	                                <span className="min-w-0 max-w-full break-words font-bold">{entityLabel}</span>
+	                              )}
                               {!isCreation && (
                                 <>
                                   <span>de</span>
