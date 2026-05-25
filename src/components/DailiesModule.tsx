@@ -497,13 +497,6 @@ export default function DailiesModule({
         toStatus: mapTaskStatusToIncidentStatus(taskForm.status),
       });
 
-      if (selectedPersonIds.length > 0) {
-        await supabase.from('incident_assignments').insert(selectedPersonIds.map(personId => ({
-          incident_id: newIncidentId,
-          assigned_to: personId,
-          status: mapTaskStatusToIncidentStatus(taskForm.status),
-        })) as any);
-      }
     }
 
     const primaryPersonId = selectedPersonIds[0] || null;
@@ -561,28 +554,6 @@ export default function DailiesModule({
         });
       }
       
-      // Si hay una persona asignada, crear asignación en incident_assignments
-      if (selectedPersonIds.length > 0) {
-        // Verificar si ya existe una asignación para esta persona
-        const { data: existingAssignments } = await supabase
-          .from('incident_assignments')
-          .select('assigned_to')
-          .eq('incident_id', incidentIdToLink)
-          .in('assigned_to', selectedPersonIds);
-        const existingPersonIds = new Set((existingAssignments || []).map((assignment: any) => assignment.assigned_to));
-        const missingPersonIds = selectedPersonIds.filter(personId => !existingPersonIds.has(personId));
-        
-        // Solo crear si no existe
-        if (missingPersonIds.length > 0) {
-          await supabase
-            .from('incident_assignments')
-            .insert(missingPersonIds.map(personId => ({
-              incident_id: incidentIdToLink,
-              assigned_to: personId,
-              status: mapTaskStatusToIncidentStatus(taskForm.status)
-            })) as any);
-        }
-      }
     }
     
     // Get the current max order_position for this daily
@@ -636,6 +607,27 @@ export default function DailiesModule({
     })) as any, {
       onConflict: 'daily_id,task_id'
     } as any);
+
+    if (incidentIdToLink && selectedPersonIds.length > 0 && (creationMode === 'linked' || creationMode === 'manual')) {
+      const { data: existingAssignments } = await supabase
+        .from('incident_assignments')
+        .select('assigned_to')
+        .eq('incident_id', incidentIdToLink)
+        .in('assigned_to', selectedPersonIds);
+      const existingPersonIds = new Set((existingAssignments || []).map((assignment: any) => assignment.assigned_to));
+      const missingPersonIds = selectedPersonIds.filter(personId => !existingPersonIds.has(personId));
+
+      if (missingPersonIds.length > 0) {
+        await supabase
+          .from('incident_assignments')
+          .insert(missingPersonIds.map(personId => ({
+            incident_id: incidentIdToLink,
+            assigned_to: personId,
+            status: mapTaskStatusToIncidentStatus(taskForm.status),
+          })) as any);
+      }
+    }
+
     await recordDailyTaskCreated({
       projectId,
       taskId: created.id,
