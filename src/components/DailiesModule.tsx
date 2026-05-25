@@ -1117,6 +1117,135 @@ export default function DailiesModule({
     });
   }, [visibleDailyTasks]);
 
+  const copyDailySummary = async () => {
+    const getSummaryTaskType = (task: any) => {
+      const ticket = String(task.related_ticket ?? '').trim();
+      const linkedIncident = incidents.find((incident) => {
+        const incidentReference = formatIncidentReference(incident);
+        return incidentReference === ticket || String(incident.incident_number ?? '') === ticket;
+      });
+
+      return getCategoryLabel(getDisplayCategory(linkedIncident));
+    };
+    const formatSummaryTask = (task: any) => ({
+      type: getSummaryTaskType(task),
+      text: formatTaskText(task),
+    });
+    const formatTaskText = (task: any) => {
+      const ticket = String(task.related_ticket ?? '').trim();
+      return ticket ? `${ticket} - ${task.title}` : task.title;
+    };
+    const escapeHtml = (value: string) => value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    const escapeTableText = (value: string) => value.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+    type SummaryTask = { type: string; text: string };
+    const buildStatusTable = (label: string, icon: string, tasks: SummaryTask[]) => [
+      `| Estado | Tipo | Incidencia |`,
+      `|---|---|---|`,
+      ...(tasks.length
+        ? tasks.map((task) => `| ${icon} ${label} | ${escapeTableText(task.type)} | ${escapeTableText(task.text)} |`)
+        : [`| ${icon} ${label} | — | Sin tareas |`]),
+    ];
+    const buildHtmlTable = (label: string, icon: string, color: string, tasks: SummaryTask[]) => {
+      const rows = tasks.length ? tasks : [{ type: '—', text: 'Sin tareas' }];
+      return `
+        <table style="border-collapse: collapse; margin: 0 0 14px 0;">
+          <thead>
+            <tr>
+              <th style="border: 1px solid #d1d5db; padding: 4px 8px; text-align: left;">Estado</th>
+              <th style="border: 1px solid #d1d5db; padding: 4px 8px; text-align: left;">Tipo</th>
+              <th style="border: 1px solid #d1d5db; padding: 4px 8px; text-align: left;">Incidencia</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((task) => `
+              <tr>
+                <td style="border: 1px solid #d1d5db; padding: 4px 8px; white-space: nowrap;">
+                  <span style="color: ${color}; font-weight: 700;">${icon}</span> ${escapeHtml(label)}
+                </td>
+                <td style="border: 1px solid #d1d5db; padding: 4px 8px;">${escapeHtml(task.type)}</td>
+                <td style="border: 1px solid #d1d5db; padding: 4px 8px;">${escapeHtml(task.text)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    };
+
+    const summaryPeople = people
+      .filter((person) => !person.name.toLowerCase().includes('marcos'))
+      .map((person) => {
+        const personTasks = activeDailyTasks
+          .filter((task) => (task.person_id || task.assigned_to) === person.id)
+          .filter((task) => !String(task.description || '').includes(NOTE_MARKER));
+
+        return {
+          person,
+          inProgress: personTasks.filter((task) => task.status === 'in_progress').map(formatSummaryTask),
+          pending: personTasks.filter((task) => task.status === 'pending').map(formatSummaryTask),
+        };
+      })
+      .filter((item) => item.inProgress.length > 0 || item.pending.length > 0);
+
+    const dayText = format(date, "d 'de' MMMM", { locale: es });
+    const title = `Tareas del Día ${dayText.charAt(0).toUpperCase()}${dayText.slice(1)}`;
+    const lines = [title];
+
+    summaryPeople.forEach(({ person, inProgress, pending }) => {
+      lines.push(
+        '',
+        '',
+        `**${person.name.toUpperCase()}**`,
+        '',
+        'En curso',
+        '',
+        ...buildStatusTable('WIP', '🟠', inProgress),
+        '',
+        'Pendientes',
+        '',
+        ...buildStatusTable('Pendiente', '⚪', pending),
+      );
+    });
+
+    const textSummary = lines.join('\n');
+    const htmlSummary = `
+      <div>
+        <p><strong>${escapeHtml(title)}</strong></p>
+        ${summaryPeople.map(({ person, inProgress, pending }) => `
+          <br>
+          <p style="margin: 14px 0 0 0;"><strong>${escapeHtml(person.name.toUpperCase())}</strong></p>
+          <br>
+          <p style="margin: 0;"><strong>En curso</strong></p>
+          <br>
+          ${buildHtmlTable('WIP', '●', '#f97316', inProgress)}
+          <p style="margin: 0;"><strong>Pendientes</strong></p>
+          <br>
+          ${buildHtmlTable('Pendiente', '●', '#6b7280', pending)}
+        `).join('')}
+      </div>
+    `;
+
+    if (navigator.clipboard.write && window.ClipboardItem) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([htmlSummary], { type: 'text/html' }),
+          'text/plain': new Blob([textSummary], { type: 'text/plain' }),
+        }),
+      ]);
+    } else {
+      await navigator.clipboard.writeText(textSummary);
+    }
+
+    toast({
+      title: 'Resumen copiado',
+      description: `Se copió el resumen de ${summaryPeople.length} personas.`,
+    });
+  };
+
   const availableEpics = useMemo(() => {
     const set = new Set<string>();
     incidents.forEach((incident) => {
@@ -1791,15 +1920,20 @@ export default function DailiesModule({
             {/* Tasks List */}
             <div className="w-full">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setNoteForm({ comment: '', personId: '', date: dateToLocalInputValue(date) });
-                    setNoteOpen(true);
-                  }}
-                >
-                  Añadir nota
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setNoteForm({ comment: '', personId: '', date: dateToLocalInputValue(date) });
+                      setNoteOpen(true);
+                    }}
+                  >
+                    Añadir nota
+                  </Button>
+                  <Button variant="outline" onClick={copyDailySummary}>
+                    Resumen diario
+                  </Button>
+                </div>
                 <Button
                   variant="ghost"
                   size="icon"
