@@ -145,7 +145,10 @@ export const useTaskAssignments = (taskId: string | null) => {
             .update({ status: newIncidentStatus, environment: incidentEnvironment } as any)
             .eq('id', assignmentRow.incident_id);
 
-          if (currentIncident && currentIncident.status !== newIncidentStatus) {
+          if (
+            currentIncident &&
+            (currentIncident.status !== newIncidentStatus || normalizeEnvironment(currentIncident.environment) !== normalizeEnvironment(incidentEnvironment))
+          ) {
             await recordIncidentStatusChange({
               projectId: currentIncident.project_id,
               incidentId: assignmentRow.incident_id,
@@ -154,6 +157,8 @@ export const useTaskAssignments = (taskId: string | null) => {
               incidentCategory: currentIncident.category,
               fromStatus: currentIncident.status,
               toStatus: newIncidentStatus,
+              fromEnvironment: currentIncident.environment,
+              toEnvironment: incidentEnvironment,
             });
           }
         }

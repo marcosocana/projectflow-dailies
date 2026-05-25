@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { getStatusLogLabel } from '@/lib/taskStatus';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,9 @@ const STATUS_LABELS: Record<string, string> = {
   pending: 'Pendiente',
   in_progress: 'WIP',
   in_qa: 'Resuelta',
+  resolved_DEV: 'Resuelta - En DEV',
+  resolved_PRE: 'Resuelta - En PRE',
+  resolved_PRO: 'Resuelta - En PRO',
   resolved: 'Resuelta',
   blocked: 'Block',
   closed: 'Cerrada',
@@ -51,6 +55,9 @@ const STATUS_BADGE_CLS: Record<string, string> = {
   pending: 'bg-muted text-muted-foreground border-transparent',
   in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent',
   in_qa: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent',
+  resolved_DEV: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent',
+  resolved_PRE: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent',
+  resolved_PRO: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent',
   resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent',
   blocked: 'bg-destructive text-destructive-foreground border-transparent',
   closed: 'bg-destructive text-destructive-foreground border-transparent',
@@ -166,9 +173,9 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
     }
     const category = CATEGORY_META[log.incident_category] || CATEGORY_META.incident;
     if (log.from_status === 'created') {
-      return `${log.actor_name} creó ${category.label} - ${log.incident_number} - ${log.incident_name} con estado ${STATUS_LABELS[log.to_status] || log.to_status}.`;
+      return `${log.actor_name} creó ${category.label} - ${log.incident_number} - ${log.incident_name} con estado ${getStatusLogLabel(log.to_status)}.`;
     }
-    return `${log.actor_name} cambió el estado de ${category.label} - ${log.incident_number} - ${log.incident_name} de ${STATUS_LABELS[log.from_status] || log.from_status} a ${STATUS_LABELS[log.to_status] || log.to_status}.`;
+    return `${log.actor_name} cambió el estado de ${category.label} - ${log.incident_number} - ${log.incident_name} de ${getStatusLogLabel(log.from_status)} a ${getStatusLogLabel(log.to_status)}.`;
   };
 
   const formatAnonymousEntry = (log: ActivityLogRow) => {
@@ -184,9 +191,9 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
     }
     const category = CATEGORY_META[log.incident_category] || CATEGORY_META.incident;
     if (log.from_status === 'created') {
-      return `Se ha creado ${category.label} - ${log.incident_number} - ${log.incident_name} con estado ${STATUS_LABELS[log.to_status] || log.to_status}.`;
+      return `Se ha creado ${category.label} - ${log.incident_number} - ${log.incident_name} con estado ${getStatusLogLabel(log.to_status)}.`;
     }
-    return `Se ha cambiado el estado de ${category.label} - ${log.incident_number} - ${log.incident_name} de ${STATUS_LABELS[log.from_status] || log.from_status} a ${STATUS_LABELS[log.to_status] || log.to_status}.`;
+    return `Se ha cambiado el estado de ${category.label} - ${log.incident_number} - ${log.incident_name} de ${getStatusLogLabel(log.from_status)} a ${getStatusLogLabel(log.to_status)}.`;
   };
 
   const copyText = async (text: string, description: string) => {
@@ -413,14 +420,14 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                                 <>
                                   <span>de</span>
                                   <Badge variant="outline" className={STATUS_BADGE_CLS[log.from_status] || 'border-transparent'}>
-                                    {STATUS_LABELS[log.from_status] || log.from_status}
+                                    {getStatusLogLabel(log.from_status)}
                                   </Badge>
                                   <span>a</span>
                                 </>
                               )}
                               {isCreation && <span>con estado</span>}
                               <Badge variant="outline" className={STATUS_BADGE_CLS[log.to_status] || 'border-transparent'}>
-                                {STATUS_LABELS[log.to_status] || log.to_status}
+                                {getStatusLogLabel(log.to_status)}
                               </Badge>
                               <span>.</span>
                             </div>

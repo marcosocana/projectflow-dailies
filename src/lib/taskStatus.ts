@@ -68,6 +68,25 @@ export const getResolvedSubstatusLabel = (
   return `En ${normalizeEnvironment(status === 'in_qa' ? 'PRE' : environment) || 'PRO'}`;
 };
 
+export const getStatusLogValue = (
+  status: IncidentStatus | TaskStatus | string | null | undefined,
+  environment?: string | null,
+) => {
+  if (status === 'in_qa') return 'resolved_PRE';
+  if (status === 'closed') return 'resolved_PRO';
+  if (status === 'resolved' || status === 'resolved_yesterday') {
+    return `resolved_${normalizeEnvironment(environment) || 'PRO'}`;
+  }
+  return String(status || 'pending');
+};
+
+export const getStatusLogLabel = (status: string | null | undefined) => {
+  if (status === 'resolved_DEV') return 'Resuelta - En DEV';
+  if (status === 'resolved_PRE') return 'Resuelta - En PRE';
+  if (status === 'resolved_PRO') return 'Resuelta - En PRO';
+  return getIncidentStatusLabel(status);
+};
+
 export const getIncidentStatusTone = (status: IncidentStatus | string | null | undefined) => {
   if (status === 'pending') return 'bg-yellow-100 text-yellow-800 border-yellow-300';
   if (status === 'in_progress') return 'bg-blue-100 text-blue-800 border-blue-300';

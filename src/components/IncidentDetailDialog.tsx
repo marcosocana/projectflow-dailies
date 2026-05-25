@@ -293,8 +293,9 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         }
       }
       const previousStatus = selected.status;
+      const previousEnvironment = selected.environment;
       await supabase.from('incidents').update(payload).eq('id', selected.id);
-      if (previousStatus !== payload.status) {
+      if (previousStatus !== payload.status || normalizeEnvironment(previousEnvironment) !== normalizeEnvironment(payload.environment)) {
         await recordIncidentStatusChange({
           projectId: selected.project_id,
           incidentId: selected.id,
@@ -303,6 +304,8 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           incidentCategory: payload.category,
           fromStatus: previousStatus,
           toStatus: payload.status,
+          fromEnvironment: previousEnvironment,
+          toEnvironment: payload.environment,
         });
       }
       

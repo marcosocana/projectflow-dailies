@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { getStatusLogValue } from '@/lib/taskStatus';
 
 type IncidentStatusLogInput = {
   projectId: string;
@@ -8,6 +9,8 @@ type IncidentStatusLogInput = {
   incidentCategory: string;
   fromStatus: string;
   toStatus: string;
+  fromEnvironment?: string | null;
+  toEnvironment?: string | null;
 };
 
 type ActivityActor = {
@@ -52,8 +55,8 @@ async function recordIncidentActivity(input: IncidentStatusLogInput) {
       incident_number: input.incidentNumber,
       incident_name: input.incidentName,
       incident_category: input.incidentCategory,
-      from_status: input.fromStatus,
-      to_status: input.toStatus,
+      from_status: getStatusLogValue(input.fromStatus, input.fromEnvironment),
+      to_status: getStatusLogValue(input.toStatus, input.toEnvironment),
       actor_user_id: actor.userId,
       actor_name: actor.name,
       actor_color: actor.color,

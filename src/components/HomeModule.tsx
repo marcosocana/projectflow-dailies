@@ -314,7 +314,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
         .eq('id', activeId);
 
       if (error) throw error;
-      if (previousStatus !== newStatus) {
+      if (previousStatus !== newStatus || normalizeEnvironment(activeIncident.environment) !== normalizeEnvironment(newEnvironment)) {
         await recordIncidentStatusChange({
           projectId,
           incidentId: activeId,
@@ -323,6 +323,8 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
           incidentCategory: activeIncident.category,
           fromStatus: previousStatus,
           toStatus: newStatus,
+          fromEnvironment: activeIncident.environment,
+          toEnvironment: newEnvironment,
         });
       }
       

@@ -31,6 +31,7 @@ import {
   getAppStatusTone,
   getResolvedSubstatusLabel,
   getTaskStatusLabel as getSharedTaskStatusLabel,
+  mapIncidentStatusToTaskStatus,
   mapTaskStatusToIncidentStatus,
 } from '@/lib/taskStatus';
 import {
@@ -514,7 +515,7 @@ export default function DailiesModule({
     if (incidentIdToLink && creationMode === 'linked') {
       const { data: currentIncident } = await supabase
         .from('incidents')
-        .select('status, incident_number, name, category')
+        .select('status, incident_number, name, category, environment')
         .eq('id', incidentIdToLink)
         .maybeSingle();
 
@@ -528,7 +529,11 @@ export default function DailiesModule({
         } as any)
         .eq('id', incidentIdToLink);
 
-      if (currentIncident && currentIncident.status !== mapTaskStatusToIncidentStatus(taskForm.status)) {
+      if (
+        currentIncident &&
+        (currentIncident.status !== mapTaskStatusToIncidentStatus(taskForm.status) ||
+          normalizeTaskEnvironment(mapIncidentStatusToTaskStatus(currentIncident.status) as TaskStatus, currentIncident.environment || '') !== taskEnvironment)
+      ) {
         await recordIncidentStatusChange({
           projectId,
           incidentId: incidentIdToLink,
@@ -537,6 +542,8 @@ export default function DailiesModule({
           incidentCategory: currentIncident.category,
           fromStatus: currentIncident.status,
           toStatus: mapTaskStatusToIncidentStatus(taskForm.status),
+          fromEnvironment: currentIncident.environment,
+          toEnvironment: taskEnvironment || null,
         });
       }
       
@@ -754,10 +761,24 @@ export default function DailiesModule({
     }
 
     if (task.incident_id) {
+      const linkedIncident = incidents.find((incident) => incident.id === task.incident_id);
       await supabase
         .from('incidents')
         .update({ environment })
         .eq('id', task.incident_id);
+      if (linkedIncident && normalizeTaskEnvironment(task.status as TaskStatus, linkedIncident.environment || '') !== environment) {
+        await recordIncidentStatusChange({
+          projectId,
+          incidentId: task.incident_id,
+          incidentNumber: Number(linkedIncident.incident_number),
+          incidentName: linkedIncident.name,
+          incidentCategory: linkedIncident.category,
+          fromStatus: linkedIncident.status,
+          toStatus: linkedIncident.status,
+          fromEnvironment: linkedIncident.environment,
+          toEnvironment: environment,
+        });
+      }
       setIncidents(prev => prev.map(incident => incident.id === task.incident_id ? { ...incident, environment } : incident));
     }
 
@@ -1705,7 +1726,7 @@ export default function DailiesModule({
         if (update.incident_id && relatedTicket) {
           const { data: currentIncident } = await supabase
             .from('incidents')
-            .select('status, incident_number, name, category, additional_comments')
+            .select('status, incident_number, name, category, additional_comments, environment')
             .eq('id', update.incident_id)
             .maybeSingle();
 
@@ -1728,7 +1749,10 @@ export default function DailiesModule({
             } as any)
             .eq('id', update.incident_id);
 
-          if (currentIncident && currentIncident.status !== nextIncidentStatus) {
+          if (
+            currentIncident &&
+            (currentIncident.status !== nextIncidentStatus || normalizeTaskEnvironment(mapIncidentStatusToTaskStatus(currentIncident.status) as TaskStatus, currentIncident.environment || '') !== taskEnvironment)
+          ) {
             await recordIncidentStatusChange({
               projectId,
               incidentId: update.incident_id,
@@ -1737,6 +1761,8 @@ export default function DailiesModule({
               incidentCategory: currentIncident.category,
               fromStatus: currentIncident.status,
               toStatus: nextIncidentStatus,
+              fromEnvironment: currentIncident.environment,
+              toEnvironment: taskEnvironment || null,
             });
           }
 

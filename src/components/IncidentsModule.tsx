@@ -879,12 +879,13 @@ export default function IncidentsModule({
           const path = await handleUploadEvidence(id);
           updatePayload.evidence = path;
         }
-        const fromStatus = incidents.find(incident => incident.id === id)?.status;
+        const previousIncident = incidents.find(incident => incident.id === id);
+        const fromStatus = previousIncident?.status;
         const {
           error
         } = await supabase.from('incidents').update(updatePayload).eq('id', id);
         if (error) throw error;
-        if (fromStatus && fromStatus !== updatePayload.status) {
+        if (fromStatus && (fromStatus !== updatePayload.status || normalizeEnvironment(previousIncident?.environment) !== normalizeEnvironment(updatePayload.environment))) {
           await recordIncidentStatusChange({
             projectId,
             incidentId: id,
@@ -893,6 +894,8 @@ export default function IncidentsModule({
             incidentCategory: updatePayload.category,
             fromStatus,
             toStatus: updatePayload.status,
+            fromEnvironment: previousIncident?.environment,
+            toEnvironment: updatePayload.environment,
           });
         }
         
@@ -971,10 +974,11 @@ export default function IncidentsModule({
           updatePayload.evidence = path;
         }
 
-        const fromStatus = incidents.find(incident => incident.id === editingId)?.status;
+        const previousIncident = incidents.find(incident => incident.id === editingId);
+        const fromStatus = previousIncident?.status;
         const { error } = await supabase.from('incidents').update(updatePayload).eq('id', editingId);
         if (error) throw error;
-        if (fromStatus && fromStatus !== updatePayload.status) {
+        if (fromStatus && (fromStatus !== updatePayload.status || normalizeEnvironment(previousIncident?.environment) !== normalizeEnvironment(updatePayload.environment))) {
           await recordIncidentStatusChange({
             projectId,
             incidentId: editingId,
@@ -983,6 +987,8 @@ export default function IncidentsModule({
             incidentCategory: updatePayload.category,
             fromStatus,
             toStatus: updatePayload.status,
+            fromEnvironment: previousIncident?.environment,
+            toEnvironment: updatePayload.environment,
           });
         }
 
@@ -1180,6 +1186,8 @@ Sub-estado: ${getResolvedSubstatusLabel(incident.status, incident.environment)}`
           incidentCategory: activeIncident.category,
           fromStatus,
           toStatus,
+          fromEnvironment: activeIncident.environment,
+          toEnvironment: toStatus === 'resolved' ? normalizeEnvironment(activeIncident.environment) || 'PRO' : null,
         });
       }
       
