@@ -34,7 +34,18 @@ import BacklogImportDialog from '@/components/BacklogImportDialog';
 import { recordIncidentCreated, recordIncidentDeleted, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference, formatInternalTaskIdFromValue, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getAppStatusTone, getIncidentStatusLabel, getResolvedSubstatusLabel, mapIncidentStatusToTaskStatus, normalizeEnvironment, type TaskEnvironment } from '@/lib/taskStatus';
+import {
+  ASSIGNMENT_STATUS_OPTIONS,
+  assignmentToSelectValue,
+  getAppStatusTone,
+  getIncidentStatusLabel,
+  getResolvedSubstatusLabel,
+  mapIncidentStatusToTaskStatus,
+  normalizeEnvironment,
+  selectValueToAssignment,
+  type AssignmentStatusValue,
+  type TaskEnvironment,
+} from '@/lib/taskStatus';
 
 interface IncidentsModuleProps {
   projectId: string;
@@ -56,22 +67,6 @@ interface SortableIncidentCardProps {
 }
 type IncidentStatus = Database['public']['Enums']['incident_status'];
 type IncidentCategory = Database['public']['Enums']['incident_category'];
-const STATUS_OPTIONS = [{
-  value: 'pending',
-  label: 'Pendiente'
-}, {
-  value: 'in_progress',
-  label: 'WIP'
-}, {
-  value: 'resolved',
-  label: 'Resuelta'
-}, {
-  value: 'blocked',
-  label: 'Block'
-}, {
-  value: 'closed',
-  label: 'Cerrada'
-}];
 const CATEGORY_OPTIONS = [{
   value: 'incident',
   label: 'Incidencia'
@@ -515,7 +510,7 @@ export default function IncidentsModule({
     setTotalIncidents(onlyIncidents.length);
     const statusGrouped: Record<string, number> = {};
     onlyIncidents.forEach(incident => {
-      const status = incident.status;
+      const status = incident.status === 'in_qa' ? 'resolved' : incident.status;
       statusGrouped[status] = (statusGrouped[status] || 0) + 1;
     });
     setStatusCounts(statusGrouped);
@@ -525,7 +520,7 @@ export default function IncidentsModule({
     setTotalImprovements(onlyImprovements.length);
     const improvementGrouped: Record<string, number> = {};
     onlyImprovements.forEach(imp => {
-      const status = imp.status;
+      const status = imp.status === 'in_qa' ? 'resolved' : imp.status;
       improvementGrouped[status] = (improvementGrouped[status] || 0) + 1;
     });
     setImprovementStatusCounts(improvementGrouped);
@@ -535,7 +530,7 @@ export default function IncidentsModule({
     setTotalCorrectiveImprovements(onlyCorrectiveImprovements.length);
     const correctiveImprovementGrouped: Record<string, number> = {};
     onlyCorrectiveImprovements.forEach(imp => {
-      const status = imp.status;
+      const status = imp.status === 'in_qa' ? 'resolved' : imp.status;
       correctiveImprovementGrouped[status] = (correctiveImprovementGrouped[status] || 0) + 1;
     });
     setCorrectiveImprovementStatusCounts(correctiveImprovementGrouped);
@@ -1036,11 +1031,11 @@ export default function IncidentsModule({
       description: incident.description || '',
       evidenceLink: incident.evidence && !incident.evidence.startsWith('incidents/') ? incident.evidence : '',
       environment: incident.environment || '',
-      statusEnvironment: incident.status_environment || '',
+      statusEnvironment: incident.status === 'in_qa' ? 'PRE' : incident.status_environment || '',
       device: incident.device || '',
       epic: incident.epic || '',
       occurredAt: incident.occurred_at ? new Date(incident.occurred_at).toISOString() : new Date().toISOString(),
-      status: incident.status || 'pending',
+      status: incident.status === 'in_qa' ? 'resolved' : incident.status || 'pending',
       category: getDisplayCategory(incident),
       additionalComments: cleanAdditionalComments(incident.additional_comments),
       createdBy: incident.created_by || '',
@@ -2030,36 +2025,29 @@ Sub-estado: ${getResolvedSubstatusLabel(incident.status, incident.status_environ
           </div>
            <div className="space-y-2">
              <Label>Estado</Label>
-	             <Select value={form.status} onValueChange={v => setForm(f => ({
-	              ...f,
-	              status: v,
-	              statusEnvironment: v === 'resolved' || v === 'closed' ? normalizeEnvironment(f.statusEnvironment) || 'PRO' : '',
-	            }))}>
+	             <Select
+                value={assignmentToSelectValue(form.status, form.statusEnvironment)}
+                onValueChange={(value) => setForm(f => {
+                  const next = selectValueToAssignment(value as AssignmentStatusValue);
+                  return {
+                    ...f,
+                    status: next.status,
+                    statusEnvironment: next.environment || '',
+                  };
+                })}
+              >
                <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
                <SelectContent>
-                 {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>
+                 {ASSIGNMENT_STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>
                      <div className="flex items-center gap-2">
                        <Badge variant="outline" className={`${getAppStatusTone(s.value)} text-[10px] px-1 py-0.5`}>
-                         {getIncidentStatusLabel(s.value)}
+                         {s.label}
                        </Badge>
                      </div>
                    </SelectItem>)}
                </SelectContent>
 	             </Select>
 	           </div>
-	           {(form.status === 'resolved' || form.status === 'closed') && (
-	            <div className="space-y-2">
-	              <Label>Sub-estado</Label>
-	              <Select value={form.statusEnvironment} onValueChange={v => setForm(f => ({ ...f, statusEnvironment: v }))}>
-	                <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-	                <SelectContent>
-	                  <SelectItem value="DEV">En DEV</SelectItem>
-	                  <SelectItem value="PRE">En PRE</SelectItem>
-	                  <SelectItem value="PRO">En PRO</SelectItem>
-	                </SelectContent>
-	              </Select>
-	            </div>
-	           )}
            {!editingId ? (
               <>
                 <div className="space-y-2 md:col-span-2">

@@ -28,11 +28,15 @@ import { cn } from '@/lib/utils';
 import { recordDailyTaskCreated, recordDailyTasksPersisted, recordIncidentCreated, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, extractInternalTaskNumber, formatIncidentReference, formatInternalTaskIdFromValue, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import {
+  ASSIGNMENT_STATUS_OPTIONS,
+  assignmentToSelectValue,
   getAppStatusTone,
   getResolvedSubstatusLabel,
   getTaskStatusLabel as getSharedTaskStatusLabel,
   mapIncidentStatusToTaskStatus,
   mapTaskStatusToIncidentStatus,
+  selectValueToAssignment,
+  type AssignmentStatusValue,
 } from '@/lib/taskStatus';
 import {
   DndContext,
@@ -2345,40 +2349,25 @@ export default function DailiesModule({
               <div>
                 <Label>Estado</Label>
                 <Select
-                  value={taskForm.status}
+                  value={assignmentToSelectValue(taskForm.status, taskForm.environment)}
                   onValueChange={v => setTaskForm(f => {
-                    const nextStatus = v as TaskStatus;
+                    const next = selectValueToAssignment(v as AssignmentStatusValue);
+                    const nextStatus = mapIncidentStatusToTaskStatus(next.status) as TaskStatus;
                     return {
                       ...f,
                       status: nextStatus,
-                      environment: normalizeTaskEnvironment(nextStatus, f.environment),
+                      environment: next.environment || '',
                     };
                   })}
                 >
                   <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pending">Pendiente</SelectItem>
-                    <SelectItem value="in_progress">WIP</SelectItem>
-                    <SelectItem value="resolved">Resuelta</SelectItem>
-                    <SelectItem value="blocked">Block</SelectItem>
+                    {ASSIGNMENT_STATUS_OPTIONS.filter(option => option.value !== 'closed').map(option => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-              {isResolvedTask(taskForm.status) && (
-                <div>
-                  <RequiredLabel>Entorno</RequiredLabel>
-                  <Select value={taskForm.environment} onValueChange={value => setTaskForm(f => ({ ...f, environment: value as TaskEnvironment }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar entorno" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="DEV">DEV</SelectItem>
-                      <SelectItem value="PRE">PRE</SelectItem>
-                      <SelectItem value="PRO">PRO</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
               <div className="md:col-span-2">
                 <Label>Descripción</Label>
                 <Textarea value={taskForm.description} onChange={e => setTaskForm(f => ({

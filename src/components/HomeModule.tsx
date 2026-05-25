@@ -15,7 +15,8 @@ import { formatIncidentReference } from '@/lib/internalTaskIds';
 import {
   getIncidentStatusLabel,
   getIncidentStatusTone,
-  getResolvedSubstatusLabel,
+  getStatusLogLabel,
+  getStatusLogValue,
   mapIncidentStatusToTaskStatus,
   normalizeEnvironment,
   type IncidentStatus,
@@ -624,7 +625,6 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
                 <TableHead>Número</TableHead>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Sub-estado</TableHead>
                 <TableHead>Categoría</TableHead>
                 <TableHead>Asignado a</TableHead>
                 <TableHead>Fecha</TableHead>
@@ -640,10 +640,9 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
                     <TableCell>{incident.name}</TableCell>
                     <TableCell>
                       <Badge className={`${getIncidentStatusTone(incident.status)}`}>
-                        {getIncidentStatusLabel(incident.status)}
+                        {getStatusLogLabel(getStatusLogValue(incident.status, incident.status_environment))}
                       </Badge>
                     </TableCell>
-                    <TableCell>{getResolvedSubstatusLabel(incident.status, incident.status_environment)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         {getCategoryIcon(getDisplayCategory(incident))}

@@ -415,22 +415,39 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
         </div>
 
         {tasks.length > 0 && (
-          <div className="max-h-[168px] min-w-0 overflow-y-auto rounded-md border bg-muted/30 p-2">
-            <div className="flex flex-wrap gap-2 pr-2">
-              {tasks.map(task => (
-                <Badge key={`${task.source}-${task.taskId || task.id}`} variant="secondary" className="gap-1 pr-1">
-                  <span className="max-w-[420px] min-w-0 truncate">{task.id} · {task.title}</span>
+          <div className="max-h-[220px] min-w-0 overflow-y-auto rounded-md border bg-muted/30 p-2">
+            <div className="space-y-2 pr-2">
+              {tasks.map((task, index) => (
+                <div key={`${task.source}-${task.taskId || task.id}-${index}`} className="grid min-w-0 gap-2 rounded-md bg-background p-2 sm:grid-cols-[120px_minmax(0,1fr)_32px]">
+                  <Input
+                    value={task.id}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setTasks(prev => prev.map((item, itemIndex) => itemIndex === index ? { ...item, id: value } : item));
+                    }}
+                    placeholder="ID"
+                    className="min-w-0"
+                  />
+                  <Input
+                    value={task.title}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setTasks(prev => prev.map((item, itemIndex) => itemIndex === index ? { ...item, title: value } : item));
+                    }}
+                    placeholder="Título"
+                    className="min-w-0"
+                  />
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
+                    size="icon"
                     aria-label="Quitar tarea"
-                    className="h-5 w-5 p-0 hover:bg-transparent"
+                    className="h-9 w-9"
                     onClick={() => removeTask(task, setTasks)}
                   >
-                    <X className="h-3 w-3" />
+                    <X className="h-4 w-4" />
                   </Button>
-                </Badge>
+                </div>
               ))}
             </div>
           </div>

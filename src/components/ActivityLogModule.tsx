@@ -382,8 +382,12 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                   const entityLabel = `${category.label} - ${log.incident_number} - ${log.incident_name}`;
                   const isUnread = isUnreadLog(log);
                   const isCreation = log.from_status === 'created';
-                  const isDailyEvent = log.event_type === 'daily_task_created' || log.event_type === 'daily_tasks_persisted' || log.event_type === 'assignment_status_changed';
+                  const isAssignmentEvent = log.event_type === 'assignment_status_changed';
+                  const isDailyEvent = log.event_type === 'daily_task_created' || log.event_type === 'daily_tasks_persisted';
                   const isDeletedEvent = log.event_type === 'incident_deleted';
+                  const assignmentPersonName = typeof log.metadata?.personName === 'string'
+                    ? log.metadata.personName
+                    : 'Persona asignada';
                   return (
 	                    <div key={log.id} className="relative flex items-start justify-between gap-3 rounded-md border p-3 min-w-0">
                       {isUnread && (
@@ -400,7 +404,31 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                           {category.icon}
                         </div>
                         <div className="min-w-0">
-                          {isDailyEvent || isDeletedEvent ? (
+                          {isAssignmentEvent ? (
+                            <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                              <span>{log.actor_name} cambió el estado de {assignmentPersonName} de</span>
+                              <Badge variant="outline" className={STATUS_BADGE_CLS[log.from_status] || 'border-transparent'}>
+                                {getStatusLogLabel(log.from_status)}
+                              </Badge>
+                              <span>a</span>
+                              <Badge variant="outline" className={STATUS_BADGE_CLS[log.to_status] || 'border-transparent'}>
+                                {getStatusLogLabel(log.to_status)}
+                              </Badge>
+                              <span>para la tarea</span>
+                              {log.incident_id ? (
+                                <Button
+                                  variant="link"
+                                  className="h-auto min-w-0 max-w-full whitespace-normal break-words p-0 text-left align-baseline text-sm font-bold leading-snug"
+                                  onClick={() => openIncidentDetails(log.incident_id!)}
+                                >
+                                  {entityLabel}
+                                </Button>
+                              ) : (
+                                <span className="min-w-0 max-w-full break-words font-bold">{entityLabel}</span>
+                              )}
+                              <span>.</span>
+                            </div>
+                          ) : isDailyEvent || isDeletedEvent ? (
 	                            <div className="text-sm break-words">{log.message}</div>
                           ) : (
                             <div className="flex flex-wrap items-center gap-1.5 text-sm">
