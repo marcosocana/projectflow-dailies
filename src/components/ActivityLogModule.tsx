@@ -382,7 +382,7 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                   const entityLabel = `${category.label} - ${log.incident_number} - ${log.incident_name}`;
                   const isUnread = isUnreadLog(log);
                   const isCreation = log.from_status === 'created';
-                  const isDailyEvent = log.event_type === 'daily_task_created' || log.event_type === 'daily_tasks_persisted';
+                  const isDailyEvent = log.event_type === 'daily_task_created' || log.event_type === 'daily_tasks_persisted' || log.event_type === 'assignment_status_changed';
                   const isDeletedEvent = log.event_type === 'incident_deleted';
                   return (
 	                    <div key={log.id} className="relative flex items-start justify-between gap-3 rounded-md border p-3 min-w-0">

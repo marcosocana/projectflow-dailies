@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { getStatusLogValue } from '@/lib/taskStatus';
+import { getStatusLogLabel, getStatusLogValue } from '@/lib/taskStatus';
 
 type IncidentStatusLogInput = {
   projectId: string;
@@ -71,6 +71,42 @@ async function recordIncidentActivity(input: IncidentStatusLogInput) {
 
 export async function recordIncidentStatusChange(input: IncidentStatusLogInput) {
   await recordIncidentActivity(input);
+}
+
+export async function recordAssignmentStatusChange(input: IncidentStatusLogInput & {
+  personName: string;
+}) {
+  try {
+    const actor = await loadActivityActor();
+    if (!actor) return;
+
+    const fromStatus = getStatusLogValue(input.fromStatus, input.fromEnvironment);
+    const toStatus = getStatusLogValue(input.toStatus, input.toEnvironment);
+
+    const { error } = await supabase.from('incident_activity_logs').insert({
+      project_id: input.projectId,
+      incident_id: input.incidentId,
+      incident_number: input.incidentNumber,
+      incident_name: input.incidentName,
+      incident_category: input.incidentCategory,
+      from_status: fromStatus,
+      to_status: toStatus,
+      actor_user_id: actor.userId,
+      actor_name: actor.name,
+      actor_color: actor.color,
+      event_type: 'assignment_status_changed',
+      message: `${actor.name} cambió el estado de ${input.personName} de ${getStatusLogLabel(fromStatus)} a ${getStatusLogLabel(toStatus)} para la tarea ${input.incidentNumber} - ${input.incidentName}.`,
+      metadata: {
+        personName: input.personName,
+        fromStatus,
+        toStatus,
+      },
+    });
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error recording assignment activity log:', error);
+  }
 }
 
 export async function recordIncidentCreated(input: Omit<IncidentStatusLogInput, 'fromStatus'>) {

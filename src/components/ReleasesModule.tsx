@@ -731,8 +731,9 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
           </DialogHeader>
           
           {selectedRelease && (
-            <div className="space-y-4">
-              <div>
+            <div className="grid min-w-0 max-w-full gap-4 overflow-hidden py-2">
+              <div className="grid min-w-0 max-w-full gap-3 md:grid-cols-3">
+              <div className={formGroupClassName}>
                 <Label>Plataforma</Label>
                 {isEditing ? (
                   <Select value={editPlatform} onValueChange={(value: 'web' | 'app') => {
@@ -776,7 +777,7 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
                 )}
               </div>
               
-              <div>
+              <div className={formGroupClassName}>
                 <Label>Entorno</Label>
                 {isEditing ? (
                   <Select value={editEnvironment} onValueChange={(value: 'dev' | 'pre' | 'pro') => setEditEnvironment(value)}>
@@ -806,7 +807,7 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
                 )}
               </div>
               
-              <div>
+              <div className={formGroupClassName}>
                 <Label>Versión</Label>
                 {isEditing ? (
                   <Input
@@ -824,7 +825,9 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
                 )}
               </div>
               
-              <div>
+              </div>
+
+              <div className={formGroupClassName}>
                 <Label>Qué incluye</Label>
                 {isEditing ? (
                   <div className="mt-1">
@@ -875,8 +878,11 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
               <div className="flex flex-col gap-3 pt-4 border-t sm:flex-row sm:justify-between">
                 {isEditing ? (
                   <div className="flex flex-col-reverse gap-2 sm:flex-row">
-                    <Button variant="outline" onClick={() => setIsEditing(false)}>
-                      Cerrar edición
+                    <Button variant="outline" onClick={handleCancelEdit}>
+                      Cancelar
+                    </Button>
+                    <Button onClick={handleSaveEdit}>
+                      Guardar cambios
                     </Button>
                   </div>
                 ) : (

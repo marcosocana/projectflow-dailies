@@ -16,22 +16,17 @@ import { useTaskAssignments } from '@/hooks/useTaskAssignments';
 import { recordIncidentDeleted, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, extractInternalTaskNumber, formatIncidentReference, formatInternalTaskIdFromValue } from '@/lib/internalTaskIds';
 import {
+  ASSIGNMENT_STATUS_OPTIONS,
+  assignmentToSelectValue,
   getAppStatusTone,
   getIncidentStatusLabel,
   getResolvedSubstatusLabel,
   mapIncidentStatusToTaskStatus,
   normalizeEnvironment,
+  selectValueToAssignment,
+  type AssignmentStatusValue,
   type IncidentStatus,
 } from '@/lib/taskStatus';
-
-// Options same as IncidentsModule to keep UI identical
-const STATUS_OPTIONS = [
-  { value: 'pending', label: 'Pendiente' },
-  { value: 'in_progress', label: 'WIP' },
-  { value: 'resolved', label: 'Resuelta' },
-  { value: 'blocked', label: 'Block' },
-  { value: 'closed', label: 'Cerrada' },
-] as const;
 
 const CATEGORY_OPTIONS = [
   { value: 'incident', label: 'Incidencia' },
@@ -313,8 +308,8 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
       }
       
       // Sync single-person assignment state if the incident status changed.
-      if (payload.status !== selected.status) {
-        await syncSingleAssignmentStatus(selected.id, payload.status);
+      if (payload.status !== selected.status || normalizeEnvironment(payload.status_environment) !== normalizeEnvironment(selected.status_environment)) {
+        await syncSingleAssignmentStatus(selected.id, payload.status, payload.status_environment);
       }
 
       await supabase
@@ -461,29 +456,34 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                 />
               </div>
               <div>
-                <Label>Estado</Label>
-                <Select 
-                  value={detailForm.status} 
-                  onValueChange={(v) => setDetailForm((f) => ({
-                    ...f,
-                    status: v,
-                    statusEnv: v === 'resolved' || v === 'closed' ? normalizeEnvironment(f.statusEnv) || 'PRO' : '',
-                  }))}
-                  disabled={assignments.length > 1}
-                >
-                  <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
-                  <SelectContent>
-                    {STATUS_OPTIONS.map((s) => (
-                      <SelectItem key={s.value} value={s.value}>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className={`${getAppStatusTone(s.value)} text-[10px] px-1 py-0.5`}>
-                            {getIncidentStatusLabel(s.value)}
-                          </Badge>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+	                <Label>Estado</Label>
+	                <Select 
+	                  value={assignmentToSelectValue(detailForm.status, detailForm.statusEnv)} 
+	                  onValueChange={(v: AssignmentStatusValue) => {
+	                    const next = selectValueToAssignment(v);
+	                    setDetailForm((f) => ({
+	                      ...f,
+	                      status: next.status,
+	                      statusEnv: next.environment || '',
+	                    }));
+	                  }}
+	                  disabled={assignments.length > 1}
+	                >
+	                  <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
+	                  <SelectContent>
+	                    {ASSIGNMENT_STATUS_OPTIONS.map((s) => {
+	                      const next = selectValueToAssignment(s.value);
+	                      return (
+	                      <SelectItem key={s.value} value={s.value}>
+	                        <div className="flex items-center gap-2">
+	                          <Badge variant="outline" className={`${getAppStatusTone(next.status)} text-[10px] px-1 py-0.5`}>
+	                            {s.label}
+	                          </Badge>
+	                        </div>
+	                      </SelectItem>
+	                    )})}
+	                  </SelectContent>
+	                </Select>
                 {assignments.length > 1 && (
                   <p className="text-xs text-muted-foreground mt-1">
                     Estado calculado automáticamente según las asignaciones
@@ -522,19 +522,6 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                   </SelectContent>
                 </Select>
               </div>
-              {(detailForm.status === 'resolved' || detailForm.status === 'closed') && (
-                <div>
-                  <Label>Sub-estado</Label>
-                  <Select value={detailForm.statusEnv} onValueChange={(v) => setDetailForm((f) => ({ ...f, statusEnv: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="DEV">En DEV</SelectItem>
-                      <SelectItem value="PRE">En PRE</SelectItem>
-                      <SelectItem value="PRO">En PRO</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
               <div>
                 <Label>Canal</Label>
                 <Select value={detailForm.dev} onValueChange={(v) => setDetailForm((f) => ({ ...f, dev: v }))}>

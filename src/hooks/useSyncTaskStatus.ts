@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
+import { recordAssignmentStatusChange } from '@/lib/incidentActivityLog';
 import { getMinimumIncidentAssignmentState, normalizeEnvironment } from '@/lib/taskStatus';
 
 type IncidentStatus = Database['public']['Enums']['incident_status'];
@@ -48,12 +49,12 @@ export const updateTaskStatusFromAssignments = async (taskId: string): Promise<v
  * Sincroniza el estado de la tarea con las asignaciones cuando hay una sola asignación
  * Si la tarea cambia de estado y solo hay una asignación, actualiza también la asignación
  */
-export const syncSingleAssignmentStatus = async (taskId: string, taskStatus: IncidentStatus): Promise<void> => {
+export const syncSingleAssignmentStatus = async (taskId: string, taskStatus: IncidentStatus, statusEnvironment: string | null = null): Promise<void> => {
   try {
     // Obtener todas las asignaciones
     const { data: assignments, error } = await supabase
       .from('incident_assignments')
-      .select('id, status, status_environment')
+      .select('id, status, status_environment, assigned_to')
       .eq('incident_id', taskId);
 
     if (error) throw error;
@@ -63,14 +64,40 @@ export const syncSingleAssignmentStatus = async (taskId: string, taskStatus: Inc
       const assignment = assignments[0];
       
       // Solo actualizar si el estado es diferente
-      if (assignment.status !== taskStatus) {
+      if (assignment.status !== taskStatus || normalizeEnvironment((assignment as any).status_environment) !== normalizeEnvironment(statusEnvironment)) {
+        const { data: incident } = await supabase
+          .from('incidents')
+          .select('project_id, incident_number, name, category')
+          .eq('id', taskId)
+          .maybeSingle();
+        const { data: person } = await supabase
+          .from('people')
+          .select('name')
+          .eq('id', (assignment as any).assigned_to)
+          .maybeSingle();
+
         await supabase
           .from('incident_assignments')
           .update({
             status: taskStatus,
-            status_environment: taskStatus === 'resolved' ? normalizeEnvironment((assignment as any).status_environment) || 'PRO' : null,
+            status_environment: taskStatus === 'resolved' ? normalizeEnvironment(statusEnvironment) || 'PRO' : null,
           } as any)
           .eq('id', assignment.id);
+
+        if (incident) {
+          await recordAssignmentStatusChange({
+            projectId: incident.project_id,
+            incidentId: taskId,
+            incidentNumber: Number(incident.incident_number),
+            incidentName: incident.name,
+            incidentCategory: incident.category,
+            personName: person?.name || 'Persona asignada',
+            fromStatus: assignment.status,
+            toStatus: taskStatus,
+            fromEnvironment: (assignment as any).status_environment,
+            toEnvironment: statusEnvironment,
+          });
+        }
       }
     }
   } catch (error) {

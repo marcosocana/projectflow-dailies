@@ -1414,8 +1414,8 @@ Sub-estado: ${getResolvedSubstatusLabel(incident.status, incident.status_environ
     }
 
     // Equivalencias explícitas verdes
-    if (excel.includes('resuelto') && vectorea.includes('en pro')) return true;
-    if (excel.includes('en pruebas') && vectorea.includes('en pre')) return true;
+    if (excel.includes('resuelto') && (vectorea.includes('resuelta') || vectorea.includes('en pro'))) return true;
+    if (excel.includes('en pruebas') && (vectorea.includes('resuelta') || vectorea.includes('en pre') || vectorea.includes('en qa'))) return true;
     if (excel.includes('en curso') && vectorea.includes('wip')) return true;
     if (excel.includes('cerrado') && vectorea.includes('en pro')) return true;
     if (excel.includes('resuelto') && vectorea.includes('cerrada')) return true;

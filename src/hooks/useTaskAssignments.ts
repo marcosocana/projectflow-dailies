@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
-import { recordIncidentStatusChange } from '@/lib/incidentActivityLog';
+import { recordAssignmentStatusChange, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { getMinimumIncidentAssignmentState, mapIncidentStatusToTaskStatus, normalizeEnvironment, type TaskEnvironment } from '@/lib/taskStatus';
 
 type IncidentStatus = Database['public']['Enums']['incident_status'];
@@ -83,6 +83,12 @@ export const useTaskAssignments = (taskId: string | null) => {
 
   const updateAssignmentStatus = async (assignmentId: string, status: IncidentStatus, statusEnvironment: TaskEnvironment | null = null) => {
     try {
+      const { data: previousAssignment } = await supabase
+        .from('incident_assignments')
+        .select('incident_id, assigned_to, status, status_environment')
+        .eq('id', assignmentId)
+        .maybeSingle();
+
       // 1) Actualizar el estado de la asignación
       const { error } = await supabase
         .from('incident_assignments')
@@ -104,6 +110,31 @@ export const useTaskAssignments = (taskId: string | null) => {
           .select('status, incident_number, name, category, project_id, status_environment')
           .eq('id', assignmentRow.incident_id)
           .maybeSingle();
+
+        if (
+          currentIncident &&
+          previousAssignment &&
+          (previousAssignment.status !== status || normalizeEnvironment(previousAssignment.status_environment) !== normalizeEnvironment(statusEnvironment))
+        ) {
+          const { data: assignedPerson } = await supabase
+            .from('people')
+            .select('name')
+            .eq('id', assignmentRow.assigned_to)
+            .maybeSingle();
+
+          await recordAssignmentStatusChange({
+            projectId: currentIncident.project_id,
+            incidentId: assignmentRow.incident_id,
+            incidentNumber: Number(currentIncident.incident_number),
+            incidentName: currentIncident.name,
+            incidentCategory: currentIncident.category,
+            personName: assignedPerson?.name || 'Persona asignada',
+            fromStatus: previousAssignment.status,
+            toStatus: status,
+            fromEnvironment: previousAssignment.status_environment,
+            toEnvironment: statusEnvironment,
+          });
+        }
 
         // 3) Sincronizar las tareas del seguimiento interno vinculadas con esta persona
         const mapped: TaskStatus = mapIncidentStatusToTaskStatus(status);
