@@ -74,6 +74,9 @@ export const getStatusLogValue = (
 ) => {
   if (status === 'in_qa') return 'resolved_PRE';
   if (status === 'closed') return 'resolved_PRO';
+  if (status === 'resolved_yesterday') {
+    return `resolved_yesterday_${normalizeEnvironment(environment) || 'PRO'}`;
+  }
   if (status === 'resolved' || status === 'resolved_yesterday') {
     return `resolved_${normalizeEnvironment(environment) || 'PRO'}`;
   }
@@ -81,6 +84,9 @@ export const getStatusLogValue = (
 };
 
 export const getStatusLogLabel = (status: string | null | undefined) => {
+  if (status === 'resolved_yesterday_DEV') return 'Resuelta ayer - En DEV';
+  if (status === 'resolved_yesterday_PRE') return 'Resuelta ayer - En PRE';
+  if (status === 'resolved_yesterday_PRO') return 'Resuelta ayer - En PRO';
   if (status === 'resolved_DEV') return 'Resuelta - En DEV';
   if (status === 'resolved_PRE') return 'Resuelta - En PRE';
   if (status === 'resolved_PRO') return 'Resuelta - En PRO';
@@ -140,6 +146,7 @@ export const getIncidentStatusTone = (status: IncidentStatus | string | null | u
 
 export const getAppStatusTone = (status: IncidentStatus | TaskStatus | string | null | undefined) => {
   if (status === 'in_progress') return 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent';
+  if (status === 'resolved_yesterday' || String(status || '').startsWith('resolved_yesterday_')) return 'bg-green-100 text-green-800 border-green-300';
   if (status === 'resolved' || status === 'resolved_yesterday' || status === 'in_qa' || String(status || '').startsWith('resolved_')) return 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent';
   if (status === 'blocked') return 'bg-destructive text-destructive-foreground border-transparent';
   if (status === 'closed') return 'bg-slate-700 text-white border-transparent';

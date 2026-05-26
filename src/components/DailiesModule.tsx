@@ -320,6 +320,70 @@ export default function DailiesModule({
     if (insertErr) throw insertErr;
     return created.id as string;
   };
+
+  const syncLinkedTaskStatuses = async (taskList: any[]) => {
+    const linkedTasks = taskList.filter((task) => task.incident_id && task.status !== 'resolved_yesterday');
+    if (linkedTasks.length === 0) return taskList;
+
+    const incidentIds = Array.from(new Set(linkedTasks.map((task) => task.incident_id).filter(Boolean)));
+    const [{ data: linkedIncidents }, { data: linkedAssignments }] = await Promise.all([
+      supabase
+        .from('incidents')
+        .select('id,status,status_environment')
+        .in('id', incidentIds),
+      supabase
+        .from('incident_assignments')
+        .select('incident_id,assigned_to,status,status_environment')
+        .in('incident_id', incidentIds),
+    ]);
+
+    const incidentsById = new Map((linkedIncidents || []).map((incident: any) => [incident.id, incident]));
+    const assignmentsByIncidentAndPerson = new Map<string, any>();
+    (linkedAssignments || []).forEach((assignment: any) => {
+      assignmentsByIncidentAndPerson.set(`${assignment.incident_id}:${assignment.assigned_to}`, assignment);
+    });
+
+    const updates: Array<{ id: string; status: TaskStatus; status_environment: TaskEnvironment | null }> = [];
+    const syncedTasks = taskList.map((task) => {
+      if (!task.incident_id || task.status === 'resolved_yesterday') return task;
+
+      const assignedPersonId = task.person_id || task.assigned_to;
+      const assignment = assignedPersonId
+        ? assignmentsByIncidentAndPerson.get(`${task.incident_id}:${assignedPersonId}`)
+        : null;
+      const source = assignment || incidentsById.get(task.incident_id);
+      if (!source) return task;
+
+      const nextStatus = mapIncidentStatusToTaskStatus(source.status) as TaskStatus;
+      const nextEnvironment = nextStatus === 'resolved'
+        ? normalizeEnvironment(source.status_environment) || 'PRO'
+        : null;
+
+      if (task.status === nextStatus && normalizeEnvironment(task.status_environment) === nextEnvironment) {
+        return task;
+      }
+
+      updates.push({ id: task.id, status: nextStatus, status_environment: nextEnvironment });
+      return {
+        ...task,
+        status: nextStatus,
+        status_environment: nextEnvironment,
+      };
+    });
+
+    if (updates.length > 0) {
+      await Promise.all(updates.map((update) => supabase
+        .from('tasks')
+        .update({
+          status: update.status,
+          status_environment: update.status_environment,
+        } as any)
+        .eq('id', update.id)));
+    }
+
+    return syncedTasks;
+  };
+
   const loadTasks = async (d: Date) => {
     const id = await ensureDaily(d);
     setDailyId(id);
@@ -335,7 +399,8 @@ export default function DailiesModule({
     } = await supabase.from('daily_tasks').select('task_id, order_position, tasks(*)').eq('daily_id', id).order('order_position', { ascending: true });
     if (!error) {
       const list = (data || []).map((r: any) => r.tasks).filter(Boolean);
-      setTasks(list);
+      const syncedList = await syncLinkedTaskStatuses(list);
+      setTasks(syncedList);
     }
   };
   useEffect(() => {
@@ -956,9 +1021,10 @@ export default function DailiesModule({
           ...r.tasks,
           original_order: r.order_position
         }));
+      const syncedTasksWithOrder = await syncLinkedTaskStatuses(tasksWithOrder);
       
-      setLastDayTasks(tasksWithOrder);
-      setSelectedTasksForPersist(tasksWithOrder.filter((t: any) => t.status !== 'resolved_yesterday').map((t: any) => t.id));
+      setLastDayTasks(syncedTasksWithOrder);
+      setSelectedTasksForPersist(syncedTasksWithOrder.filter((t: any) => t.status !== 'resolved_yesterday').map((t: any) => t.id));
       setShowResolvedYesterdayInPersist(false);
       setPersistSourceDate(sourceDaily.date);
       setPersistModalOpen(true);
@@ -1503,23 +1569,29 @@ export default function DailiesModule({
           </div>
         </TableCell>
         <TableCell>
-          <Select
-            value={assignmentToSelectValue(incident?.status === 'closed' ? 'closed' : task.status, incident?.status === 'closed' ? incident.status_environment : task.status_environment)}
-            onValueChange={(value) => updateTaskStatus(task, value as AssignmentStatusValue)}
-          >
-            <SelectTrigger className="h-8 w-[172px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ASSIGNMENT_STATUS_OPTIONS.map(option => (
-                <SelectItem key={option.value} value={option.value}>
-                  <Badge variant="outline" className={`${getAppStatusTone(option.value)} text-[10px] px-1 py-0.5`}>
-                    {option.label}
-                  </Badge>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {task.status === 'resolved_yesterday' ? (
+            <Badge variant="outline" className={`${getAppStatusTone(getStatusLogValue(task.status, task.status_environment))} text-[10px] px-1 py-0.5`}>
+              {getTaskCompositeStatusLabel(task.status, task.status_environment)}
+            </Badge>
+          ) : (
+            <Select
+              value={assignmentToSelectValue(incident?.status === 'closed' ? 'closed' : task.status, incident?.status === 'closed' ? incident.status_environment : task.status_environment)}
+              onValueChange={(value) => updateTaskStatus(task, value as AssignmentStatusValue)}
+            >
+              <SelectTrigger className="h-8 w-[172px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ASSIGNMENT_STATUS_OPTIONS.map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    <Badge variant="outline" className={`${getAppStatusTone(option.value)} text-[10px] px-1 py-0.5`}>
+                      {option.label}
+                    </Badge>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </TableCell>
         <TableCell>
           {task.related_ticket ? (
