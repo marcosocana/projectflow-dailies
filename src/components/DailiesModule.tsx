@@ -946,6 +946,27 @@ export default function DailiesModule({
     } : prev);
   };
 
+  const updateSelectedTaskStatus = (value: AssignmentStatusValue) => {
+    const next = selectValueToAssignment(value);
+    const nextStatus = mapIncidentStatusToTaskStatus(next.status) as TaskStatus;
+    const nextEnvironment = nextStatus === 'resolved' ? next.environment || 'PRO' : null;
+
+    setEditForm(f => ({
+      ...f,
+      status: nextStatus,
+      environment: nextEnvironment || '',
+    }));
+
+    if (selectedTask) {
+      void updateTaskStatus({
+        ...selectedTask,
+        incident_id: editForm.incidentId || selectedTask.incident_id,
+        person_id: editForm.personIds[0] || selectedTask.person_id,
+        assigned_to: editForm.personIds[0] || selectedTask.assigned_to,
+      }, value);
+    }
+  };
+
   const deleteTask = async (taskOrId: any) => {
     if (!confirm('¿Estás seguro de que quieres eliminar esta tarea?')) return;
 
@@ -2754,15 +2775,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                    <Label>Estado</Label>
                    <Select
                      value={assignmentToSelectValue(editForm.status, editForm.environment)}
-                     onValueChange={v => setEditForm(f => {
-                       const next = selectValueToAssignment(v as AssignmentStatusValue);
-                       const nextStatus = mapIncidentStatusToTaskStatus(next.status) as TaskStatus;
-                       return {
-                         ...f,
-                         status: nextStatus,
-                         environment: next.environment || '',
-                       };
-                     })}
+                     onValueChange={(value) => updateSelectedTaskStatus(value as AssignmentStatusValue)}
                    >
                      <SelectTrigger><SelectValue placeholder="Pendiente" /></SelectTrigger>
                      <SelectContent>
