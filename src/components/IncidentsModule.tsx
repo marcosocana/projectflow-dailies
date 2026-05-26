@@ -1413,6 +1413,8 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
     }
 
     // Equivalencias explícitas verdes
+    if ((excel.includes('resuelto') || excel.includes('en pro')) && vectorea.includes('resuelta')) return true;
+    if ((excel.includes('en pruebas') || excel.includes('en qa')) && vectorea.includes('resuelta')) return true;
     if (excel.includes('resuelto') && (vectorea.includes('resuelta') || vectorea.includes('en pro'))) return true;
     if (excel.includes('en pruebas') && (vectorea.includes('resuelta') || vectorea.includes('en pre') || vectorea.includes('en qa'))) return true;
     if (excel.includes('en curso') && vectorea.includes('wip')) return true;
