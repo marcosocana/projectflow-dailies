@@ -195,7 +195,6 @@ export default function DailiesModule({
   const [filteredTasks, setFilteredTasks] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [showResolvedYesterdayInPersist, setShowResolvedYesterdayInPersist] = useState(false);
   
   // Sorting state
   const [sortField, setSortField] = useState<'status' | 'title' | 'person'>('status');
@@ -322,7 +321,7 @@ export default function DailiesModule({
   };
 
   const syncLinkedTaskStatuses = async (taskList: any[]) => {
-    const linkedTasks = taskList.filter((task) => task.incident_id && task.status !== 'resolved_yesterday');
+    const linkedTasks = taskList.filter((task) => task.incident_id);
     if (linkedTasks.length === 0) return taskList;
 
     const incidentIds = Array.from(new Set(linkedTasks.map((task) => task.incident_id).filter(Boolean)));
@@ -345,7 +344,7 @@ export default function DailiesModule({
 
     const updates: Array<{ id: string; status: TaskStatus; status_environment: TaskEnvironment | null }> = [];
     const syncedTasks = taskList.map((task) => {
-      if (!task.incident_id || task.status === 'resolved_yesterday') return task;
+      if (!task.incident_id) return task;
 
       const assignedPersonId = task.person_id || task.assigned_to;
       const assignment = assignedPersonId
@@ -1045,8 +1044,7 @@ export default function DailiesModule({
       const syncedTasksWithOrder = await syncLinkedTaskStatuses(tasksWithOrder);
       
       setLastDayTasks(syncedTasksWithOrder);
-      setSelectedTasksForPersist(syncedTasksWithOrder.filter((t: any) => t.status !== 'resolved_yesterday').map((t: any) => t.id));
-      setShowResolvedYesterdayInPersist(false);
+      setSelectedTasksForPersist(syncedTasksWithOrder.filter((t: any) => !isResolvedTask(t.status as TaskStatus)).map((t: any) => t.id));
       setPersistSourceDate(sourceDaily.date);
       setPersistModalOpen(true);
     } catch (e) {
@@ -1089,7 +1087,7 @@ export default function DailiesModule({
       // Sort selected tasks by their original order before assigning new positions
       const persistableSelectedTaskIds = selectedTasksForPersist.filter(taskId => {
         const task = lastDayTasks.find((t: any) => t.id === taskId);
-        return task?.status !== 'resolved_yesterday';
+        return task && !isResolvedTask(task.status as TaskStatus);
       });
 
       const tasksWithOriginalOrder = persistableSelectedTaskIds
@@ -1113,18 +1111,6 @@ export default function DailiesModule({
         const { error: insertErr } = await supabase.from('daily_tasks').insert(rows as any);
         if (insertErr) throw insertErr;
         
-        const resolvedTaskIds = persistableSelectedTaskIds.filter(taskId => {
-          const task = lastDayTasks.find((t: any) => t.id === taskId);
-          return task?.status === 'resolved';
-        });
-        
-        if (resolvedTaskIds.length > 0) {
-          const { error: updateErr } = await supabase
-            .from('tasks')
-            .update({ status: 'resolved_yesterday' })
-            .in('id', resolvedTaskIds);
-          if (updateErr) throw updateErr;
-        }
       }
 
       const persistedAt = getCurrentTimeLabel();
@@ -1276,10 +1262,8 @@ export default function DailiesModule({
   };
 
   const activeDailyTasks = useMemo(() => {
-    const selectedDateKey = dateToLocalInputValue(date);
-    const shouldShowResolvedYesterday = dailyPersistenceSummary?.targetDate === selectedDateKey;
-    return tasks.filter(task => task.status !== 'resolved_yesterday' || shouldShowResolvedYesterday);
-  }, [tasks, dailyPersistenceSummary, date]);
+    return tasks;
+  }, [tasks]);
 
   const visibleDailyTasks = useMemo(() => {
     return selectedPersonFilter === 'all'
@@ -1590,29 +1574,23 @@ export default function DailiesModule({
           </div>
         </TableCell>
         <TableCell>
-          {task.status === 'resolved_yesterday' ? (
-            <Badge variant="outline" className={`${getAppStatusTone(getStatusLogValue(task.status, task.status_environment))} text-[10px] px-1 py-0.5`}>
-              {getTaskCompositeStatusLabel(task.status, task.status_environment)}
-            </Badge>
-          ) : (
-            <Select
-              value={assignmentToSelectValue(incident?.status === 'closed' ? 'closed' : task.status, incident?.status === 'closed' ? incident.status_environment : task.status_environment)}
-              onValueChange={(value) => updateTaskStatus(task, value as AssignmentStatusValue)}
-            >
-              <SelectTrigger className="h-8 w-[172px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ASSIGNMENT_STATUS_OPTIONS.map(option => (
-                  <SelectItem key={option.value} value={option.value}>
-                    <Badge variant="outline" className={`${getAppStatusTone(option.value)} text-[10px] px-1 py-0.5`}>
-                      {option.label}
-                    </Badge>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          <Select
+            value={assignmentToSelectValue(incident?.status === 'closed' ? 'closed' : task.status, incident?.status === 'closed' ? incident.status_environment : task.status_environment)}
+            onValueChange={(value) => updateTaskStatus(task, value as AssignmentStatusValue)}
+          >
+            <SelectTrigger className="h-8 w-[172px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ASSIGNMENT_STATUS_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  <Badge variant="outline" className={`${getAppStatusTone(option.value)} text-[10px] px-1 py-0.5`}>
+                    {option.label}
+                  </Badge>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </TableCell>
         <TableCell>
           {task.related_ticket ? (
@@ -2913,21 +2891,12 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
             <DialogDescription>Selecciona las tareas del último día que quieres persistir</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Checkbox
-                checked={showResolvedYesterdayInPersist}
-                onCheckedChange={(checked) => setShowResolvedYesterdayInPersist(Boolean(checked))}
-              />
-              Mostrar tareas resueltas ayer
-            </label>
             <ScrollArea className="h-[400px] pr-4">
               <div className="space-y-3">
-                {lastDayTasks
-                  .filter(task => showResolvedYesterdayInPersist || task.status !== 'resolved_yesterday')
-                  .map(task => {
+                {lastDayTasks.map(task => {
                 const person = people.find(p => p.id === (task.person_id || task.assigned_to));
                 const isSelected = selectedTasksForPersist.includes(task.id);
-                const isPersistable = task.status !== 'resolved_yesterday';
+                const isPersistable = !isResolvedTask(task.status as TaskStatus);
                 return <div key={task.id} className="flex items-start gap-3 p-3 border rounded">
                       <Checkbox checked={isSelected} disabled={!isPersistable} onCheckedChange={checked => {
                     if (checked) {
@@ -2963,8 +2932,14 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
             </ScrollArea>
             
             <div className="flex gap-2 pt-4 border-t">
-              <Button variant="outline" onClick={() => setSelectedTasksForPersist(lastDayTasks.filter(t => t.status !== 'resolved_yesterday').map(t => t.id))} disabled={lastDayTasks.length === 0}>
+              <Button variant="outline" onClick={() => setSelectedTasksForPersist(lastDayTasks.filter(t => !isResolvedTask(t.status as TaskStatus)).map(t => t.id))} disabled={lastDayTasks.length === 0}>
                 Seleccionar todas
+              </Button>
+              <Button variant="outline" onClick={() => setSelectedTasksForPersist(prev => prev.filter(taskId => {
+                const task = lastDayTasks.find(t => t.id === taskId);
+                return task ? !isResolvedTask(task.status as TaskStatus) : true;
+              }))}>
+                Deseleccionar resueltas
               </Button>
               <Button variant="outline" onClick={() => setSelectedTasksForPersist([])}>
                 Deseleccionar todas
