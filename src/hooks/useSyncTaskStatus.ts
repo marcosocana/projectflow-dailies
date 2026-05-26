@@ -35,12 +35,16 @@ export const syncTaskStatus = async (taskId: string): Promise<IncidentStatus | n
  * Actualiza el estado de una tarea y lo sincroniza en la tabla incidents
  */
 export const updateTaskStatusFromAssignments = async (taskId: string): Promise<void> => {
-  const status = await syncTaskStatus(taskId);
-  
-  if (status) {
+  const { data: assignments } = await supabase
+    .from('incident_assignments')
+    .select('status, status_environment')
+    .eq('incident_id', taskId);
+
+  if (assignments && assignments.length > 0) {
+    const nextState = getMinimumIncidentAssignmentState(assignments);
     await supabase
       .from('incidents')
-      .update({ status: status })
+      .update({ status: nextState.status, status_environment: nextState.statusEnvironment } as any)
       .eq('id', taskId);
   }
 };

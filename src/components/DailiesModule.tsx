@@ -26,11 +26,18 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { recordDailyTaskCreated, recordDailyTasksPersisted, recordIncidentCreated, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
+import {
+  recordAssignmentStatusChange,
+  recordDailyTaskCreated,
+  recordDailyTasksPersisted,
+  recordIncidentCreated,
+  recordIncidentStatusChange,
+} from '@/lib/incidentActivityLog';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, extractInternalTaskNumber, formatIncidentReference, formatInternalTaskIdFromValue, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import {
   ASSIGNMENT_STATUS_OPTIONS,
   assignmentToSelectValue,
+  getMinimumIncidentAssignmentState,
   getAppStatusTone,
   getStatusLogLabel,
   getStatusLogValue,
@@ -1045,9 +1052,6 @@ export default function DailiesModule({
     const next = selectValueToAssignment(value);
     const nextTaskStatus = mapIncidentStatusToTaskStatus(next.status) as TaskStatus;
     const nextEnvironment = nextTaskStatus === 'resolved' ? next.environment || 'PRO' : null;
-    const nextIncidentStatus = next.status === 'closed'
-      ? 'closed'
-      : mapTaskStatusToIncidentStatus(nextTaskStatus);
 
     const { error } = await supabase
       .from('tasks')
@@ -1067,30 +1071,77 @@ export default function DailiesModule({
 
     if (task.incident_id) {
       const linkedIncident = incidents.find((incident) => incident.id === task.incident_id);
-      await supabase
-        .from('incidents')
-        .update({
-          status: nextIncidentStatus,
-          status_environment: nextEnvironment,
-          updated_at: new Date().toISOString(),
-        } as any)
-        .eq('id', task.incident_id);
-
+      const assignedPerson = people.find((candidate) => candidate.id === (task.person_id || task.assigned_to));
       const assignedPersonId = task.person_id || task.assigned_to;
+      let nextIncidentStatus = linkedIncident?.status || mapTaskStatusToIncidentStatus(nextTaskStatus);
+      let nextIncidentEnvironment = linkedIncident?.status_environment || null;
+
       if (assignedPersonId) {
+        const { data: previousAssignment } = await supabase
+          .from('incident_assignments')
+          .select('status, status_environment')
+          .eq('incident_id', task.incident_id)
+          .eq('assigned_to', assignedPersonId)
+          .maybeSingle();
+
         await supabase
           .from('incident_assignments')
           .update({
-            status: nextIncidentStatus,
+            status: next.status,
             status_environment: nextEnvironment,
           } as any)
           .eq('incident_id', task.incident_id)
           .eq('assigned_to', assignedPersonId);
+
+        if (
+          linkedIncident &&
+          previousAssignment &&
+          (
+            previousAssignment.status !== next.status ||
+            normalizeEnvironment(previousAssignment.status_environment) !== normalizeEnvironment(nextEnvironment)
+          )
+        ) {
+          await recordAssignmentStatusChange({
+            projectId,
+            incidentId: task.incident_id,
+            incidentNumber: Number(linkedIncident.incident_number),
+            incidentName: linkedIncident.name,
+            incidentCategory: linkedIncident.category,
+            personName: assignedPerson?.name || 'Persona asignada',
+            fromStatus: previousAssignment.status,
+            toStatus: next.status,
+            fromEnvironment: previousAssignment.status_environment,
+            toEnvironment: nextEnvironment,
+          });
+        }
       }
+
+      const { data: allAssignments } = await supabase
+        .from('incident_assignments')
+        .select('status, status_environment')
+        .eq('incident_id', task.incident_id);
+
+      if (allAssignments && allAssignments.length > 0) {
+        const nextState = getMinimumIncidentAssignmentState(allAssignments);
+        nextIncidentStatus = nextState.status;
+        nextIncidentEnvironment = nextState.statusEnvironment;
+      }
+
+      await supabase
+        .from('incidents')
+        .update({
+          status: nextIncidentStatus,
+          status_environment: nextIncidentEnvironment,
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq('id', task.incident_id);
 
       if (
         linkedIncident &&
-        (linkedIncident.status !== nextIncidentStatus || normalizeTaskEnvironment(mapIncidentStatusToTaskStatus(linkedIncident.status) as TaskStatus, linkedIncident.status_environment || '') !== (nextEnvironment || ''))
+        (
+          linkedIncident.status !== nextIncidentStatus ||
+          normalizeEnvironment(linkedIncident.status_environment) !== normalizeEnvironment(nextIncidentEnvironment)
+        )
       ) {
         await recordIncidentStatusChange({
           projectId,
@@ -1101,14 +1152,14 @@ export default function DailiesModule({
           fromStatus: linkedIncident.status,
           toStatus: nextIncidentStatus,
           fromEnvironment: linkedIncident.status_environment,
-          toEnvironment: nextEnvironment,
+          toEnvironment: nextIncidentEnvironment,
         });
       }
 
       setIncidents(prev => prev.map(incident => incident.id === task.incident_id ? {
         ...incident,
         status: nextIncidentStatus,
-        status_environment: nextEnvironment,
+        status_environment: nextIncidentEnvironment,
       } : incident));
     }
 
@@ -1754,7 +1805,7 @@ export default function DailiesModule({
         </TableCell>
         <TableCell>
           <Select
-            value={assignmentToSelectValue(incident?.status === 'closed' ? 'closed' : task.status, incident?.status === 'closed' ? incident.status_environment : task.status_environment)}
+            value={assignmentToSelectValue(task.status, task.status_environment)}
             onValueChange={(value) => updateTaskStatus(task, value as AssignmentStatusValue)}
           >
             <SelectTrigger className="h-8 w-[172px]">

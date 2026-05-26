@@ -109,6 +109,41 @@ export const getMinimumIncidentAssignmentState = <T extends { status: string; st
     return { status: 'pending' as IncidentStatus, statusEnvironment: null as TaskEnvironment | null };
   }
 
+  const normalizedAssignments = assignments.map((assignment) => ({
+    status: assignment.status as IncidentStatus,
+    statusEnvironment: normalizeEnvironment(assignment.status === 'in_qa' ? 'PRE' : assignment.status_environment),
+    composite: assignmentToSelectValue(assignment.status as IncidentStatus, assignment.status_environment),
+  }));
+
+  if (normalizedAssignments.length === 1) {
+    const single = normalizedAssignments[0];
+    return {
+      status: single.status === 'in_qa' ? 'resolved' as IncidentStatus : single.status,
+      statusEnvironment: single.status === 'resolved' || single.status === 'in_qa' ? single.statusEnvironment || 'PRO' : single.status === 'closed' ? 'PRO' : null,
+    };
+  }
+
+  const firstComposite = normalizedAssignments[0].composite;
+  const allSameState = normalizedAssignments.every((assignment) => assignment.composite === firstComposite);
+  if (allSameState) {
+    const first = normalizedAssignments[0];
+    return {
+      status: first.status === 'in_qa' ? 'resolved' as IncidentStatus : first.status,
+      statusEnvironment: first.status === 'resolved' || first.status === 'in_qa' ? first.statusEnvironment || 'PRO' : first.status === 'closed' ? 'PRO' : null,
+    };
+  }
+
+  const hasPendingOrInProgress = normalizedAssignments.some((assignment) =>
+    assignment.status === 'pending' || assignment.status === 'in_progress',
+  );
+
+  if (hasPendingOrInProgress) {
+    return {
+      status: 'in_progress' as IncidentStatus,
+      statusEnvironment: null,
+    };
+  }
+
   const minimum = assignments.reduce((current, assignment) => {
     const currentRank = INCIDENT_STATUS_RANK[current.status] ?? INCIDENT_STATUS_RANK.pending;
     const assignmentRank = INCIDENT_STATUS_RANK[assignment.status] ?? INCIDENT_STATUS_RANK.pending;
