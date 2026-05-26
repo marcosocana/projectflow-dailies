@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { RefreshCcw } from 'lucide-react';
 
 type BacklogCompareRow = {
   id: string;
@@ -61,6 +62,8 @@ const isComparisonMatch = (excelStatusRaw: string, vectoreaStatusRaw: string) =>
 
   if ((excel.includes('resuelto') || excel.includes('en pro')) && vectorea.includes('resuelta')) return true;
   if ((excel.includes('en pruebas') || excel.includes('en qa')) && vectorea.includes('resuelta')) return true;
+  if (excel.includes('cerrado') && vectorea.includes('resuelta')) return true;
+  if (excel.includes('cerrado') && vectorea.includes('cerrada')) return true;
   if (excel.includes('resuelto') && (vectorea.includes('resuelta') || vectorea.includes('en pro'))) return true;
   if (excel.includes('en pruebas') && (vectorea.includes('resuelta') || vectorea.includes('en pre') || vectorea.includes('en qa'))) return true;
   if (excel.includes('en curso') && vectorea.includes('wip')) return true;
@@ -91,6 +94,7 @@ export default function BacklogComparePanel({ projectId, onClose, onSelectId }: 
   const { toast } = useToast();
   const compareInputRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<BacklogCompareRow[]>([]);
+  const [lastCompareFile, setLastCompareFile] = useState<File | null>(null);
   const [selected, setSelected] = useState<{
     ids: string[];
     types: string[];
@@ -200,6 +204,14 @@ export default function BacklogComparePanel({ projectId, onClose, onSelectId }: 
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={downloadTemplate}>Descargar plantilla</Button>
           <Button onClick={() => compareInputRef.current?.click()}>Subir excel</Button>
+          <Button
+            variant="outline"
+            onClick={() => lastCompareFile && compareWithFile(lastCompareFile)}
+            disabled={!lastCompareFile}
+          >
+            <RefreshCcw className="mr-2 h-4 w-4" />
+            Actualizar
+          </Button>
           <input
             ref={compareInputRef}
             type="file"
@@ -207,7 +219,10 @@ export default function BacklogComparePanel({ projectId, onClose, onSelectId }: 
             className="hidden"
             onChange={(event) => {
               const file = event.target.files?.[0];
-              if (file) compareWithFile(file);
+              if (file) {
+                setLastCompareFile(file);
+                compareWithFile(file);
+              }
               if (compareInputRef.current) compareInputRef.current.value = '';
             }}
           />

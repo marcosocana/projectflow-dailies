@@ -380,6 +380,7 @@ export default function IncidentsModule({
   const [createOpen, setCreateOpen] = useState(false);
   const [compareBacklogOpen, setCompareBacklogOpen] = useState(false);
   const [backlogCompareRows, setBacklogCompareRows] = useState<Array<{ id: string; type: string; excelStatus: string; vectoreaStatus: string }>>([]);
+  const [lastBacklogCompareFile, setLastBacklogCompareFile] = useState<File | null>(null);
   const [compareSelected, setCompareSelected] = useState<{
     ids: string[];
     types: string[];
@@ -1415,6 +1416,8 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
     // Equivalencias explícitas verdes
     if ((excel.includes('resuelto') || excel.includes('en pro')) && vectorea.includes('resuelta')) return true;
     if ((excel.includes('en pruebas') || excel.includes('en qa')) && vectorea.includes('resuelta')) return true;
+    if (excel.includes('cerrado') && vectorea.includes('resuelta')) return true;
+    if (excel.includes('cerrado') && vectorea.includes('cerrada')) return true;
     if (excel.includes('resuelto') && (vectorea.includes('resuelta') || vectorea.includes('en pro'))) return true;
     if (excel.includes('en pruebas') && (vectorea.includes('resuelta') || vectorea.includes('en pre') || vectorea.includes('en qa'))) return true;
     if (excel.includes('en curso') && vectorea.includes('wip')) return true;
@@ -1542,7 +1545,10 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                 className="hidden"
                 onChange={e => {
                   const f = e.target.files?.[0];
-                  if (f) compareWithBacklogFile(f);
+                  if (f) {
+                    setLastBacklogCompareFile(f);
+                    compareWithBacklogFile(f);
+                  }
                   if (compareInputRef.current) compareInputRef.current.value = '';
                 }}
               />
@@ -1775,6 +1781,14 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
               </Button>
               <Button onClick={() => compareInputRef.current?.click()}>
                 Subir excel
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => lastBacklogCompareFile && compareWithBacklogFile(lastBacklogCompareFile)}
+                disabled={!lastBacklogCompareFile}
+              >
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                Actualizar
               </Button>
             </div>
             <div className="max-h-[calc(100vh-280px)] overflow-auto rounded-md border">
