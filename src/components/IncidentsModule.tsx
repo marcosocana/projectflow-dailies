@@ -1418,6 +1418,8 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
     if ((excel.includes('en pruebas') || excel.includes('en qa')) && vectorea.includes('resuelta')) return true;
     if (excel.includes('cerrado') && vectorea.includes('resuelta')) return true;
     if (excel.includes('cerrado') && vectorea.includes('cerrada')) return true;
+    if (excel.includes('descartado') && vectorea.includes('resuelta')) return true;
+    if (excel.includes('bloqueado') && vectorea.includes('resuelta')) return true;
     if (excel.includes('resuelto') && (vectorea.includes('resuelta') || vectorea.includes('en pro'))) return true;
     if (excel.includes('en pruebas') && (vectorea.includes('resuelta') || vectorea.includes('en pre') || vectorea.includes('en qa'))) return true;
     if (excel.includes('en curso') && vectorea.includes('wip')) return true;

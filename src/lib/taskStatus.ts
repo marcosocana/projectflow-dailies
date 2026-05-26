@@ -73,7 +73,7 @@ export const getStatusLogValue = (
   environment?: string | null,
 ) => {
   if (status === 'in_qa') return 'resolved_PRE';
-  if (status === 'closed') return 'resolved_PRO';
+  if (status === 'closed') return 'closed';
   if (status === 'resolved' || status === 'resolved_yesterday') {
     return `resolved_${normalizeEnvironment(environment) || 'PRO'}`;
   }
@@ -177,7 +177,7 @@ export const getAppStatusTone = (status: IncidentStatus | TaskStatus | string | 
   if (status === 'in_progress') return 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent';
   if (status === 'resolved' || status === 'resolved_yesterday' || status === 'in_qa' || String(status || '').startsWith('resolved_')) return 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent';
   if (status === 'blocked') return 'bg-destructive text-destructive-foreground border-transparent';
-  if (status === 'closed') return 'bg-slate-700 text-white border-transparent';
+  if (status === 'closed') return 'bg-muted text-muted-foreground border-transparent';
   return 'bg-muted text-muted-foreground border-transparent';
 };
 
