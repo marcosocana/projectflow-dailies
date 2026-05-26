@@ -22,6 +22,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -227,6 +228,7 @@ export default function DailiesModule({
     return () => window.removeEventListener('dailies-task-created', handler as EventListener);
   }, [projectId, date]);
   const [dailyId, setDailyId] = useState<string | null>(null);
+  const [tasksLoading, setTasksLoading] = useState(false);
   const [dailyPersistenceSummary, setDailyPersistenceSummary] = useState<DailyPersistenceSummary | null>(null);
   const [people, setPeople] = useState<any[]>([]);
   const [linkedProfiles, setLinkedProfiles] = useState<Record<string, { full_name: string; email: string | null }>>({});
@@ -409,41 +411,43 @@ export default function DailiesModule({
   };
 
   const loadTasks = async (d: Date) => {
-    const id = await ensureDaily(d);
-    setDailyId(id);
-    const { data: daily } = await supabase
-      .from('dailies')
-      .select('content')
-      .eq('id', id)
-      .maybeSingle();
-    setDailyPersistenceSummary(getDailyPersistenceSummary(daily?.content));
-    const {
-      data: linkRows,
-      error
-    } = await supabase.from('daily_tasks').select('task_id, order_position').eq('daily_id', id).order('order_position', { ascending: true });
-    if (!error) {
-      const taskIds = (linkRows || []).map((row: any) => row.task_id).filter(Boolean);
-      const taskRows: any[] = [];
-      for (const chunk of chunkArray(taskIds, 100)) {
-        const { data: chunkTasks, error: taskError } = await supabase
-          .from('tasks')
-          .select('*')
-          .in('id', chunk);
+    setTasksLoading(true);
+    try {
+      const id = await ensureDaily(d);
+      setDailyId(id);
+      const { data: daily } = await supabase
+        .from('dailies')
+        .select('content')
+        .eq('id', id)
+        .maybeSingle();
+      setDailyPersistenceSummary(getDailyPersistenceSummary(daily?.content));
+      const {
+        data: linkRows,
+        error
+      } = await supabase.from('daily_tasks').select('task_id, order_position').eq('daily_id', id).order('order_position', { ascending: true });
+      if (!error) {
+        const taskIds = (linkRows || []).map((row: any) => row.task_id).filter(Boolean);
+        const taskRows: any[] = [];
+        for (const chunk of chunkArray(taskIds, 100)) {
+          const { data: chunkTasks, error: taskError } = await supabase
+            .from('tasks')
+            .select('*')
+            .in('id', chunk);
 
-        if (taskError) {
-          throw taskError;
+          if (taskError) {
+            throw taskError;
+          }
+
+          taskRows.push(...(chunkTasks || []));
         }
 
-        taskRows.push(...(chunkTasks || []));
-      }
-
-      const tasksById = new Map(taskRows.map((task: any) => [task.id, task]));
-      let list = (linkRows || [])
-        .map((row: any) => {
-          const task = tasksById.get(row.task_id);
-          return task ? { ...task, order_position: row.order_position } : null;
-        })
-        .filter(Boolean);
+        const tasksById = new Map(taskRows.map((task: any) => [task.id, task]));
+        let list = (linkRows || [])
+          .map((row: any) => {
+            const task = tasksById.get(row.task_id);
+            return task ? { ...task, order_position: row.order_position } : null;
+          })
+          .filter(Boolean);
 
       if (dateToLocalInputValue(d) === dateToLocalInputValue(new Date())) {
         const { data: teamRows } = await supabase
@@ -570,8 +574,11 @@ export default function DailiesModule({
         }
       }
 
-      const syncedList = await syncLinkedTaskStatuses(list);
-      setTasks(syncedList);
+        const syncedList = await syncLinkedTaskStatuses(list);
+        setTasks(syncedList);
+      }
+    } finally {
+      setTasksLoading(false);
     }
   };
   useEffect(() => {
@@ -2373,29 +2380,62 @@ export default function DailiesModule({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    <SortableContext
-                      items={sortedTasks.map(t => t.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {sortedTasks.map((t) => {
-                        const person = people.find((p) => p.id === (t.person_id || t.assigned_to));
-                        const inc = incidents.find((i) => i.id === t.incident_id);
-                        return (
-                          <SortableTaskRow 
-                            key={t.id}
-                            task={t}
-                            person={person}
-                            incident={inc}
-                          />
-                        );
-                      })}
-                    </SortableContext>
-                      {sortedTasks.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground">
-                          Sin tareas para este día
-                        </TableCell>
-                      </TableRow>
+                    {tasksLoading ? (
+                      Array.from({ length: 8 }).map((_, index) => (
+                        <TableRow key={`tasks-loading-${index}`}>
+                          <TableCell className="w-8">
+                            <Skeleton className="h-4 w-4" />
+                          </TableCell>
+                          <TableCell>
+                            <Skeleton className="h-8 w-[172px]" />
+                          </TableCell>
+                          <TableCell>
+                            <Skeleton className="h-4 w-16" />
+                          </TableCell>
+                          <TableCell>
+                            <Skeleton className="h-5 w-5 rounded-full" />
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-2">
+                              <Skeleton className="h-4 w-full max-w-[420px]" />
+                              <Skeleton className="h-3 w-full max-w-[260px]" />
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Skeleton className="h-4 w-24" />
+                          </TableCell>
+                          <TableCell>
+                            <Skeleton className="h-8 w-8" />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <>
+                        <SortableContext
+                          items={sortedTasks.map(t => t.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          {sortedTasks.map((t) => {
+                            const person = people.find((p) => p.id === (t.person_id || t.assigned_to));
+                            const inc = incidents.find((i) => i.id === t.incident_id);
+                            return (
+                              <SortableTaskRow
+                                key={t.id}
+                                task={t}
+                                person={person}
+                                incident={inc}
+                              />
+                            );
+                          })}
+                        </SortableContext>
+                        {sortedTasks.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center text-muted-foreground">
+                              Sin tareas para este día
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
                     )}
                   </TableBody>
                 </Table>
