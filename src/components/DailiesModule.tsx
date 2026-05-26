@@ -44,6 +44,7 @@ import {
   getTaskStatusLabel as getSharedTaskStatusLabel,
   mapIncidentStatusToTaskStatus,
   mapTaskStatusToIncidentStatus,
+  normalizeEnvironment,
   selectValueToAssignment,
   type AssignmentStatusValue,
 } from '@/lib/taskStatus';
@@ -240,6 +241,7 @@ export default function DailiesModule({
   const [people, setPeople] = useState<any[]>([]);
   const [linkedProfiles, setLinkedProfiles] = useState<Record<string, { full_name: string; email: string | null }>>({});
   const [tasks, setTasks] = useState<any[]>([]);
+  const [assignmentStatusesByKey, setAssignmentStatusesByKey] = useState<Record<string, { status: string; status_environment: TaskEnvironment | null }>>({});
   const [incidents, setIncidents] = useState<any[]>([]);
   const [vacations, setVacations] = useState<any[]>([]);
   // Estado para modal de detalle de incidencia
@@ -371,6 +373,15 @@ export default function DailiesModule({
       (linkedAssignments || []).forEach((assignment: any) => {
         assignmentsByIncidentAndPerson.set(`${assignment.incident_id}:${assignment.assigned_to}`, assignment);
       });
+      setAssignmentStatusesByKey(
+        (linkedAssignments || []).reduce<Record<string, { status: string; status_environment: TaskEnvironment | null }>>((acc, assignment: any) => {
+          acc[`${assignment.incident_id}:${assignment.assigned_to}`] = {
+            status: assignment.status,
+            status_environment: normalizeEnvironment(assignment.status_environment),
+          };
+          return acc;
+        }, {}),
+      );
 
       const updates: Array<{ id: string; status: TaskStatus; status_environment: TaskEnvironment | null }> = [];
       const syncedTasks = taskList.map((task) => {
@@ -992,17 +1003,47 @@ export default function DailiesModule({
 
   const toggleUrgent = async (taskId: string, currentUrgent: boolean) => {
     preserveScroll();
-    const {
-      error
-    } = await supabase.from('tasks').update({
-      is_urgent: !currentUrgent
+    const nextUrgent = !currentUrgent;
+    const nextTasks = nextUrgent
+      ? [
+          ...(tasks.find((task) => task.id === taskId) ? [{
+            ...tasks.find((task) => task.id === taskId),
+            is_urgent: true,
+          }] : []),
+          ...tasks
+            .filter((task) => task.id !== taskId)
+            .map((task) => task.id === taskId ? { ...task, is_urgent: true } : task),
+        ].map((task, index) => ({ ...task, order_position: index }))
+      : tasks.map((task) => task.id === taskId ? { ...task, is_urgent: false } : task);
+
+    const { error } = await supabase.from('tasks').update({
+      is_urgent: nextUrgent,
     }).eq('id', taskId);
-    if (!error) {
-      setTasks(t => t.map(x => x.id === taskId ? {
-        ...x,
-        is_urgent: !currentUrgent
-      } : x));
+
+    if (error) return;
+
+    if (nextUrgent && dailyId) {
+      const { error: orderError } = await supabase
+        .from('daily_tasks')
+        .upsert(
+          nextTasks.map((task) => ({
+            daily_id: dailyId,
+            task_id: task.id,
+            order_position: task.order_position ?? 0,
+          })),
+          { onConflict: 'daily_id,task_id' },
+        );
+
+      if (orderError) {
+        return toast({
+          title: 'Error',
+          description: 'No se pudo fijar la tarea',
+          variant: 'destructive',
+        });
+      }
     }
+
+    setTasks(nextTasks);
   };
 
   const updateTaskEnvironment = async (task: any, environment: TaskEnvironment) => {
@@ -1114,6 +1155,14 @@ export default function DailiesModule({
             toEnvironment: nextEnvironment,
           });
         }
+
+        setAssignmentStatusesByKey((prev) => ({
+          ...prev,
+          [`${task.incident_id}:${assignedPersonId}`]: {
+            status: next.status,
+            status_environment: nextEnvironment,
+          },
+        }));
       }
 
       const { data: allAssignments } = await supabase
@@ -1506,13 +1555,51 @@ export default function DailiesModule({
     pending: 1,
     blocked: 2,
     resolved: 3,
-    resolved_yesterday: 4,
+    resolved_yesterday: 3,
   };
 
-  // Daily list is always sorted by status: WIP, Pending, Resolved, Resolved yesterday.
+  const getDisplayedAssignmentStatus = (task: { incident_id?: string | null; person_id?: string | null; assigned_to?: string | null; status: TaskStatus; status_environment?: TaskEnvironment | null }) => {
+    const assignmentKey = task.incident_id && (task.person_id || task.assigned_to)
+      ? `${task.incident_id}:${task.person_id || task.assigned_to}`
+      : null;
+    const assignmentStatus = assignmentKey ? assignmentStatusesByKey[assignmentKey] : null;
+
+    return {
+      status: (assignmentStatus?.status ? mapIncidentStatusToTaskStatus(assignmentStatus.status) : task.status) as TaskStatus,
+      status_environment: assignmentStatus?.status_environment ?? task.status_environment ?? null,
+    };
+  };
+
+  const getDailyStatusGroup = (task: { incident_id?: string | null; person_id?: string | null; assigned_to?: string | null; status: TaskStatus; status_environment?: TaskEnvironment | null }) => {
+    const displayedStatus = getDisplayedAssignmentStatus(task);
+
+    if (displayedStatus.status === 'resolved' || displayedStatus.status === 'resolved_yesterday') {
+      const environment = normalizeEnvironment(displayedStatus.status_environment) || 'PRO';
+      const resolvedEnvironmentOrder: Record<TaskEnvironment, number> = {
+        DEV: 0,
+        PRE: 1,
+        PRO: 2,
+      };
+
+      return `resolved_${resolvedEnvironmentOrder[environment]}`;
+    }
+
+    return String(statusOrder[displayedStatus.status] ?? 99);
+  };
+
+  // Daily list is always sorted by status groups: WIP, Pending, Block, Resolved DEV/PRE/PRO.
   const sortedTasks = useMemo(() => {
     return [...visibleDailyTasks].sort((a, b) => {
-      const byStatus = (statusOrder[a.status as TaskStatus] ?? 99) - (statusOrder[b.status as TaskStatus] ?? 99);
+      if (Boolean(a.is_urgent) !== Boolean(b.is_urgent)) {
+        return a.is_urgent ? -1 : 1;
+      }
+      if (a.is_urgent && b.is_urgent) {
+        return (a.order_position ?? 0) - (b.order_position ?? 0);
+      }
+
+      const aGroup = getDailyStatusGroup(a);
+      const bGroup = getDailyStatusGroup(b);
+      const byStatus = aGroup.localeCompare(bGroup, undefined, { numeric: true });
       if (byStatus !== 0) return byStatus;
       return (a.order_position ?? 0) - (b.order_position ?? 0);
     });
@@ -1719,26 +1806,25 @@ export default function DailiesModule({
     if (oldIndex === -1 || newIndex === -1) return;
     const activeTask = sortedTasks[oldIndex];
     const overTask = sortedTasks[newIndex];
-    if (activeTask.status !== overTask.status) return;
+    if (getDailyStatusGroup(activeTask) !== getDailyStatusGroup(overTask)) return;
 
     // Save scroll position before update
     preserveScroll();
 
-    const newVisibleTasks = arrayMove(sortedTasks, oldIndex, newIndex);
-    const visibleTaskIds = new Set(visibleDailyTasks.map(task => task.id));
-    const movedVisibleQueue = [...newVisibleTasks];
-    const newTasks = tasks.map(task => {
-      if (!visibleTaskIds.has(task.id)) return task;
-      return movedVisibleQueue.shift() ?? task;
-    });
+    const newVisibleTasks = arrayMove(sortedTasks, oldIndex, newIndex).map((task, index) => ({
+      ...task,
+      order_position: index,
+    }));
+    const reorderedTasksById = new Map(newVisibleTasks.map((task) => [task.id, task]));
+    const newTasks = tasks.map((task) => reorderedTasksById.get(task.id) ?? task);
     setTasks(newTasks);
 
     // Update order_position in database
     try {
-      const updates = newTasks.map((task, index) => ({
+      const updates = newVisibleTasks.map((task) => ({
         daily_id: dailyId,
         task_id: task.id,
-        order_position: index,
+        order_position: task.order_position ?? 0,
       }));
 
       const { error } = await supabase
@@ -1795,6 +1881,8 @@ export default function DailiesModule({
     };
 
     const isNote = String(task.description || '').includes(NOTE_MARKER);
+    const displayedStatus = getDisplayedAssignmentStatus(task);
+    const rowStatusValue = assignmentToSelectValue(displayedStatus.status, displayedStatus.status_environment);
 
     return (
       <TableRow ref={setNodeRef} style={style} className={cn(isDragging && 'relative z-50', isNote && 'bg-yellow-100 hover:bg-yellow-100/90')}>
@@ -1805,7 +1893,7 @@ export default function DailiesModule({
         </TableCell>
         <TableCell>
           <Select
-            value={assignmentToSelectValue(task.status, task.status_environment)}
+            value={rowStatusValue}
             onValueChange={(value) => updateTaskStatus(task, value as AssignmentStatusValue)}
           >
             <SelectTrigger className="h-8 w-[172px]">
@@ -1846,7 +1934,8 @@ export default function DailiesModule({
               size="icon"
               className={`h-6 w-6 ${task.is_urgent ? 'bg-red-500 hover:bg-red-600 text-white' : 'hover:bg-muted'}`}
               onClick={() => toggleUrgent(task.id, task.is_urgent || false)}
-              aria-label={task.is_urgent ? "Marcar como normal" : "Marcar como urgente"}
+              aria-label={task.is_urgent ? "Desfijar tarea" : "Fijar tarea"}
+              title={task.is_urgent ? "Desfijar tarea" : "Fijar tarea"}
             >
               <AlertTriangle className="h-3 w-3" />
             </Button>

@@ -318,11 +318,42 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           title: payload.name,
           description: payload.description || null,
           related_ticket: incidentReference,
-          status: mapIncidentStatusToTaskStatus(payload.status),
-          status_environment: payload.status_environment,
         } as any)
         .eq('incident_id', selected.id)
         .eq('is_auto_linked', true);
+
+      const { data: assignments } = await supabase
+        .from('incident_assignments')
+        .select('assigned_to, status, status_environment')
+        .eq('incident_id', selected.id);
+
+      if (assignments && assignments.length > 0) {
+        await Promise.all(assignments.map((assignment) => {
+          const assignmentTaskStatus = mapIncidentStatusToTaskStatus(assignment.status);
+          const assignmentEnvironment = assignmentTaskStatus === 'resolved'
+            ? normalizeEnvironment(assignment.status_environment) || 'PRO'
+            : null;
+
+          return supabase
+            .from('tasks')
+            .update({
+              status: assignmentTaskStatus,
+              status_environment: assignmentEnvironment,
+            } as any)
+            .eq('incident_id', selected.id)
+            .eq('is_auto_linked', true)
+            .or(`person_id.eq.${assignment.assigned_to},assigned_to.eq.${assignment.assigned_to}`);
+        }));
+      } else {
+        await supabase
+          .from('tasks')
+          .update({
+            status: mapIncidentStatusToTaskStatus(payload.status),
+            status_environment: payload.status_environment,
+          } as any)
+          .eq('incident_id', selected.id)
+          .eq('is_auto_linked', true);
+      }
       
       setSelected((prev: any) => (prev ? { ...prev, ...payload } : prev));
       onPatched?.(selected.id, payload);
