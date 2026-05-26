@@ -397,7 +397,54 @@ export default function DailiesModule({
       error
     } = await supabase.from('daily_tasks').select('task_id, order_position, tasks(*)').eq('daily_id', id).order('order_position', { ascending: true });
     if (!error) {
-      const list = (data || []).map((r: any) => r.tasks).filter(Boolean);
+      let list = (data || [])
+        .map((r: any) => r.tasks ? { ...r.tasks, order_position: r.order_position } : null)
+        .filter(Boolean);
+
+      if (dateToLocalInputValue(d) === dateToLocalInputValue(new Date())) {
+        const { data: teamRows } = await supabase
+          .from('people')
+          .select('id')
+          .eq('project_id', projectId);
+        const teamPersonIds = new Set((teamRows || []).map((person: any) => person.id).filter(Boolean));
+
+        if (teamPersonIds.size > 0) {
+          const { data: assignedTasks } = await supabase
+            .from('tasks')
+            .select('*')
+            .eq('project_id', projectId);
+
+          const linkedTaskIds = new Set(list.map((task: any) => task.id));
+          const missingAssignedTasks = (assignedTasks || [])
+            .filter((task: any) => teamPersonIds.has(task.person_id || task.assigned_to))
+            .filter((task: any) => !linkedTaskIds.has(task.id));
+
+          if (missingAssignedTasks.length > 0) {
+            const currentMaxOrder = Math.max(
+              -1,
+              ...list.map((task: any) => Number(task.order_position ?? -1)),
+            );
+            const restoredLinks = missingAssignedTasks.map((task: any, index: number) => ({
+              daily_id: id,
+              task_id: task.id,
+              order_position: currentMaxOrder + index + 1,
+            }));
+
+            await supabase
+              .from('daily_tasks')
+              .upsert(restoredLinks as any, { onConflict: 'daily_id,task_id' } as any);
+
+            list = [
+              ...list,
+              ...missingAssignedTasks.map((task: any, index: number) => ({
+                ...task,
+                order_position: currentMaxOrder + index + 1,
+              })),
+            ];
+          }
+        }
+      }
+
       const syncedList = await syncLinkedTaskStatuses(list);
       setTasks(syncedList);
     }
