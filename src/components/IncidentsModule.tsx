@@ -381,6 +381,7 @@ export default function IncidentsModule({
   const [compareBacklogOpen, setCompareBacklogOpen] = useState(false);
   const [backlogCompareRows, setBacklogCompareRows] = useState<Array<{ id: string; type: string; excelStatus: string; vectoreaStatus: string }>>([]);
   const [lastBacklogCompareFile, setLastBacklogCompareFile] = useState<File | null>(null);
+  const [showOnlyRedBacklogCompareRows, setShowOnlyRedBacklogCompareRows] = useState(false);
   const [compareSelected, setCompareSelected] = useState<{
     ids: string[];
     types: string[];
@@ -1371,13 +1372,14 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
       const typeValue = row.type || '—';
       const excelValue = row.excelStatus || '—';
       const vectoreaValue = row.vectoreaStatus || '—';
+      const isMatch = isComparisonMatch(row.excelStatus || '', row.vectoreaStatus || '');
       const matchId = compareSelected.ids.length === 0 || compareSelected.ids.includes(idValue);
       const matchType = compareSelected.types.length === 0 || compareSelected.types.includes(typeValue);
       const matchExcel = compareSelected.excelStatuses.length === 0 || compareSelected.excelStatuses.includes(excelValue);
       const matchVectorea = compareSelected.vectoreaStatuses.length === 0 || compareSelected.vectoreaStatuses.includes(vectoreaValue);
-      return matchId && matchType && matchExcel && matchVectorea;
+      return (!showOnlyRedBacklogCompareRows || !isMatch) && matchId && matchType && matchExcel && matchVectorea;
     });
-  }, [backlogCompareRows, compareSelected]);
+  }, [backlogCompareRows, compareSelected, showOnlyRedBacklogCompareRows]);
 
   const sortedBacklogCompareRows = useMemo(() => {
     return [...filteredBacklogCompareRows].sort((a, b) => {
@@ -1791,6 +1793,12 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
               >
                 <RefreshCcw className="mr-2 h-4 w-4" />
                 Actualizar
+              </Button>
+              <Button
+                variant={showOnlyRedBacklogCompareRows ? 'default' : 'outline'}
+                onClick={() => setShowOnlyRedBacklogCompareRows((prev) => !prev)}
+              >
+                Ver solo rojos
               </Button>
             </div>
             <div className="max-h-[calc(100vh-280px)] overflow-auto rounded-md border">

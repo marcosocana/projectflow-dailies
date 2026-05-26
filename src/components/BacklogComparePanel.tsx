@@ -97,6 +97,7 @@ export default function BacklogComparePanel({ projectId, onClose, onSelectId }: 
   const compareInputRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<BacklogCompareRow[]>([]);
   const [lastCompareFile, setLastCompareFile] = useState<File | null>(null);
+  const [showOnlyRedRows, setShowOnlyRedRows] = useState(false);
   const [selected, setSelected] = useState<{
     ids: string[];
     types: string[];
@@ -179,7 +180,9 @@ export default function BacklogComparePanel({ projectId, onClose, onSelectId }: 
         const typeValue = row.type || '-';
         const excelValue = row.excelStatus || '-';
         const vectoreaValue = row.vectoreaStatus || '-';
+        const isMatch = isComparisonMatch(row.excelStatus || '', row.vectoreaStatus || '');
         return (
+          (!showOnlyRedRows || !isMatch) &&
           (selected.ids.length === 0 || selected.ids.includes(idValue)) &&
           (selected.types.length === 0 || selected.types.includes(typeValue)) &&
           (selected.excelStatuses.length === 0 || selected.excelStatuses.includes(excelValue)) &&
@@ -192,7 +195,7 @@ export default function BacklogComparePanel({ projectId, onClose, onSelectId }: 
         if (Number.isFinite(aNum) && Number.isFinite(bNum)) return bNum - aNum;
         return String(b.id).localeCompare(String(a.id));
       });
-  }, [rows, selected]);
+  }, [rows, selected, showOnlyRedRows]);
 
   return (
     <Card className="sticky top-[88px] w-full shrink-0 self-start xl:w-[460px]">
@@ -213,6 +216,12 @@ export default function BacklogComparePanel({ projectId, onClose, onSelectId }: 
           >
             <RefreshCcw className="mr-2 h-4 w-4" />
             Actualizar
+          </Button>
+          <Button
+            variant={showOnlyRedRows ? 'default' : 'outline'}
+            onClick={() => setShowOnlyRedRows((prev) => !prev)}
+          >
+            Ver solo rojos
           </Button>
           <input
             ref={compareInputRef}
