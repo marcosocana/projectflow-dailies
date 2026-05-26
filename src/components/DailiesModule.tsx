@@ -84,6 +84,14 @@ const normalizeTaskEnvironment = (status: TaskStatus, environment: TaskEnvironme
 
 const DAILY_TASK_FORM_STATUS_OPTIONS = ASSIGNMENT_STATUS_OPTIONS.filter(option => option.value !== 'closed');
 
+const chunkArray = <T,>(items: T[], size: number) => {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+};
+
 const cleanAdditionalComments = (value: string | null | undefined) =>
   cleanInternalTaskIdMarker(String(value ?? '').replace(CORRECTIVE_CATEGORY_MARKER, '')).trim();
 
@@ -321,66 +329,83 @@ export default function DailiesModule({
   };
 
   const syncLinkedTaskStatuses = async (taskList: any[]) => {
-    const linkedTasks = taskList.filter((task) => task.incident_id);
-    if (linkedTasks.length === 0) return taskList;
+    try {
+      const linkedTasks = taskList.filter((task) => task.incident_id);
+      if (linkedTasks.length === 0) return taskList;
 
-    const incidentIds = Array.from(new Set(linkedTasks.map((task) => task.incident_id).filter(Boolean)));
-    const [{ data: linkedIncidents }, { data: linkedAssignments }] = await Promise.all([
-      supabase
-        .from('incidents')
-        .select('id,status,status_environment')
-        .in('id', incidentIds),
-      supabase
-        .from('incident_assignments')
-        .select('incident_id,assigned_to,status,status_environment')
-        .in('incident_id', incidentIds),
-    ]);
+      const incidentIds = Array.from(new Set(linkedTasks.map((task) => task.incident_id).filter(Boolean)));
+      const linkedIncidents: any[] = [];
+      const linkedAssignments: any[] = [];
 
-    const incidentsById = new Map((linkedIncidents || []).map((incident: any) => [incident.id, incident]));
-    const assignmentsByIncidentAndPerson = new Map<string, any>();
-    (linkedAssignments || []).forEach((assignment: any) => {
-      assignmentsByIncidentAndPerson.set(`${assignment.incident_id}:${assignment.assigned_to}`, assignment);
-    });
+      for (const chunk of chunkArray(incidentIds, 75)) {
+        const [{ data: incidentRows, error: incidentError }, { data: assignmentRows, error: assignmentError }] = await Promise.all([
+          supabase
+            .from('incidents')
+            .select('id,status,status_environment')
+            .in('id', chunk),
+          supabase
+            .from('incident_assignments')
+            .select('incident_id,assigned_to,status,status_environment')
+            .in('incident_id', chunk),
+        ]);
 
-    const updates: Array<{ id: string; status: TaskStatus; status_environment: TaskEnvironment | null }> = [];
-    const syncedTasks = taskList.map((task) => {
-      if (!task.incident_id) return task;
+        if (incidentError || assignmentError) {
+          throw incidentError || assignmentError;
+        }
 
-      const assignedPersonId = task.person_id || task.assigned_to;
-      const assignment = assignedPersonId
-        ? assignmentsByIncidentAndPerson.get(`${task.incident_id}:${assignedPersonId}`)
-        : null;
-      const source = assignment || incidentsById.get(task.incident_id);
-      if (!source) return task;
-
-      const nextStatus = mapIncidentStatusToTaskStatus(source.status) as TaskStatus;
-      const nextEnvironment = nextStatus === 'resolved'
-        ? normalizeEnvironment(source.status_environment) || 'PRO'
-        : null;
-
-      if (task.status === nextStatus && normalizeEnvironment(task.status_environment) === nextEnvironment) {
-        return task;
+        linkedIncidents.push(...(incidentRows || []));
+        linkedAssignments.push(...(assignmentRows || []));
       }
 
-      updates.push({ id: task.id, status: nextStatus, status_environment: nextEnvironment });
-      return {
-        ...task,
-        status: nextStatus,
-        status_environment: nextEnvironment,
-      };
-    });
+      const incidentsById = new Map((linkedIncidents || []).map((incident: any) => [incident.id, incident]));
+      const assignmentsByIncidentAndPerson = new Map<string, any>();
+      (linkedAssignments || []).forEach((assignment: any) => {
+        assignmentsByIncidentAndPerson.set(`${assignment.incident_id}:${assignment.assigned_to}`, assignment);
+      });
 
-    if (updates.length > 0) {
-      await Promise.all(updates.map((update) => supabase
-        .from('tasks')
-        .update({
-          status: update.status,
-          status_environment: update.status_environment,
-        } as any)
-        .eq('id', update.id)));
+      const updates: Array<{ id: string; status: TaskStatus; status_environment: TaskEnvironment | null }> = [];
+      const syncedTasks = taskList.map((task) => {
+        if (!task.incident_id) return task;
+
+        const assignedPersonId = task.person_id || task.assigned_to;
+        const assignment = assignedPersonId
+          ? assignmentsByIncidentAndPerson.get(`${task.incident_id}:${assignedPersonId}`)
+          : null;
+        const source = assignment || incidentsById.get(task.incident_id);
+        if (!source) return task;
+
+        const nextStatus = mapIncidentStatusToTaskStatus(source.status) as TaskStatus;
+        const nextEnvironment = nextStatus === 'resolved'
+          ? normalizeEnvironment(source.status_environment) || 'PRO'
+          : null;
+
+        if (task.status === nextStatus && normalizeEnvironment(task.status_environment) === nextEnvironment) {
+          return task;
+        }
+
+        updates.push({ id: task.id, status: nextStatus, status_environment: nextEnvironment });
+        return {
+          ...task,
+          status: nextStatus,
+          status_environment: nextEnvironment,
+        };
+      });
+
+      if (updates.length > 0) {
+        await Promise.all(updates.map((update) => supabase
+          .from('tasks')
+          .update({
+            status: update.status,
+            status_environment: update.status_environment,
+          } as any)
+          .eq('id', update.id)));
+      }
+
+      return syncedTasks;
+    } catch (error) {
+      console.error('Error syncing linked daily task statuses:', error);
+      return taskList;
     }
-
-    return syncedTasks;
   };
 
   const loadTasks = async (d: Date) => {
@@ -393,12 +418,31 @@ export default function DailiesModule({
       .maybeSingle();
     setDailyPersistenceSummary(getDailyPersistenceSummary(daily?.content));
     const {
-      data,
+      data: linkRows,
       error
-    } = await supabase.from('daily_tasks').select('task_id, order_position, tasks(*)').eq('daily_id', id).order('order_position', { ascending: true });
+    } = await supabase.from('daily_tasks').select('task_id, order_position').eq('daily_id', id).order('order_position', { ascending: true });
     if (!error) {
-      let list = (data || [])
-        .map((r: any) => r.tasks ? { ...r.tasks, order_position: r.order_position } : null)
+      const taskIds = (linkRows || []).map((row: any) => row.task_id).filter(Boolean);
+      const taskRows: any[] = [];
+      for (const chunk of chunkArray(taskIds, 100)) {
+        const { data: chunkTasks, error: taskError } = await supabase
+          .from('tasks')
+          .select('*')
+          .in('id', chunk);
+
+        if (taskError) {
+          throw taskError;
+        }
+
+        taskRows.push(...(chunkTasks || []));
+      }
+
+      const tasksById = new Map(taskRows.map((task: any) => [task.id, task]));
+      let list = (linkRows || [])
+        .map((row: any) => {
+          const task = tasksById.get(row.task_id);
+          return task ? { ...task, order_position: row.order_position } : null;
+        })
         .filter(Boolean);
 
       if (dateToLocalInputValue(d) === dateToLocalInputValue(new Date())) {
