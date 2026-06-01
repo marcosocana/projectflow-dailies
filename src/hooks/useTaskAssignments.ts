@@ -188,12 +188,40 @@ export const useTaskAssignments = (taskId: string | null) => {
 
   const removeAssignment = async (assignmentId: string) => {
     try {
+      const { data: assignmentToRemove, error: loadError } = await supabase
+        .from('incident_assignments')
+        .select('incident_id')
+        .eq('id', assignmentId)
+        .maybeSingle();
+
+      if (loadError) throw loadError;
+
       const { error } = await supabase
         .from('incident_assignments')
         .delete()
         .eq('id', assignmentId);
 
       if (error) throw error;
+
+      if (assignmentToRemove?.incident_id) {
+        const { data: remainingAssignments, error: remainingError } = await supabase
+          .from('incident_assignments')
+          .select('id')
+          .eq('incident_id', assignmentToRemove.incident_id)
+          .limit(1);
+
+        if (remainingError) throw remainingError;
+
+        if (!remainingAssignments || remainingAssignments.length === 0) {
+          const { error: incidentError } = await supabase
+            .from('incidents')
+            .update({ assigned_to: null } as any)
+            .eq('id', assignmentToRemove.incident_id);
+
+          if (incidentError) throw incidentError;
+        }
+      }
+
       await fetchAssignments();
     } catch (error) {
       console.error('Error removing assignment:', error);

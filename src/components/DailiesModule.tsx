@@ -345,35 +345,24 @@ export default function DailiesModule({
       if (linkedTasks.length === 0) return taskList;
 
       const incidentIds = Array.from(new Set(linkedTasks.map((task) => task.incident_id).filter(Boolean)));
-      const linkedIncidents: any[] = [];
       const linkedAssignments: any[] = [];
 
       for (const chunk of chunkArray(incidentIds, 75)) {
-        const [{ data: incidentRows, error: incidentError }, { data: assignmentRows, error: assignmentError }] = await Promise.all([
-          supabase
-            .from('incidents')
-            .select('id,status,status_environment,assigned_to')
-            .in('id', chunk),
-          supabase
-            .from('incident_assignments')
-            .select('incident_id,assigned_to,status,status_environment')
-            .in('incident_id', chunk),
-        ]);
+        const { data: assignmentRows, error: assignmentError } = await supabase
+          .from('incident_assignments')
+          .select('incident_id,assigned_to,status,status_environment')
+          .in('incident_id', chunk);
 
-        if (incidentError || assignmentError) {
-          throw incidentError || assignmentError;
+        if (assignmentError) {
+          throw assignmentError;
         }
 
-        linkedIncidents.push(...(incidentRows || []));
         linkedAssignments.push(...(assignmentRows || []));
       }
 
-      const incidentsById = new Map((linkedIncidents || []).map((incident: any) => [incident.id, incident]));
       const assignmentsByIncidentAndPerson = new Map<string, any>();
-      const incidentIdsWithAssignments = new Set<string>();
       (linkedAssignments || []).forEach((assignment: any) => {
         assignmentsByIncidentAndPerson.set(`${assignment.incident_id}:${assignment.assigned_to}`, assignment);
-        incidentIdsWithAssignments.add(assignment.incident_id);
       });
       setAssignmentStatusesByKey(
         (linkedAssignments || []).reduce<Record<string, { status: string; status_environment: TaskEnvironment | null }>>((acc, assignment: any) => {
@@ -391,25 +380,18 @@ export default function DailiesModule({
         if (!task.incident_id) return task;
 
         const assignedPersonId = task.person_id || task.assigned_to;
-        const incident = incidentsById.get(task.incident_id);
         const assignment = assignedPersonId
           ? assignmentsByIncidentAndPerson.get(`${task.incident_id}:${assignedPersonId}`)
           : null;
-        const hasCurrentAssignments = incidentIdsWithAssignments.has(task.incident_id);
-        const isCurrentDirectAssignment = !hasCurrentAssignments && incident?.assigned_to && incident.assigned_to === assignedPersonId;
-        const isCurrentAssignment = Boolean(assignment) || isCurrentDirectAssignment;
 
-        if (!isCurrentAssignment) {
+        if (!assignment) {
           staleTaskIds.push(task.id);
           return null;
         }
 
-        const source = assignment || incident;
-        if (!source) return task;
-
-        const nextStatus = mapIncidentStatusToTaskStatus(source.status) as TaskStatus;
+        const nextStatus = mapIncidentStatusToTaskStatus(assignment.status) as TaskStatus;
         const nextEnvironment = nextStatus === 'resolved'
-          ? normalizeEnvironment(source.status_environment) || 'PRO'
+          ? normalizeEnvironment(assignment.status_environment) || 'PRO'
           : null;
 
         if (task.status === nextStatus && normalizeEnvironment(task.status_environment) === nextEnvironment) {
@@ -517,30 +499,15 @@ export default function DailiesModule({
 
           const incidentsById = new Map((homeIncidents || []).map((incident: any) => [incident.id, incident]));
           const desiredIncidentAssignments = new Map<string, any>();
-          const incidentIdsWithAssignments = new Set<string>();
           (homeAssignments || []).forEach((assignment: any) => {
             const incident = incidentsById.get(assignment.incident_id);
             if (incident && teamPersonIds.has(assignment.assigned_to)) {
-              incidentIdsWithAssignments.add(assignment.incident_id);
               desiredIncidentAssignments.set(`${assignment.incident_id}:${assignment.assigned_to}`, {
                 incident,
                 personId: assignment.assigned_to,
                 status: assignment.status,
                 status_environment: assignment.status_environment,
               });
-            }
-          });
-          (homeIncidents || []).forEach((incident: any) => {
-            if (!incidentIdsWithAssignments.has(incident.id) && incident.assigned_to && teamPersonIds.has(incident.assigned_to)) {
-              const key = `${incident.id}:${incident.assigned_to}`;
-              if (!desiredIncidentAssignments.has(key)) {
-                desiredIncidentAssignments.set(key, {
-                  incident,
-                  personId: incident.assigned_to,
-                  status: incident.status,
-                  status_environment: incident.status_environment,
-                });
-              }
             }
           });
 
