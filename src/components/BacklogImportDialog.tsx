@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import type { Database } from '@/integrations/supabase/types';
 import { recordIncidentCreated } from '@/lib/incidentActivityLog';
 import { useAuth } from '@/hooks/useAuth';
-import { mapIncidentStatusToTaskStatus, normalizeEnvironment } from '@/lib/taskStatus';
+import { normalizeEnvironment } from '@/lib/taskStatus';
 
 type IncidentCategory = Database['public']['Enums']['incident_category'];
 
@@ -182,95 +182,8 @@ export default function BacklogImportDialog({
 
         if (assignError) throw assignError;
 
-        // Create daily tasks if requested
-        if (createDailyTasks) {
-          const today = new Date().toISOString().split('T')[0];
-          
-          // Get or create today's daily
-          let dailyId: string;
-          const { data: existingDaily } = await supabase
-            .from('dailies')
-            .select('id')
-            .eq('project_id', projectId)
-            .eq('date', today)
-            .single();
-
-          if (existingDaily) {
-            dailyId = existingDaily.id;
-          } else {
-            const { data: newDaily, error: dailyError } = await supabase
-              .from('dailies')
-              .insert({
-                project_id: projectId,
-                date: today,
-                content: {}
-              })
-              .select()
-              .single();
-
-            if (dailyError) throw dailyError;
-            dailyId = newDaily.id;
-          }
-
-          // Create tasks for each assignment
-          const taskInserts = assignments.map(assignment => {
-            const taskStatus = mapIncidentStatusToTaskStatus(assignment.status);
-            return {
-              project_id: projectId,
-              person_id: assignment.person,
-              assigned_to: assignment.person,
-              title: current.name,
-              description: current.description || null,
-              status: taskStatus,
-              status_environment: taskStatus === 'resolved' ? normalizeEnvironment(assignment.environment) || 'PRO' : null,
-              incident_id: incident.id,
-              is_auto_linked: true,
-              related_ticket: current.number
-            };
-          });
-
-          const { data: createdTasks, error: taskError } = await supabase
-            .from('tasks')
-            .insert(taskInserts)
-            .select();
-
-          if (taskError) throw taskError;
-
-          // Get max order_position for each person in this daily
-          const dailyTaskInserts = await Promise.all(
-            createdTasks.map(async (task) => {
-              // Find max order_position for this specific person in this daily
-              const { data: maxOrderData } = await supabase
-                .from('daily_tasks')
-                .select('order_position, task_id')
-                .eq('daily_id', dailyId)
-                .order('order_position', { ascending: false, nullsFirst: false });
-
-              // Filter by person_id on client side
-              const { data: personTasks } = await supabase
-                .from('tasks')
-                .select('id')
-                .eq('person_id', task.person_id)
-                .in('id', maxOrderData?.map(dt => dt.task_id) || []);
-
-              const personTaskIds = new Set(personTasks?.map(t => t.id) || []);
-              const personDailyTasks = maxOrderData?.filter(dt => personTaskIds.has(dt.task_id)) || [];
-              const maxOrder = personDailyTasks.length > 0 ? personDailyTasks[0].order_position : -1;
-
-              return {
-                daily_id: dailyId,
-                task_id: task.id,
-                order_position: maxOrder + 1
-              };
-            })
-          );
-
-          const { error: dailyTaskError } = await supabase
-            .from('daily_tasks')
-            .insert(dailyTaskInserts);
-
-          if (dailyTaskError) throw dailyTaskError;
-        }
+        // The incident_assignments trigger materializes today's daily tasks.
+        // Avoid inserting them again from the client, which can race the trigger.
       }
 
       toast({

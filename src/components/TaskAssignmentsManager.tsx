@@ -64,20 +64,19 @@ export default function TaskAssignmentsManager({
 
     try {
       const memberId = selectedMember;
-      const createdAssignment = await addAssignment(memberId);
+      await addAssignment(memberId);
       setSelectedMember('');
-      const projectId = await syncDailyTasksForIncident(taskId, [
-        {
-          assigned_to: memberId,
-          status: (createdAssignment?.status as IncidentStatus | undefined) || 'pending',
-          status_environment: normalizeEnvironment((createdAssignment as any)?.status_environment),
-        },
-      ]);
       
       // Sincronizar el estado general de la tarea
       await updateTaskStatusFromAssignments(taskId);
+
+      const { data: incident } = await supabase
+        .from('incidents')
+        .select('project_id')
+        .eq('id', taskId)
+        .maybeSingle();
       
-      if (projectId) notifyDailiesChanged(projectId);
+      if (incident?.project_id) notifyDailiesChanged(incident.project_id);
       onAssignmentsChange?.();
     } catch (error) {
       console.error('Error adding assignment:', error);

@@ -793,73 +793,8 @@ export default function IncidentsModule({
           const { updateTaskStatusFromAssignments } = await import('@/hooks/useSyncTaskStatus');
           await updateTaskStatusFromAssignments(id);
 
-          // Create daily tasks if checkbox is enabled
-          if (createDailyTasks) {
-            const today = getMadridDate();
-            
-            // Get or create today's daily
-            let { data: daily, error: dailyError } = await supabase
-              .from('dailies')
-              .select('id')
-              .eq('project_id', projectId)
-              .eq('date', today)
-              .single();
-
-            if (dailyError && dailyError.code === 'PGRST116') {
-              // Daily doesn't exist, create it
-              const { data: newDaily, error: createError } = await supabase
-                .from('dailies')
-                .insert({ project_id: projectId, date: today, content: {} })
-                .select('id')
-                .single();
-              
-              if (createError) throw createError;
-              daily = newDaily;
-            } else if (dailyError) {
-              throw dailyError;
-            }
-
-            if (daily) {
-              // Create a task in the tasks table for each assignment
-              const tasksToInsert = createAssignments.map(a => {
-                const taskStatus = mapIncidentStatusToTaskStatus(a.status);
-
-                return {
-                  title: form.name,
-                  description: form.description,
-                  project_id: projectId,
-                  incident_id: id,
-                  person_id: a.person,
-                  assigned_to: a.person,
-                  status: taskStatus,
-                  status_environment: taskStatus === 'resolved' ? normalizeEnvironment(a.environment) || 'PRO' : null,
-                  is_auto_linked: true,
-                  related_ticket: incidentReference
-                };
-              });
-
-              const { data: createdTasks, error: tasksError } = await supabase
-                .from('tasks')
-                .insert(tasksToInsert)
-                .select('id');
-
-              if (tasksError) throw tasksError;
-
-              // Link tasks with the daily
-              if (createdTasks && createdTasks.length > 0) {
-                const dailyTasksToInsert = createdTasks.map(task => ({
-                  daily_id: daily.id,
-                  task_id: task.id
-                }));
-
-                const { error: dailyTasksError } = await supabase
-                  .from('daily_tasks')
-                  .insert(dailyTasksToInsert);
-
-                if (dailyTasksError) throw dailyTasksError;
-              }
-            }
-          }
+          // The incident_assignments trigger materializes today's daily tasks.
+          // Avoid inserting them again from the client, which can race the trigger.
         }
         
         toast({

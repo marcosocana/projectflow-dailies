@@ -352,7 +352,7 @@ export default function DailiesModule({
         const [{ data: incidentRows, error: incidentError }, { data: assignmentRows, error: assignmentError }] = await Promise.all([
           supabase
             .from('incidents')
-            .select('id,status,status_environment')
+            .select('id,status,status_environment,assigned_to')
             .in('id', chunk),
           supabase
             .from('incident_assignments')
@@ -370,8 +370,10 @@ export default function DailiesModule({
 
       const incidentsById = new Map((linkedIncidents || []).map((incident: any) => [incident.id, incident]));
       const assignmentsByIncidentAndPerson = new Map<string, any>();
+      const incidentIdsWithAssignments = new Set<string>();
       (linkedAssignments || []).forEach((assignment: any) => {
         assignmentsByIncidentAndPerson.set(`${assignment.incident_id}:${assignment.assigned_to}`, assignment);
+        incidentIdsWithAssignments.add(assignment.incident_id);
       });
       setAssignmentStatusesByKey(
         (linkedAssignments || []).reduce<Record<string, { status: string; status_environment: TaskEnvironment | null }>>((acc, assignment: any) => {
@@ -384,14 +386,25 @@ export default function DailiesModule({
       );
 
       const updates: Array<{ id: string; status: TaskStatus; status_environment: TaskEnvironment | null }> = [];
+      const staleTaskIds: string[] = [];
       const syncedTasks = taskList.map((task) => {
         if (!task.incident_id) return task;
 
         const assignedPersonId = task.person_id || task.assigned_to;
+        const incident = incidentsById.get(task.incident_id);
         const assignment = assignedPersonId
           ? assignmentsByIncidentAndPerson.get(`${task.incident_id}:${assignedPersonId}`)
           : null;
-        const source = assignment || incidentsById.get(task.incident_id);
+        const hasCurrentAssignments = incidentIdsWithAssignments.has(task.incident_id);
+        const isCurrentDirectAssignment = !hasCurrentAssignments && incident?.assigned_to && incident.assigned_to === assignedPersonId;
+        const isCurrentAssignment = Boolean(assignment) || isCurrentDirectAssignment;
+
+        if (!isCurrentAssignment) {
+          staleTaskIds.push(task.id);
+          return null;
+        }
+
+        const source = assignment || incident;
         if (!source) return task;
 
         const nextStatus = mapIncidentStatusToTaskStatus(source.status) as TaskStatus;
@@ -409,7 +422,7 @@ export default function DailiesModule({
           status: nextStatus,
           status_environment: nextEnvironment,
         };
-      });
+      }).filter(Boolean);
 
       if (updates.length > 0) {
         await Promise.all(updates.map((update) => supabase
@@ -419,6 +432,11 @@ export default function DailiesModule({
             status_environment: update.status_environment,
           } as any)
           .eq('id', update.id)));
+      }
+
+      if (staleTaskIds.length > 0) {
+        await supabase.from('daily_tasks').delete().in('task_id', staleTaskIds);
+        await supabase.from('tasks').delete().in('id', staleTaskIds);
       }
 
       return syncedTasks;
@@ -499,9 +517,11 @@ export default function DailiesModule({
 
           const incidentsById = new Map((homeIncidents || []).map((incident: any) => [incident.id, incident]));
           const desiredIncidentAssignments = new Map<string, any>();
+          const incidentIdsWithAssignments = new Set<string>();
           (homeAssignments || []).forEach((assignment: any) => {
             const incident = incidentsById.get(assignment.incident_id);
             if (incident && teamPersonIds.has(assignment.assigned_to)) {
+              incidentIdsWithAssignments.add(assignment.incident_id);
               desiredIncidentAssignments.set(`${assignment.incident_id}:${assignment.assigned_to}`, {
                 incident,
                 personId: assignment.assigned_to,
@@ -511,7 +531,7 @@ export default function DailiesModule({
             }
           });
           (homeIncidents || []).forEach((incident: any) => {
-            if (incident.assigned_to && teamPersonIds.has(incident.assigned_to)) {
+            if (!incidentIdsWithAssignments.has(incident.id) && incident.assigned_to && teamPersonIds.has(incident.assigned_to)) {
               const key = `${incident.id}:${incident.assigned_to}`;
               if (!desiredIncidentAssignments.has(key)) {
                 desiredIncidentAssignments.set(key, {
