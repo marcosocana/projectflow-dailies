@@ -2373,7 +2373,7 @@ export default function DailiesModule({
               <Button variant="outline" onClick={() => { loadAllTasks(); setViewAllTasksOpen(true); }}>Ver todas</Button>
               <Button
                 variant="outline"
-                onClick={() => window.open('https://cepsacorp-my.sharepoint.com/:x:/g/personal/prminsait18_outsourcing_moeveglobal_com/IQAFEc-JDQ4FQqmgcLy-bYFMAXmhMbJeo93EwHxza2rwSmk?e=BM91hk', '_blank', 'noopener,noreferrer')}
+                onClick={() => window.open('https://cepsacorp.sharepoint.com/:x:/s/EnergyParks-Aplicacionesmviles/IQCYSpOGmtWnTapOf5J-ytbyAROm3UjaCgYH8ORv13rZXro?e=fA8BrC', '_blank', 'noopener,noreferrer')}
               >
                 Ver Excel Incidencias
               </Button>

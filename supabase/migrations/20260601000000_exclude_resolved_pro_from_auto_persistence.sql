@@ -51,10 +51,10 @@ BEGIN
       CONTINUE;
     END IF;
 
-    SELECT id INTO v_target_daily_id
-    FROM public.dailies
-    WHERE project_id = v_project_id
-      AND date = v_target_date;
+    SELECT d.id INTO v_target_daily_id
+    FROM public.dailies d
+    WHERE d.project_id = v_project_id
+      AND d.date = v_target_date;
 
     IF v_target_daily_id IS NULL THEN
       INSERT INTO public.dailies (project_id, date, content)
@@ -62,9 +62,9 @@ BEGIN
       RETURNING id INTO v_target_daily_id;
     END IF;
 
-    SELECT COALESCE(MAX(order_position), -1) INTO v_max_order_position
-    FROM public.daily_tasks
-    WHERE daily_id = v_target_daily_id;
+    SELECT COALESCE(MAX(dt.order_position), -1) INTO v_max_order_position
+    FROM public.daily_tasks dt
+    WHERE dt.daily_id = v_target_daily_id;
 
     FOR v_task_record IN
       SELECT dt.task_id
@@ -103,7 +103,7 @@ BEGIN
         'targetDate', v_target_date::text
       )
     )
-    WHERE id = v_target_daily_id;
+    WHERE dailies.id = v_target_daily_id;
 
     INSERT INTO public.incident_activity_logs (
       project_id,
