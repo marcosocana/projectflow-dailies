@@ -7,15 +7,114 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Trash2, UserPlus, Pencil } from 'lucide-react';
+import { GripVertical, Trash2, UserPlus, Pencil } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface TeamModuleProps {
   projectId: string;
 }
 
+interface TeamPerson {
+  id: string;
+  project_id: string;
+  name: string;
+  role: string;
+  color: string;
+  user_id?: string | null;
+  order_position?: number | null;
+}
+
+interface SortablePersonRowProps {
+  person: TeamPerson;
+  linkedProfile?: { full_name: string; email: string | null };
+  onEdit: (person: TeamPerson) => void;
+  onDelete: (id: string) => void;
+}
+
+const SortablePersonRow = ({ person, linkedProfile, onEdit, onDelete }: SortablePersonRowProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: person.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <TableRow ref={setNodeRef} style={style} className={isDragging ? 'relative z-50 bg-muted/50' : undefined}>
+      <TableCell className="w-8">
+        <button
+          type="button"
+          className="cursor-grab rounded p-1 text-muted-foreground active:cursor-grabbing"
+          aria-label={`Reordenar ${person.name}`}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+      </TableCell>
+      <TableCell className="font-medium">{person.name}</TableCell>
+      <TableCell>{person.role}</TableCell>
+      <TableCell>{person.user_id ? (linkedProfile?.full_name || 'Vinculado') : 'Sin vincular'}</TableCell>
+      <TableCell>{person.user_id ? (linkedProfile?.email || 'Sin email') : '-'}</TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <div
+            className="w-4 h-4 rounded border"
+            style={{ backgroundColor: person.color }}
+          />
+          <span className="text-sm font-mono">{person.color}</span>
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onEdit(person)}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDelete(person.id)}
+            className="text-destructive hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+};
+
 export default function TeamModule({ projectId }: TeamModuleProps) {
   const { toast } = useToast();
-  const [people, setPeople] = useState<any[]>([]);
+  const [people, setPeople] = useState<TeamPerson[]>([]);
   const [linkedProfiles, setLinkedProfiles] = useState<Record<string, { full_name: string; email: string | null }>>({});
   const [createPersonOpen, setCreatePersonOpen] = useState(false);
   const [personForm, setPersonForm] = useState({
@@ -30,16 +129,39 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
     role: '',
     color: '#3B82F6'
   });
+  const [manualOrderAvailable, setManualOrderAvailable] = useState(true);
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
-  const loadPeople = async () => {
-    const { data, error } = await supabase
+  const loadPeopleRows = async () => {
+    const ordered = await supabase
+      .from('people')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('order_position', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true });
+
+    if (!ordered.error) {
+      setManualOrderAvailable(true);
+      return ordered.data || [];
+    }
+
+    const fallback = await supabase
       .from('people')
       .select('*')
       .eq('project_id', projectId)
       .order('created_at', { ascending: true });
 
-    if (!error) {
-      const rows = data || [];
+    setManualOrderAvailable(false);
+    if (fallback.error) throw fallback.error;
+    return fallback.data || [];
+  };
+
+  const loadPeople = async () => {
+    try {
+      const rows = await loadPeopleRows();
       setPeople(rows);
 
       const userIds = Array.from(new Set(rows.map(person => person.user_id).filter(Boolean)));
@@ -57,6 +179,9 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
       } else {
         setLinkedProfiles({});
       }
+    } catch {
+      setPeople([]);
+      setLinkedProfiles({});
     }
   };
 
@@ -66,12 +191,31 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
 
   const addPerson = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabase.from('people').insert({
+    const nextOrderPosition = people.length > 0
+      ? Math.max(...people.map(person => Number(person.order_position ?? -1))) + 1
+      : 0;
+
+    const payload = {
       name: personForm.name,
       role: personForm.role,
       color: personForm.color,
-      project_id: projectId
-    });
+      project_id: projectId,
+      ...(manualOrderAvailable ? { order_position: nextOrderPosition } : {}),
+    };
+
+    let { error } = await supabase.from('people').insert(payload as any);
+
+    if (error && manualOrderAvailable) {
+      const fallbackPayload = {
+        name: personForm.name,
+        role: personForm.role,
+        color: personForm.color,
+        project_id: projectId,
+      };
+      const fallbackResult = await supabase.from('people').insert(fallbackPayload);
+      error = fallbackResult.error;
+      if (!error) setManualOrderAvailable(false);
+    }
 
     if (error) {
       return toast({
@@ -110,10 +254,54 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
     });
   };
 
-  const openEdit = (person: any) => {
+  const openEdit = (person: TeamPerson) => {
     setEditingPerson(person);
     setEditForm({ name: person.name, role: person.role, color: person.color });
     setEditPersonOpen(true);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    if (!manualOrderAvailable) {
+      toast({
+        title: 'Orden no disponible',
+        description: 'Falta aplicar la migración de orden del equipo en Supabase.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const oldIndex = people.findIndex(person => person.id === active.id);
+    const newIndex = people.findIndex(person => person.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const previousPeople = people;
+    const reorderedPeople = arrayMove(people, oldIndex, newIndex).map((person, index) => ({
+      ...person,
+      order_position: index,
+    }));
+
+    setPeople(reorderedPeople);
+
+    const updates = reorderedPeople.map((person, index) =>
+      supabase
+        .from('people')
+        .update({ order_position: index } as any)
+        .eq('id', person.id),
+    );
+    const results = await Promise.all(updates);
+    const failed = results.find(result => result.error);
+
+    if (failed) {
+      setPeople(previousPeople);
+      toast({
+        title: 'Error',
+        description: 'No se pudo guardar el orden del equipo',
+        variant: 'destructive'
+      });
+    }
   };
 
   useEffect(() => {
@@ -158,56 +346,38 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
               <p className="text-muted-foreground">No hay personas en el equipo</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Rol</TableHead>
-                  <TableHead>Usuario</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Color</TableHead>
-                  <TableHead className="w-[100px]">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {people.map((person) => (
-                  <TableRow key={person.id}>
-                    <TableCell className="font-medium">{person.name}</TableCell>
-                    <TableCell>{person.role}</TableCell>
-                    <TableCell>{person.user_id ? (linkedProfiles[person.user_id]?.full_name || 'Vinculado') : 'Sin vincular'}</TableCell>
-                    <TableCell>{person.user_id ? (linkedProfiles[person.user_id]?.email || 'Sin email') : '—'}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="w-4 h-4 rounded border" 
-                          style={{ backgroundColor: person.color }}
-                        />
-                        <span className="text-sm font-mono">{person.color}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEdit(person)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deletePerson(person.id)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-8"></TableHead>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Rol</TableHead>
+                    <TableHead>Usuario</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Color</TableHead>
+                    <TableHead className="w-[100px]">Acciones</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  <SortableContext items={people.map(person => person.id)} strategy={verticalListSortingStrategy}>
+                    {people.map((person) => (
+                      <SortablePersonRow
+                        key={person.id}
+                        person={person}
+                        linkedProfile={person.user_id ? linkedProfiles[person.user_id] : undefined}
+                        onEdit={openEdit}
+                        onDelete={deletePerson}
+                      />
+                    ))}
+                  </SortableContext>
+                </TableBody>
+              </Table>
+            </DndContext>
           )}
         </CardContent>
       </Card>

@@ -286,20 +286,44 @@ export default function DailiesModule({
     personId: '',
     date: '',
   });
+  const loadPeopleRows = async () => {
+    const ordered = await supabase
+      .from('people')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('order_position', {
+        ascending: true,
+        nullsFirst: false
+      })
+      .order('created_at', {
+        ascending: true
+      });
+
+    if (!ordered.error) return ordered.data || [];
+
+    const fallback = await supabase
+      .from('people')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', {
+        ascending: true
+      });
+
+    if (fallback.error) throw fallback.error;
+    return fallback.data || [];
+  };
   const loadBaseData = async () => {
     const [{
-      data: ppl
-    }, {
       data: incs
     }, {
       data: vacs
-    }] = await Promise.all([supabase.from('people').select('*').eq('project_id', projectId).order('created_at', {
-      ascending: true
-    }), supabase.from('incidents').select('id,name,description,incident_number,status,category,epic,additional_comments,environment,status_environment').eq('project_id', projectId).order('incident_number', {
+    }, {
+      value: ppl
+    }] = await Promise.all([supabase.from('incidents').select('id,name,description,incident_number,status,category,epic,additional_comments,environment,status_environment').eq('project_id', projectId).order('incident_number', {
       ascending: false
     }), supabase.from('vacations').select('*').eq('project_id', projectId).order('start_date', {
       ascending: true
-    })]);
+    }), loadPeopleRows().then(value => ({ value }))]);
     setPeople(ppl || []);
     setIncidents(incs || []);
     setVacations(vacs || []);
@@ -2081,7 +2105,22 @@ export default function DailiesModule({
       });
     });
 
-    return Array.from(counts.values()).sort((a, b) => a.name.localeCompare(b.name));
+    const orderedPeopleCounts = people
+      .map((person) => counts.get(person.id))
+      .filter(Boolean) as Array<{
+        id: string;
+        name: string;
+        color?: string;
+        pending: number;
+        inProgress: number;
+        resolved: number;
+        blocked: number;
+      }>;
+
+    const orderedPeopleIds = new Set(people.map((person) => person.id));
+    const remainingCounts = Array.from(counts.values()).filter((item) => !orderedPeopleIds.has(item.id));
+
+    return [...orderedPeopleCounts, ...remainingCounts];
   }, [people, activeDailyTasks]);
 
   const taskCreationIncidents = useMemo(() => {
