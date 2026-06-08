@@ -87,6 +87,8 @@ const getTaskCompositeStatusLabel = (status: TaskStatus | string, environment?: 
   getStatusLogLabel(getStatusLogValue(status, environment));
 
 const isResolvedTask = (status: TaskStatus) => status === 'resolved' || status === 'resolved_yesterday';
+const isResolvedInPro = (status: TaskStatus | string | null | undefined, environment?: string | null) =>
+  isResolvedTask(status as TaskStatus) && (normalizeEnvironment(environment) || 'PRO') === 'PRO';
 const normalizeTaskEnvironment = (status: TaskStatus, environment: TaskEnvironment | '') => {
   return isResolvedTask(status) ? environment : '';
 };
@@ -525,12 +527,18 @@ export default function DailiesModule({
           const desiredIncidentAssignments = new Map<string, any>();
           (homeAssignments || []).forEach((assignment: any) => {
             const incident = incidentsById.get(assignment.incident_id);
+            const taskStatus = mapIncidentStatusToTaskStatus(assignment.status);
+            const taskEnvironment = taskStatus === 'resolved'
+              ? normalizeEnvironment(assignment.status_environment) || 'PRO'
+              : null;
             if (incident && teamPersonIds.has(assignment.assigned_to)) {
+              if (isResolvedInPro(taskStatus, taskEnvironment)) return;
+
               desiredIncidentAssignments.set(`${assignment.incident_id}:${assignment.assigned_to}`, {
                 incident,
                 personId: assignment.assigned_to,
                 status: assignment.status,
-                status_environment: assignment.status_environment,
+                status_environment: taskEnvironment,
               });
             }
           });
@@ -1334,7 +1342,7 @@ export default function DailiesModule({
       const syncedTasksWithOrder = await syncLinkedTaskStatuses(tasksWithOrder);
       
       setLastDayTasks(syncedTasksWithOrder);
-      setSelectedTasksForPersist(syncedTasksWithOrder.filter((t: any) => !isResolvedTask(t.status as TaskStatus)).map((t: any) => t.id));
+      setSelectedTasksForPersist(syncedTasksWithOrder.filter((t: any) => !isResolvedInPro(t.status, t.status_environment)).map((t: any) => t.id));
       setPersistSourceDate(sourceDaily.date);
       setPersistModalOpen(true);
     } catch (e) {
@@ -1377,7 +1385,7 @@ export default function DailiesModule({
       // Sort selected tasks by their original order before assigning new positions
       const persistableSelectedTaskIds = selectedTasksForPersist.filter(taskId => {
         const task = lastDayTasks.find((t: any) => t.id === taskId);
-        return task && !isResolvedTask(task.status as TaskStatus);
+        return task && !isResolvedInPro(task.status, task.status_environment);
       });
 
       const tasksWithOriginalOrder = persistableSelectedTaskIds
@@ -3263,20 +3271,34 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
 
       {/* Modal de persistir tareas */}
       <Dialog open={persistModalOpen} onOpenChange={setPersistModalOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
+        <DialogContent className="max-h-[88vh] max-w-2xl overflow-hidden p-0">
+          <DialogHeader className="border-b px-6 pb-4 pt-6">
             <DialogTitle>Persistir tareas</DialogTitle>
-            <DialogDescription>Selecciona las tareas del último día que quieres persistir</DialogDescription>
+            <DialogDescription>
+              Selecciona las tareas de {persistSourceDate || 'el día anterior'} que quieres llevar al día actual.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <ScrollArea className="h-[400px] pr-4">
-              <div className="space-y-3">
+          <div className="grid min-h-0 gap-4 px-6 pb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">
+                {selectedTasksForPersist.length} de {lastDayTasks.filter((task: any) => !isResolvedInPro(task.status, task.status_environment)).length} tareas seleccionadas
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Las tareas Resuelta - En PRO quedan fuera de la persistencia.
+              </span>
+            </div>
+
+            <ScrollArea className="h-[min(52vh,420px)] pr-3">
+              <div className="space-y-2">
                 {lastDayTasks.map(task => {
                 const person = people.find(p => p.id === (task.person_id || task.assigned_to));
                 const isSelected = selectedTasksForPersist.includes(task.id);
-                const isPersistable = !isResolvedTask(task.status as TaskStatus);
-                return <div key={task.id} className="flex items-start gap-3 p-3 border rounded">
-                      <Checkbox checked={isSelected} disabled={!isPersistable} onCheckedChange={checked => {
+                const isPersistable = !isResolvedInPro(task.status, task.status_environment);
+                return <div key={task.id} className={cn(
+                    "flex items-start gap-3 rounded-md border p-3 transition-colors",
+                    isPersistable ? "bg-background" : "bg-muted/40 opacity-75"
+                  )}>
+                      <Checkbox className="mt-1" checked={isSelected} disabled={!isPersistable} onCheckedChange={checked => {
                     if (checked) {
                       setSelectedTasksForPersist(prev => [...prev, task.id]);
                     } else {
@@ -3284,21 +3306,22 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                     }
                   }} />
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium">{task.title}</div>
-                        {task.description && !String(task.description).includes(NOTE_MARKER) && <div className="text-sm text-muted-foreground mt-1">{task.description}</div>}
-                        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                        <div className="break-words text-sm font-medium leading-5">{task.title}</div>
+                        {task.description && !String(task.description).includes(NOTE_MARKER) && <div className="mt-1 line-clamp-2 break-words text-sm text-muted-foreground">{task.description}</div>}
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <Badge 
                             variant="outline"
                             className={getTaskStatusTone(task.status as TaskStatus)}
                           >
 	            {getTaskCompositeStatusLabel(task.status as TaskStatus, task.status_environment)}
                           </Badge>
-                          {person && <div className="flex items-center gap-1">
-                              <span className="h-2 w-2 rounded" style={{
+                          {person && <div className="flex min-w-0 items-center gap-1">
+                              <span className="h-2 w-2 shrink-0 rounded" style={{
                           backgroundColor: person.color
                         }} />
-                              {person.name}
+                              <span className="truncate">{person.name}</span>
                             </div>}
+                          {!isPersistable && <span>No persistible</span>}
                         </div>
                       </div>
                     </div>;
@@ -3309,20 +3332,22 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
               </div>
             </ScrollArea>
             
-            <div className="flex gap-2 pt-4 border-t">
-              <Button variant="outline" onClick={() => setSelectedTasksForPersist(lastDayTasks.filter(t => !isResolvedTask(t.status as TaskStatus)).map(t => t.id))} disabled={lastDayTasks.length === 0}>
+            <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center">
+              <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setSelectedTasksForPersist(lastDayTasks.filter(t => !isResolvedInPro(t.status, t.status_environment)).map(t => t.id))} disabled={lastDayTasks.length === 0}>
                 Seleccionar todas
               </Button>
               <Button variant="outline" onClick={() => setSelectedTasksForPersist(prev => prev.filter(taskId => {
                 const task = lastDayTasks.find(t => t.id === taskId);
-                return task ? !isResolvedTask(task.status as TaskStatus) : true;
+                return task ? !isResolvedInPro(task.status, task.status_environment) : true;
               }))}>
-                Deseleccionar resueltas
+                Limpiar PRO
               </Button>
               <Button variant="outline" onClick={() => setSelectedTasksForPersist([])}>
                 Deseleccionar todas
               </Button>
-              <Button onClick={persistSelectedTasks} disabled={selectedTasksForPersist.length === 0} className="ml-auto">
+              </div>
+              <Button onClick={persistSelectedTasks} disabled={selectedTasksForPersist.length === 0} className="w-full sm:ml-auto sm:w-auto">
                 Persistir {selectedTasksForPersist.length} tareas
               </Button>
             </div>
