@@ -22,6 +22,7 @@ import ContactsModule from '@/components/ContactsModule';
 import RepositoryModule from '@/components/RepositoryModule';
 // import HomeModule from '@/components/HomeModule';
 import InternalConfigModule from '@/components/InternalConfigModule';
+import ConfigurationModule from '@/components/ConfigurationModule';
 import UsersModule from '@/components/UsersModule';
 import UserProfileModule from '@/components/UserProfileModule';
 import { AppSidebar } from '@/components/AppSidebar';
@@ -280,6 +281,9 @@ const Dashboard = () => {
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/config">Seguimiento</a>
                   </Button>
+                  <Button asChild variant="ghost" className="justify-start">
+                    <a href="/imputaciones">Imputaciones</a>
+                  </Button>
                   {currentProject && (
                     <Button variant="ghost" className="justify-start" onClick={() => setCompareBacklogOpen(true)}>
                       Comparar con backlog
@@ -463,6 +467,8 @@ const Dashboard = () => {
                     <Route path="contacts" element={<ContactsModule projectId={currentProject.id} />} />
                     <Route path="links" element={<InterestingLinksModule projectId={currentProject.id} />} />
                     <Route path="config" element={<InternalConfigModule projectId={currentProject.id} dailiesPassword={(currentProject as any).dailies_password || 'default'} />} />
+                    <Route path="imputaciones" element={<ConfigurationModule projectId={currentProject.id} />} />
+                    <Route path="settings" element={<Navigate to="/imputaciones" replace />} />
                     <Route path="users" element={<UsersModule projectId={currentProject.id} />} />
                   </Routes>
                 </div>

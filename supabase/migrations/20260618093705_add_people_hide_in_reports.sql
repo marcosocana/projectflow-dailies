@@ -1,0 +1,2 @@
+ALTER TABLE public.people
+ADD COLUMN IF NOT EXISTS hide_in_reports BOOLEAN NOT NULL DEFAULT false;

@@ -20,6 +20,7 @@ export type Database = {
           description: string | null
           email: string | null
           id: string
+          hide_in_reports: boolean
           name: string
           phone: string | null
           project_id: string
@@ -31,6 +32,7 @@ export type Database = {
           description?: string | null
           email?: string | null
           id?: string
+          hide_in_reports?: boolean
           name: string
           phone?: string | null
           project_id: string
@@ -42,6 +44,7 @@ export type Database = {
           description?: string | null
           email?: string | null
           id?: string
+          hide_in_reports?: boolean
           name?: string
           phone?: string | null
           project_id?: string
@@ -352,12 +355,99 @@ export type Database = {
         }
         Relationships: []
       }
+      project_time_entries: {
+        Row: {
+          created_at: string
+          entry_date: string
+          hours: number
+          id: string
+          is_holiday: boolean
+          person_id: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          entry_date: string
+          hours: number
+          id?: string
+          is_holiday?: boolean
+          person_id: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          entry_date?: string
+          hours?: number
+          id?: string
+          is_holiday?: boolean
+          person_id?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_time_entries_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_time_month_locks: {
+        Row: {
+          created_at: string
+          id: string
+          locked: boolean
+          month: number
+          project_id: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          locked?: boolean
+          month: number
+          project_id: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          locked?: boolean
+          month?: number
+          project_id?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_time_month_locks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       people: {
         Row: {
           color: string
           created_at: string
           id: string
           name: string
+          order_position: number | null
           project_id: string
           role: string
           user_id: string | null
@@ -368,6 +458,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          order_position?: number | null
           project_id: string
           role: string
           user_id?: string | null
@@ -378,6 +469,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          order_position?: number | null
           project_id?: string
           role?: string
           user_id?: string | null
@@ -386,6 +478,57 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "people_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      person_billing_rates: {
+        Row: {
+          cost_rate: number | null
+          created_at: string
+          id: string
+          month: number | null
+          person_id: string
+          project_id: string
+          sale_rate: number | null
+          updated_at: string
+          year: number | null
+        }
+        Insert: {
+          cost_rate?: number | null
+          created_at?: string
+          id?: string
+          month?: number | null
+          person_id: string
+          project_id: string
+          sale_rate?: number | null
+          updated_at?: string
+          year?: number | null
+        }
+        Update: {
+          cost_rate?: number | null
+          created_at?: string
+          id?: string
+          month?: number | null
+          person_id?: string
+          project_id?: string
+          sale_rate?: number | null
+          updated_at?: string
+          year?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "person_billing_rates_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "person_billing_rates_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"

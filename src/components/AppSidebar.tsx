@@ -24,12 +24,21 @@ import {
   Link,
   Users,
   Archive,
-  UserCog
+  User,
+  Clock3,
+  type LucideProps
 } from 'lucide-react';
 
 interface AppSidebarProps {
   currentProject: any;
 }
+
+const UserClockIcon = ({ className }: LucideProps) => (
+  <span className={`relative inline-flex ${className || ''}`} aria-hidden="true">
+    <User className="h-full w-full" />
+    <Clock3 className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-white" />
+  </span>
+);
 
 const menuItems = [
   { 
@@ -39,10 +48,16 @@ const menuItems = [
     description: "Gestión de incidencias y mejoras" 
   },
   { 
-    title: "", 
+    title: "Seguimiento", 
     url: "config", 
     icon: BarChart3,
-    description: "Seguimiento diario y gestión del equipo" 
+    description: "Seguimiento diario" 
+  },
+  {
+    title: "Imputaciones",
+    url: "imputaciones",
+    icon: UserClockIcon,
+    description: "Horas, equipo y costes"
   },
   { 
     title: "Actividad", 

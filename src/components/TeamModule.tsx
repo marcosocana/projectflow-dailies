@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { GripVertical, Trash2, UserPlus, Pencil } from 'lucide-react';
+import { Eye, EyeOff, GripVertical, Trash2, UserPlus, Pencil } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -38,16 +39,22 @@ interface TeamPerson {
   color: string;
   user_id?: string | null;
   order_position?: number | null;
+  hide_in_reports?: boolean | null;
 }
 
 interface SortablePersonRowProps {
   person: TeamPerson;
   linkedProfile?: { full_name: string; email: string | null };
+  rates?: { costRate: string; saleRate: string };
+  savingRateKeys: Set<string>;
   onEdit: (person: TeamPerson) => void;
   onDelete: (id: string) => void;
+  onRateChange: (personId: string, field: 'costRate' | 'saleRate', value: string) => void;
+  onRateBlur: (personId: string, field: 'costRate' | 'saleRate', value: string) => void;
+  onToggleHidden: (person: TeamPerson) => void;
 }
 
-const SortablePersonRow = ({ person, linkedProfile, onEdit, onDelete }: SortablePersonRowProps) => {
+const SortablePersonRow = ({ person, linkedProfile, rates, savingRateKeys, onEdit, onDelete, onRateChange, onRateBlur, onToggleHidden }: SortablePersonRowProps) => {
   const {
     attributes,
     listeners,
@@ -64,7 +71,7 @@ const SortablePersonRow = ({ person, linkedProfile, onEdit, onDelete }: Sortable
   };
 
   return (
-    <TableRow ref={setNodeRef} style={style} className={isDragging ? 'relative z-50 bg-muted/50' : undefined}>
+    <TableRow ref={setNodeRef} style={style} className={isDragging ? 'relative z-50 bg-muted/50' : person.hide_in_reports ? 'bg-muted/40 opacity-70' : undefined}>
       <TableCell className="w-8">
         <button
           type="button"
@@ -90,6 +97,32 @@ const SortablePersonRow = ({ person, linkedProfile, onEdit, onDelete }: Sortable
         </div>
       </TableCell>
       <TableCell>
+        <Input
+          type="number"
+          min="0"
+          step="0.01"
+          value={rates?.costRate || ''}
+          disabled={savingRateKeys.has(`${person.id}:costRate`)}
+          onChange={event => onRateChange(person.id, 'costRate', event.target.value)}
+          onBlur={event => onRateBlur(person.id, 'costRate', event.target.value)}
+          className="h-8 w-24"
+          placeholder="0"
+        />
+      </TableCell>
+      <TableCell>
+        <Input
+          type="number"
+          min="0"
+          step="0.01"
+          value={rates?.saleRate || ''}
+          disabled={savingRateKeys.has(`${person.id}:saleRate`)}
+          onChange={event => onRateChange(person.id, 'saleRate', event.target.value)}
+          onBlur={event => onRateBlur(person.id, 'saleRate', event.target.value)}
+          className="h-8 w-24"
+          placeholder="0"
+        />
+      </TableCell>
+      <TableCell>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -97,6 +130,14 @@ const SortablePersonRow = ({ person, linkedProfile, onEdit, onDelete }: Sortable
             onClick={() => onEdit(person)}
           >
             <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onToggleHidden(person)}
+            title={person.hide_in_reports ? 'Mostrar en imputaciones y costes' : 'Ocultar en imputaciones y costes'}
+          >
+            {person.hide_in_reports ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
           </Button>
           <Button
             variant="ghost"
@@ -114,8 +155,14 @@ const SortablePersonRow = ({ person, linkedProfile, onEdit, onDelete }: Sortable
 
 export default function TeamModule({ projectId }: TeamModuleProps) {
   const { toast } = useToast();
+  const now = new Date();
+  const activeYear = now.getFullYear();
+  const activeMonth = now.getMonth() + 1;
   const [people, setPeople] = useState<TeamPerson[]>([]);
+  const [showHidden, setShowHidden] = useState(false);
   const [linkedProfiles, setLinkedProfiles] = useState<Record<string, { full_name: string; email: string | null }>>({});
+  const [ratesByPerson, setRatesByPerson] = useState<Record<string, { costRate: string; saleRate: string }>>({});
+  const [savingRateKeys, setSavingRateKeys] = useState<Set<string>>(new Set());
   const [createPersonOpen, setCreatePersonOpen] = useState(false);
   const [personForm, setPersonForm] = useState({
     name: '',
@@ -163,6 +210,7 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
     try {
       const rows = await loadPeopleRows();
       setPeople(rows);
+      await loadRates(rows.map(person => person.id));
 
       const userIds = Array.from(new Set(rows.map(person => person.user_id).filter(Boolean)));
       if (userIds.length > 0) {
@@ -182,6 +230,113 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
     } catch {
       setPeople([]);
       setLinkedProfiles({});
+    }
+  };
+
+  const loadRates = async (personIds: string[]) => {
+    if (personIds.length === 0) {
+      setRatesByPerson({});
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('person_billing_rates')
+      .select('person_id, year, month, cost_rate, sale_rate')
+      .eq('project_id', projectId)
+      .in('person_id', personIds);
+
+    if (error) return;
+
+    const latest = (data || []).reduce((acc, rate) => {
+      const isRelevant = rate.year === null ||
+        Number(rate.year) < activeYear ||
+        (Number(rate.year) === activeYear && Number(rate.month) <= activeMonth);
+      if (!isRelevant) return acc;
+
+      const key = rate.year === null ? -1 : Number(rate.year) * 100 + Number(rate.month);
+      if (key < (acc[rate.person_id]?.key ?? -2)) return acc;
+
+      acc[rate.person_id] = {
+        key,
+        value: {
+          costRate: rate.cost_rate === null ? '' : String(Number(rate.cost_rate)),
+          saleRate: rate.sale_rate === null ? '' : String(Number(rate.sale_rate)),
+        },
+      };
+      return acc;
+    }, {} as Record<string, { key: number; value: { costRate: string; saleRate: string } }>);
+
+    setRatesByPerson(Object.fromEntries(Object.entries(latest).map(([personId, entry]) => [personId, entry.value])));
+  };
+
+  const updateRate = (personId: string, field: 'costRate' | 'saleRate', value: string) => {
+    setRatesByPerson(prev => ({
+      ...prev,
+      [personId]: {
+        costRate: prev[personId]?.costRate || '',
+        saleRate: prev[personId]?.saleRate || '',
+        [field]: value,
+      },
+    }));
+  };
+
+  const saveRate = async (personId: string, field: 'costRate' | 'saleRate', value: string) => {
+    const saveKey = `${personId}:${field}`;
+    const current = ratesByPerson[personId] || { costRate: '', saleRate: '' };
+    const next = { ...current, [field]: value.trim() };
+    const costRate = next.costRate === '' ? null : Number(next.costRate);
+    const saleRate = next.saleRate === '' ? null : Number(next.saleRate);
+
+    if (
+      (costRate !== null && (!Number.isFinite(costRate) || costRate < 0)) ||
+      (saleRate !== null && (!Number.isFinite(saleRate) || saleRate < 0))
+    ) {
+      toast({ title: 'Error', description: 'La tasa debe ser un número positivo', variant: 'destructive' });
+      return;
+    }
+
+    setSavingRateKeys(prev => new Set(prev).add(saveKey));
+    try {
+      const { data: existingRows, error: lookupError } = await supabase
+        .from('person_billing_rates')
+        .select('id')
+        .eq('project_id', projectId)
+        .eq('person_id', personId)
+        .eq('year', activeYear)
+        .eq('month', activeMonth)
+        .limit(1);
+
+      if (lookupError) throw lookupError;
+
+      const existingId = existingRows?.[0]?.id;
+      if (existingId) {
+        const { error } = await supabase
+          .from('person_billing_rates')
+          .update({ cost_rate: costRate, sale_rate: saleRate })
+          .eq('id', existingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('person_billing_rates')
+          .insert({
+            project_id: projectId,
+            person_id: personId,
+            year: activeYear,
+            month: activeMonth,
+            cost_rate: costRate,
+            sale_rate: saleRate,
+          });
+        if (error) throw error;
+      }
+    } catch (error) {
+      console.error('Error saving rate:', error);
+      toast({ title: 'Error', description: 'No se pudo guardar la tasa', variant: 'destructive' });
+    } finally {
+      setSavingRateKeys(prev => {
+        const nextSet = new Set(prev);
+        nextSet.delete(saveKey);
+        return nextSet;
+      });
     }
   };
 
@@ -252,6 +407,25 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
       title: 'Éxito',
       description: 'Persona eliminada del equipo'
     });
+  };
+
+  const toggleHidden = async (person: TeamPerson) => {
+    const nextHidden = !person.hide_in_reports;
+    setPeople(prev => prev.map(row => row.id === person.id ? { ...row, hide_in_reports: nextHidden } : row));
+
+    const { error } = await supabase
+      .from('people')
+      .update({ hide_in_reports: nextHidden } as any)
+      .eq('id', person.id);
+
+    if (error) {
+      setPeople(prev => prev.map(row => row.id === person.id ? { ...row, hide_in_reports: person.hide_in_reports } : row));
+      toast({
+        title: 'Error',
+        description: 'No se pudo actualizar la visibilidad',
+        variant: 'destructive'
+      });
+    }
   };
 
   const openEdit = (person: TeamPerson) => {
@@ -326,22 +500,32 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
     return () => clearTimeout(handler);
   }, [editForm, editingPerson?.id, editPersonOpen]);
 
+  const visiblePeople = showHidden ? people : people.filter(person => !person.hide_in_reports);
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <CardTitle>Gestión del Equipo</CardTitle>
             </div>
-            <Button onClick={() => setCreatePersonOpen(true)}>
-              <UserPlus className="h-4 w-4 mr-2" />
-              Añadir persona
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex h-10 items-center gap-2 rounded-md border px-3">
+                <Switch id="show-hidden-team" checked={showHidden} onCheckedChange={setShowHidden} />
+                <Label htmlFor="show-hidden-team" className="cursor-pointer whitespace-nowrap">
+                  Ver ocultos
+                </Label>
+              </div>
+              <Button onClick={() => setCreatePersonOpen(true)}>
+                <UserPlus className="h-4 w-4 mr-2" />
+                Añadir persona
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          {people.length === 0 ? (
+          {visiblePeople.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground">No hay personas en el equipo</p>
             </div>
@@ -360,18 +544,25 @@ export default function TeamModule({ projectId }: TeamModuleProps) {
                     <TableHead>Usuario</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Color</TableHead>
+                    <TableHead>Tasa coste</TableHead>
+                    <TableHead>Tasa venta</TableHead>
                     <TableHead className="w-[100px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <SortableContext items={people.map(person => person.id)} strategy={verticalListSortingStrategy}>
-                    {people.map((person) => (
+                  <SortableContext items={visiblePeople.map(person => person.id)} strategy={verticalListSortingStrategy}>
+                    {visiblePeople.map((person) => (
                       <SortablePersonRow
                         key={person.id}
                         person={person}
                         linkedProfile={person.user_id ? linkedProfiles[person.user_id] : undefined}
+                        rates={ratesByPerson[person.id]}
+                        savingRateKeys={savingRateKeys}
                         onEdit={openEdit}
                         onDelete={deletePerson}
+                        onRateChange={updateRate}
+                        onRateBlur={saveRate}
+                        onToggleHidden={toggleHidden}
                       />
                     ))}
                   </SortableContext>
