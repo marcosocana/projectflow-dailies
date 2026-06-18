@@ -28,7 +28,11 @@ interface TimeEntry {
   entry_date: string;
   hours: number;
   is_holiday: boolean;
+  absence_type: AbsenceType | null;
 }
+
+type AbsenceType = 'holiday' | 'vacation' | 'sick_leave';
+type AbsenceCode = 'X' | 'V' | 'B';
 
 const WEEKDAY_LABELS = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
 const MONTH_LABELS = [
@@ -48,6 +52,23 @@ const MONTH_LABELS = [
 
 const formatDateKey = (year: number, month: number, day: number) =>
   `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+const ABSENCE_CODE_TO_TYPE: Record<AbsenceCode, AbsenceType> = {
+  X: 'holiday',
+  V: 'vacation',
+  B: 'sick_leave',
+};
+
+const ABSENCE_TYPE_TO_CODE: Record<AbsenceType, AbsenceCode> = {
+  holiday: 'X',
+  vacation: 'V',
+  sick_leave: 'B',
+};
+
+const getAbsenceCode = (value: string): AbsenceCode | null => {
+  const normalized = value.trim().toUpperCase();
+  return normalized === 'X' || normalized === 'V' || normalized === 'B' ? normalized : null;
+};
 
 export default function TimeTrackingModule({ projectId }: TimeTrackingModuleProps) {
   const { toast } = useToast();
@@ -114,7 +135,7 @@ export default function TimeTrackingModule({ projectId }: TimeTrackingModuleProp
     const end = formatDateKey(year, month, days.length);
     const { data, error } = await supabase
       .from('project_time_entries')
-      .select('id, person_id, entry_date, hours, is_holiday')
+      .select('id, person_id, entry_date, hours, is_holiday, absence_type')
       .eq('project_id', projectId)
       .gte('entry_date', start)
       .lte('entry_date', end);
@@ -123,7 +144,11 @@ export default function TimeTrackingModule({ projectId }: TimeTrackingModuleProp
 
     const nextEntries = (data || []).reduce((acc, entry) => {
       const row = entry as TimeEntry;
-      acc[`${row.person_id}:${row.entry_date}`] = row.is_holiday ? 'X' : String(Number(row.hours));
+      acc[`${row.person_id}:${row.entry_date}`] = row.absence_type
+        ? ABSENCE_TYPE_TO_CODE[row.absence_type]
+        : row.is_holiday
+          ? 'X'
+          : String(Number(row.hours));
       return acc;
     }, {} as Record<string, string>);
 
@@ -178,8 +203,9 @@ export default function TimeTrackingModule({ projectId }: TimeTrackingModuleProp
         return;
       }
 
-      const isHoliday = trimmed.toUpperCase() === 'X';
-      const hours = isHoliday ? 0 : Number(trimmed);
+      const absenceCode = getAbsenceCode(trimmed);
+      const absenceType = absenceCode ? ABSENCE_CODE_TO_TYPE[absenceCode] : null;
+      const hours = absenceType ? 0 : Number(trimmed);
       if (!Number.isFinite(hours) || hours < 0 || hours > 24) {
         throw new Error('invalid-hours');
       }
@@ -191,7 +217,8 @@ export default function TimeTrackingModule({ projectId }: TimeTrackingModuleProp
           person_id: personId,
           entry_date: dateKey,
           hours,
-          is_holiday: isHoliday,
+          is_holiday: absenceType === 'holiday',
+          absence_type: absenceType,
         }, { onConflict: 'project_id,person_id,entry_date' });
 
       if (error) throw error;
@@ -212,11 +239,21 @@ export default function TimeTrackingModule({ projectId }: TimeTrackingModuleProp
   };
 
   const updateLocalEntry = (personId: string, dateKey: string, value: string) => {
-    if (!/^(x|X|\d{0,2}([.,]\d{0,2})?)?$/.test(value)) return;
+    if (!/^(x|X|v|V|b|B|\d{0,2}([.,]\d{0,2})?)?$/.test(value)) return;
     const entryKey = `${personId}:${dateKey}`;
-    const normalized = value.toUpperCase() === 'X' ? 'X' : value.replace(',', '.');
+    const absenceCode = getAbsenceCode(value);
+    const normalized = absenceCode ?? value.replace(',', '.');
     setEntries(prev => ({ ...prev, [entryKey]: normalized }));
   };
+
+  const getPersonTotalHours = (personId: string) =>
+    days.reduce((total, day) => {
+      const value = entries[`${personId}:${day.dateKey}`]?.trim() ?? '';
+      if (!value || getAbsenceCode(value)) return total;
+
+      const hours = Number(value);
+      return Number.isFinite(hours) ? total + hours : total;
+    }, 0);
 
   const fillPersonMonth = async (personId: string) => {
     if (editingDisabled) return;
@@ -242,6 +279,7 @@ export default function TimeTrackingModule({ projectId }: TimeTrackingModuleProp
         entry_date: day.dateKey,
         hours: day.weekDay === 5 ? 7 : 9,
         is_holiday: false,
+        absence_type: null,
       }));
 
       const { error } = await supabase
@@ -400,8 +438,12 @@ export default function TimeTrackingModule({ projectId }: TimeTrackingModuleProp
         </div>
       </CardHeader>
       <CardContent>
-        <div className="mb-3 rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Leyenda:</span> escribe <span className="font-mono font-semibold text-foreground">X</span> para marcar festivo. Equivale a 0 horas.
+        <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Leyenda:</span>
+          <span><span className="font-mono font-semibold text-muted-foreground">X</span> Festivo</span>
+          <span><span className="font-mono font-semibold text-black">V</span> Vacaciones</span>
+          <span><span className="font-mono font-semibold text-purple-700">B</span> Baja</span>
+          <span>Equivalen a 0 horas.</span>
         </div>
         {people.length === 0 ? (
           <div className="py-10 text-center text-muted-foreground">
@@ -424,12 +466,18 @@ export default function TimeTrackingModule({ projectId }: TimeTrackingModuleProp
                       <div className="text-[11px] font-normal text-muted-foreground">{day.label}</div>
                     </th>
                   ))}
+                  <th className="sticky right-0 z-20 min-w-[84px] border-l bg-muted px-3 py-2 text-center font-medium">
+                    Total
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {people.map(person => (
-                  <tr key={person.id} className="border-b last:border-b-0">
-                    <td className="sticky left-0 z-10 min-w-[220px] bg-background px-3 py-2">
+                {people.map(person => {
+                  const totalHours = getPersonTotalHours(person.id);
+
+                  return (
+                    <tr key={person.id} className="border-b last:border-b-0">
+                      <td className="sticky left-0 z-10 min-w-[220px] bg-background px-3 py-2">
                       <div className="flex items-center gap-2">
                         <span
                           className="h-3 w-3 rounded-full border"
@@ -464,16 +512,29 @@ export default function TimeTrackingModule({ projectId }: TimeTrackingModuleProp
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-                    </td>
-                    {days.map(day => {
+                      </td>
+                      {days.map(day => {
                       const entryKey = `${person.id}:${day.dateKey}`;
                       const value = entries[entryKey] ?? '';
                       const completed = value.trim() !== '';
-                      const isHoliday = value.trim().toUpperCase() === 'X';
+                      const absenceCode = getAbsenceCode(value);
+                      const isHoliday = absenceCode === 'X';
+                      const isVacation = absenceCode === 'V';
+                      const isSickLeave = absenceCode === 'B';
+                      const absenceCellClass = day.isWeekend || isHoliday ? 'bg-muted/70' : isVacation ? 'bg-black/10' : isSickLeave ? 'bg-purple-100' : '';
+                      const inputStateClass = day.isWeekend || isHoliday
+                        ? 'bg-muted text-muted-foreground'
+                        : isVacation
+                          ? 'border-black bg-black text-white'
+                          : isSickLeave
+                            ? 'border-purple-600 bg-purple-100 text-purple-800'
+                            : completed
+                              ? 'border-green-500 bg-green-50 text-green-700'
+                              : 'border-red-500 bg-red-50 text-red-700';
                       return (
                         <td
                           key={entryKey}
-                          className={`border-l p-1 ${day.isWeekend || isHoliday ? 'bg-muted/70' : ''}`}
+                          className={`border-l p-1 ${absenceCellClass}`}
                         >
                           <Input
                             type="text"
@@ -482,13 +543,17 @@ export default function TimeTrackingModule({ projectId }: TimeTrackingModuleProp
                             disabled={day.isWeekend || editingDisabled || savingKeys.has(entryKey)}
                             onChange={event => updateLocalEntry(person.id, day.dateKey, event.target.value)}
                             onBlur={event => saveEntry(person.id, day.dateKey, event.target.value)}
-                            className={`h-8 w-[52px] px-1 text-center text-xs ${day.isWeekend || isHoliday ? 'bg-muted text-muted-foreground' : completed ? 'border-green-500 bg-green-50 text-green-700' : 'border-red-500 bg-red-50 text-red-700'}`}
+                            className={`h-8 w-[52px] px-1 text-center text-xs ${inputStateClass}`}
                           />
                         </td>
                       );
-                    })}
-                  </tr>
-                ))}
+                      })}
+                      <td className="sticky right-0 z-10 border-l bg-background px-3 py-2 text-center font-semibold">
+                        {totalHours}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

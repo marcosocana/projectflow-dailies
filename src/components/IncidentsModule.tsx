@@ -1592,17 +1592,28 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
 
 
         {viewMode === 'list' ? <>
-            <Table>
+            <Table className="table-fixed min-w-[980px]">
+                <colgroup>
+                  <col className="w-12" />
+                  <col className="w-20" />
+                  <col />
+                  <col className="w-44" />
+                  <col className="w-20" />
+                  <col className="w-28" />
+                  <col className="w-32" />
+                  <col className="w-16" />
+                  <col className="w-24" />
+                </colgroup>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-12"></TableHead>
                     <TableHead className="w-20 cursor-pointer select-none" onClick={() => toggleSort('incident_number')}>
                       ID {sortKey === 'incident_number' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
-                    <TableHead className="w-80 cursor-pointer select-none" onClick={() => toggleSort('name')}>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('name')}>
                       Nombre {sortKey === 'name' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
-                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('epic')}>
+                    <TableHead className="w-44 cursor-pointer select-none" onClick={() => toggleSort('epic')}>
                       Épica {sortKey === 'epic' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
                     <TableHead className="w-20 cursor-pointer select-none" onClick={() => toggleSort('device')}>
@@ -1629,12 +1640,16 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                         <CategoryIcon category={getDisplayCategory(i)} />
                       </TableCell>
                       <TableCell className="font-mono w-20">{formatIncidentReference(i) ?? '—'}</TableCell>
-                      <TableCell className="font-medium w-80">
-                        <div className="max-w-[320px] break-words hyphens-auto leading-tight">
+                      <TableCell className="font-medium">
+                        <div className="break-words hyphens-auto leading-tight">
                           {i.name}
                         </div>
                       </TableCell>
-                      <TableCell>{i.epic || '-'}</TableCell>
+                      <TableCell className="w-44">
+                        <div className="truncate" title={i.epic || '-'}>
+                          {i.epic || '-'}
+                        </div>
+                      </TableCell>
                       <TableCell className="w-20">{i.device || '-'}</TableCell>
                       <TableCell>{new Date(i.occurred_at).toLocaleDateString('es-ES')}</TableCell>
                       <TableCell className="w-32"><StatusBadge status={i.status} environment={i.status_environment} /></TableCell>
