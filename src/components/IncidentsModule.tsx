@@ -338,7 +338,7 @@ export default function IncidentsModule({
   } | null>(null);
 
   // KPI filtering state
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -446,6 +446,30 @@ export default function IncidentsModule({
       window.removeEventListener('open-home-create-task-modal', handler);
     };
   }, []);
+
+  const clearKpiFilters = () => {
+    setStatusFilter([]);
+    setCategoryFilter('all');
+    setCurrentPage(1);
+  };
+
+  const selectCategoryTotal = (category: string) => {
+    setCategoryFilter(category);
+    setStatusFilter([]);
+    setCurrentPage(1);
+  };
+
+  const toggleCategoryStatus = (category: string, status: string) => {
+    setCategoryFilter(category);
+    setStatusFilter(prev => {
+      const current = categoryFilter === category ? prev : [];
+      return current.includes(status)
+        ? current.filter(value => value !== status)
+        : [...current, status];
+    });
+    setCurrentPage(1);
+  };
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return incidents.filter(i => {
@@ -453,7 +477,8 @@ export default function IncidentsModule({
       const matchesChannel = channelFilter === 'all' || i.device === channelFilter;
       const matchesEnvironment = environmentFilter === 'all' || i.environment === environmentFilter;
       const matchesEpic = epicFilter === 'all' || i.epic === epicFilter;
-      const matchesStatus = statusFilter === 'all' || i.status === statusFilter;
+      const normalizedStatus = i.status === 'in_qa' ? 'resolved' : i.status;
+      const matchesStatus = statusFilter.length === 0 || statusFilter.includes(normalizedStatus);
       const matchesCategory = categoryFilter === 'all' || getDisplayCategory(i) === categoryFilter;
       const matchesAssignee = assigneeFilter === 'all' || 
         (assigneeFilter === 'unassigned' && !i.assigned_to) ||
@@ -1377,13 +1402,42 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
   // Comentarios y autosave gestionados por IncidentDetailDialog
 
   // Detalle de incidencia gestionado por componente reutilizable
+  const kpiGridClass = compareBacklogOpen
+    ? 'grid grid-cols-2 gap-2 max-[900px]:grid-cols-1'
+    : 'grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(110px,0.45fr)_repeat(3,minmax(0,1fr))]';
+  const contentLayoutClass = compareBacklogOpen
+    ? 'flex flex-col items-stretch gap-4 2xl:flex-row 2xl:items-start'
+    : 'flex flex-col items-stretch gap-4 xl:flex-row xl:items-start';
 
   return <div className="space-y-6">
-    <div className="flex items-start gap-4">
+    <div className={contentLayoutClass}>
       <div className="min-w-0 flex-1 space-y-6">
       {/* KPIs arriba del todo */}
         {/* KPIs: bloques por tipo de tarea */}
-        <div className="grid gap-2 xl:grid-cols-3">
+        <div className={kpiGridClass}>
+          <Card>
+            <CardHeader className="p-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <ListChecks className="h-3 w-3" /> Global
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-2 pt-0">
+              {(() => {
+                const selected = categoryFilter === 'all' && statusFilter.length === 0;
+                return (
+                  <div
+                    className={`min-w-0 cursor-pointer select-none rounded-md px-1 py-1 text-center ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`}
+                    onClick={clearKpiFilters}
+                    role="button"
+                    aria-label="Filtrar global: Total"
+                  >
+                    <div className="text-lg font-bold leading-5">{incidents.length}</div>
+                    <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[9px] px-1 py-0.5">Total</Badge>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
         {[
           { category: 'incident', title: 'Incidencias', total: totalIncidents, counts: statusCounts },
           { category: 'improvement', title: 'Evolutivos', total: totalImprovements, counts: improvementStatusCounts },
@@ -1398,16 +1452,9 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
             <CardContent className="p-2 pt-0">
               <div className="flex items-stretch justify-between gap-1">
                 {(() => {
-                  const selected = statusFilter === 'all' && categoryFilter === group.category;
+                  const selected = statusFilter.length === 0 && categoryFilter === group.category;
                   return <div className={`min-w-0 flex-1 text-center cursor-pointer select-none rounded-md px-1 py-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                    if (statusFilter === 'all' && categoryFilter === group.category) {
-                      setStatusFilter('all');
-                      setCategoryFilter('all');
-                    } else {
-                      setStatusFilter('all');
-                      setCategoryFilter(group.category);
-                    }
-                    setCurrentPage(1);
+                    selectCategoryTotal(group.category);
                   }} role="button" aria-label={`Filtrar ${group.title}: Total`}>
                         <div className="text-lg font-bold leading-5">{group.total}</div>
                         <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[9px] px-1 py-0.5">Total</Badge>
@@ -1415,16 +1462,9 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                 })()}
 
                 {(statusOrder as readonly string[]).map((key) => {
-                  const selected = statusFilter === key && categoryFilter === group.category;
+                  const selected = categoryFilter === group.category && statusFilter.includes(key);
                   return <div key={key} className={`min-w-0 flex-1 text-center cursor-pointer select-none rounded-md px-1 py-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
-                    if (statusFilter === key && categoryFilter === group.category) {
-                      setStatusFilter('all');
-                      setCategoryFilter('all');
-                    } else {
-                      setStatusFilter(key);
-                      setCategoryFilter(group.category);
-                    }
-                    setCurrentPage(1);
+                    toggleCategoryStatus(group.category, key);
                   }} role="button" aria-label={`Filtrar ${group.title} por estado ${STATUS_LABELS[key] || key}`}>
                         <div className="text-lg font-bold leading-5">{group.counts[key] || 0}</div>
                         {compareBacklogOpen ? (
@@ -1704,7 +1744,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
       </div>
 
       {compareBacklogOpen && (
-        <Card className="w-full shrink-0 xl:w-[460px]">
+        <Card className="w-full shrink-0 2xl:w-[460px]">
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between gap-3">
               <div>
