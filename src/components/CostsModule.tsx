@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Download, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Download, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface CostsModuleProps {
@@ -27,6 +27,9 @@ interface CostTag {
   name: string;
   color: string;
 }
+
+type SortKey = 'person' | 'tag' | 'soldHours' | 'uncoveredHours' | 'totalHours' | 'cost' | 'sale' | 'performance' | 'margin';
+type SortDir = 'asc' | 'desc';
 
 const MONTH_LABELS = [
   'Enero',
@@ -56,6 +59,8 @@ const formatPercent = (value: number | null) =>
     ? '-'
     : `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1, minimumFractionDigits: 1 }).format(value)}%`;
 
+const round2 = (value: number) => Number(value.toFixed(2));
+
 const formatDateKey = (year: number, month: number, day: number) =>
   `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
@@ -79,6 +84,8 @@ export default function CostsModule({ projectId }: CostsModuleProps) {
   const [savingCatalogTagIds, setSavingCatalogTagIds] = useState<Set<string>>(new Set());
   const [creatingTag, setCreatingTag] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('person');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   const years = useMemo(() => {
     const current = now.getFullYear();
@@ -424,8 +431,57 @@ export default function CostsModule({ projectId }: CostsModuleProps) {
     const sale = soldHours * rates.saleRate;
     const performance = sale - cost;
     const margin = sale > 0 ? (1 - cost / sale) * 100 : null;
-    return { person, soldHours, uncoveredHours, totalHours, rates, cost, sale, performance, margin };
+    const tag = tagsByPerson[person.id] || '';
+    return { person, tag, soldHours, uncoveredHours, totalHours, rates, cost, sale, performance, margin };
   });
+
+  const getSortValue = (row: (typeof rows)[number], key: SortKey) => {
+    if (key === 'person') return row.person.name.toLocaleLowerCase('es-ES');
+    if (key === 'tag') return row.tag.toLocaleLowerCase('es-ES');
+    if (key === 'margin') return row.margin ?? Number.NEGATIVE_INFINITY;
+    return row[key];
+  };
+
+  const sortedRows = [...rows].sort((a, b) => {
+    const aValue = getSortValue(a, sortKey);
+    const bValue = getSortValue(b, sortKey);
+
+    if (typeof aValue === 'string' && typeof bValue === 'string') {
+      return sortDir === 'asc'
+        ? aValue.localeCompare(bValue, 'es-ES')
+        : bValue.localeCompare(aValue, 'es-ES');
+    }
+
+    return sortDir === 'asc'
+      ? Number(aValue) - Number(bValue)
+      : Number(bValue) - Number(aValue);
+  });
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDir('asc');
+  };
+
+  const SortableHeader = ({ sort, align = 'right', children }: { sort: SortKey; align?: 'left' | 'right'; children: ReactNode }) => (
+    <th
+      className={`cursor-pointer select-none px-3 py-2 font-medium ${align === 'left' ? 'text-left' : 'text-right'}`}
+      onClick={() => toggleSort(sort)}
+    >
+      <span className={`inline-flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
+        {children}
+        {sortKey === sort
+          ? sortDir === 'asc'
+            ? <ArrowUp className="h-3.5 w-3.5" />
+            : <ArrowDown className="h-3.5 w-3.5" />
+          : <ArrowUpDown className="h-3.5 w-3.5 opacity-50" />}
+      </span>
+    </th>
+  );
 
   const totals = rows.reduce((acc, row) => ({
     soldHours: acc.soldHours + row.soldHours,
@@ -439,15 +495,17 @@ export default function CostsModule({ projectId }: CostsModuleProps) {
   const totalMargin = totals.sale > 0 ? (1 - totals.cost / totals.sale) * 100 : null;
 
   const exportCosts = () => {
-    const exportRows = rows.map(row => ({
+    const exportRows = sortedRows.map(row => ({
       Persona: row.person.name,
-      Etiqueta: tagsByPerson[row.person.id] || '',
+      Etiqueta: row.tag,
       'Horas vendidas': row.soldHours,
       'Horas sin cubrir': row.uncoveredHours,
       'Total imputadas': row.totalHours,
-      Coste: row.cost,
-      Venta: row.sale,
-      Rendimiento: row.performance,
+      'Tasa coste': round2(row.rates.costRate),
+      'Tasa venta': round2(row.rates.saleRate),
+      Coste: round2(row.cost),
+      Venta: round2(row.sale),
+      Rendimiento: round2(row.performance),
       Margen: formatPercent(row.margin),
     }));
     exportRows.push({
@@ -455,13 +513,28 @@ export default function CostsModule({ projectId }: CostsModuleProps) {
       'Horas vendidas': totals.soldHours,
       'Horas sin cubrir': totals.uncoveredHours,
       'Total imputadas': totals.totalHours,
-      Coste: totals.cost,
-      Venta: totals.sale,
-      Rendimiento: totals.performance,
+      'Tasa coste': '',
+      'Tasa venta': '',
+      Coste: round2(totals.cost),
+      Venta: round2(totals.sale),
+      Rendimiento: round2(totals.performance),
       Margen: formatPercent(totalMargin),
     } as any);
 
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const numericHeaders = new Set(['Tasa coste', 'Tasa venta', 'Coste', 'Venta', 'Rendimiento']);
+    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:A1');
+    for (let column = range.s.c; column <= range.e.c; column += 1) {
+      const headerCell = worksheet[XLSX.utils.encode_cell({ r: range.s.r, c: column })];
+      if (!numericHeaders.has(String(headerCell?.v || ''))) continue;
+
+      for (let row = range.s.r + 1; row <= range.e.r; row += 1) {
+        const cell = worksheet[XLSX.utils.encode_cell({ r: row, c: column })];
+        if (cell && typeof cell.v === 'number') {
+          cell.z = '0.##';
+        }
+      }
+    }
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Costes');
     XLSX.writeFile(workbook, `costes-${year}-${String(month).padStart(2, '0')}.xlsx`);
@@ -528,19 +601,19 @@ export default function CostsModule({ projectId }: CostsModuleProps) {
             <table className="w-full min-w-[980px] border-collapse text-sm">
               <thead>
                 <tr className="border-b bg-muted/40">
-                  <th className="px-3 py-2 text-left font-medium">Persona</th>
-                  <th className="px-3 py-2 text-left font-medium">Etiqueta</th>
-                  <th className="px-3 py-2 text-right font-medium">Horas vendidas</th>
-                  <th className="px-3 py-2 text-right font-medium">Horas sin cubrir</th>
-                  <th className="px-3 py-2 text-right font-medium">Total imputadas</th>
-                  <th className="px-3 py-2 text-right font-medium">Coste</th>
-                  <th className="px-3 py-2 text-right font-medium">Venta</th>
-                  <th className="px-3 py-2 text-right font-medium">Rendimiento</th>
-                  <th className="px-3 py-2 text-right font-medium">Margen</th>
+                  <SortableHeader sort="person" align="left">Persona</SortableHeader>
+                  <SortableHeader sort="tag" align="left">Etiqueta</SortableHeader>
+                  <SortableHeader sort="soldHours">Horas vendidas</SortableHeader>
+                  <SortableHeader sort="uncoveredHours">Horas sin cubrir</SortableHeader>
+                  <SortableHeader sort="totalHours">Total imputadas</SortableHeader>
+                  <SortableHeader sort="cost">Coste</SortableHeader>
+                  <SortableHeader sort="sale">Venta</SortableHeader>
+                  <SortableHeader sort="performance">Rendimiento</SortableHeader>
+                  <SortableHeader sort="margin">Margen</SortableHeader>
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ person, soldHours, uncoveredHours, totalHours, cost, sale, performance, margin }) => {
+                {sortedRows.map(({ person, soldHours, uncoveredHours, totalHours, cost, sale, performance, margin }) => {
                   return (
                     <tr key={person.id} className="border-b last:border-b-0">
                       <td className="px-3 py-2">
