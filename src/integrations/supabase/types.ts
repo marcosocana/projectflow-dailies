@@ -444,6 +444,95 @@ export type Database = {
           },
         ]
       }
+      project_time_month_person_metrics: {
+        Row: {
+          cost_tag: string | null
+          created_at: string
+          id: string
+          month: number
+          person_id: string
+          project_id: string
+          sold_hours: number | null
+          uncovered_hours: number
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          cost_tag?: string | null
+          created_at?: string
+          id?: string
+          month: number
+          person_id: string
+          project_id: string
+          sold_hours?: number | null
+          uncovered_hours?: number
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          cost_tag?: string | null
+          created_at?: string
+          id?: string
+          month?: number
+          person_id?: string
+          project_id?: string
+          sold_hours?: number | null
+          uncovered_hours?: number
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_time_month_person_metrics_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_month_person_metrics_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_cost_tags: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_cost_tags_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       people: {
         Row: {
           color: string
