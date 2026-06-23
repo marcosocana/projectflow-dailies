@@ -74,6 +74,21 @@ type DailyPersistenceSummary = {
   sourceDate?: string;
   targetDate?: string;
 };
+type PersistTask = {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  person_id?: string | null;
+  assigned_to?: string | null;
+  status: TaskStatus | string | null;
+  status_environment?: string | null;
+};
+type PersistTaskGroup = {
+  key: string;
+  label: string;
+  tasks: PersistTask[];
+  persistableTaskIds: string[];
+};
 const NOTE_MARKER = '[tipo:nota_seguimiento]';
 const CORRECTIVE_CATEGORY_MARKER = '[tipo:mejora_correctiva]';
 
@@ -249,6 +264,48 @@ export default function DailiesModule({
   // Estado para modal de detalle de incidencia
   const [incidentDetailsOpen, setIncidentDetailsOpen] = useState(false);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const persistTaskGroups = useMemo(() => {
+    const groups = new Map<string, PersistTaskGroup>();
+
+    (lastDayTasks as PersistTask[]).forEach((task) => {
+      const environment = normalizeEnvironment(task.status_environment);
+      const key = `${task.status || 'pending'}:${environment || ''}`;
+      const label = getTaskCompositeStatusLabel(task.status as TaskStatus, task.status_environment);
+      const group = groups.get(key) || { key, label, tasks: [], persistableTaskIds: [] };
+
+      group.tasks.push(task);
+      if (!isResolvedInPro(task.status, task.status_environment)) {
+        group.persistableTaskIds.push(task.id);
+      }
+      groups.set(key, group);
+    });
+
+    return Array.from(groups.values());
+  }, [lastDayTasks]);
+  const selectedPersistableTaskIds = useMemo(
+    () => new Set(selectedTasksForPersist.filter(taskId => {
+      const task = (lastDayTasks as PersistTask[]).find((item) => item.id === taskId);
+      return task && !isResolvedInPro(task.status, task.status_environment);
+    })),
+    [lastDayTasks, selectedTasksForPersist]
+  );
+  const persistableTaskCount = useMemo(
+    () => (lastDayTasks as PersistTask[]).filter((task) => !isResolvedInPro(task.status, task.status_environment)).length,
+    [lastDayTasks]
+  );
+  const togglePersistStatusGroup = (taskIds: string[], checked: boolean) => {
+    setSelectedTasksForPersist(prev => {
+      const selected = new Set(prev);
+      taskIds.forEach(taskId => {
+        if (checked) {
+          selected.add(taskId);
+        } else {
+          selected.delete(taskId);
+        }
+      });
+      return Array.from(selected);
+    });
+  };
   const [personForm, setPersonForm] = useState({
     name: '',
     role: '',
@@ -3163,7 +3220,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
           <div className="grid min-h-0 gap-4 px-6 pb-6">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2 text-sm">
               <span className="text-muted-foreground">
-                {selectedTasksForPersist.length} de {lastDayTasks.filter((task: any) => !isResolvedInPro(task.status, task.status_environment)).length} tareas seleccionadas
+                {selectedPersistableTaskIds.size} de {persistableTaskCount} tareas seleccionadas
               </span>
               <span className="text-xs text-muted-foreground">
                 Las tareas Resuelta - En PRO quedan fuera de la persistencia.
@@ -3171,43 +3228,78 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
             </div>
 
             <ScrollArea className="h-[min(52vh,420px)] pr-3">
-              <div className="space-y-2">
-                {lastDayTasks.map(task => {
-                const person = people.find(p => p.id === (task.person_id || task.assigned_to));
-                const isSelected = selectedTasksForPersist.includes(task.id);
-                const isPersistable = !isResolvedInPro(task.status, task.status_environment);
-                return <div key={task.id} className={cn(
-                    "flex items-start gap-3 rounded-md border p-3 transition-colors",
-                    isPersistable ? "bg-background" : "bg-muted/40 opacity-75"
-                  )}>
-                      <Checkbox className="mt-1" checked={isSelected} disabled={!isPersistable} onCheckedChange={checked => {
-                    if (checked) {
-                      setSelectedTasksForPersist(prev => [...prev, task.id]);
-                    } else {
-                      setSelectedTasksForPersist(prev => prev.filter(id => id !== task.id));
-                    }
-                  }} />
-                      <div className="flex-1 min-w-0">
-                        <div className="break-words text-sm font-medium leading-5">{task.title}</div>
-                        {task.description && !String(task.description).includes(NOTE_MARKER) && <div className="mt-1 line-clamp-2 break-words text-sm text-muted-foreground">{task.description}</div>}
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <Badge 
-                            variant="outline"
-                            className={getTaskStatusTone(task.status as TaskStatus)}
-                          >
-	            {getTaskCompositeStatusLabel(task.status as TaskStatus, task.status_environment)}
-                          </Badge>
-                          {person && <div className="flex min-w-0 items-center gap-1">
-                              <span className="h-2 w-2 shrink-0 rounded" style={{
-                          backgroundColor: person.color
-                        }} />
-                              <span className="truncate">{person.name}</span>
-                            </div>}
-                          {!isPersistable && <span>No persistible</span>}
+              <div className="space-y-3">
+                {persistTaskGroups.map(group => {
+                  const selectedInGroup = group.persistableTaskIds.filter(taskId => selectedPersistableTaskIds.has(taskId)).length;
+                  const groupChecked = selectedInGroup === group.persistableTaskIds.length && group.persistableTaskIds.length > 0;
+                  const groupPartiallyChecked = selectedInGroup > 0 && selectedInGroup < group.persistableTaskIds.length;
+
+                  return (
+                    <div key={group.key} className="overflow-hidden rounded-md border bg-background">
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-3 py-2">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <Checkbox
+                            checked={groupPartiallyChecked ? 'indeterminate' : groupChecked}
+                            disabled={group.persistableTaskIds.length === 0}
+                            onCheckedChange={checked => togglePersistStatusGroup(group.persistableTaskIds, checked === true)}
+                          />
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <Badge variant="outline" className={getTaskStatusTone(group.tasks[0]?.status as TaskStatus)}>
+                              {group.label}
+                            </Badge>
+                            <span className="text-sm text-muted-foreground">
+                              {selectedInGroup} de {group.persistableTaskIds.length} seleccionadas
+                            </span>
+                          </div>
                         </div>
+                        <span className="text-xs text-muted-foreground">
+                          {group.tasks.length} tareas
+                        </span>
                       </div>
-                    </div>;
-              })}
+
+                      <div className="divide-y">
+                        {group.tasks.map(task => {
+                          const person = people.find(p => p.id === (task.person_id || task.assigned_to));
+                          const isSelected = selectedPersistableTaskIds.has(task.id);
+                          const isPersistable = !isResolvedInPro(task.status, task.status_environment);
+
+                          return (
+                            <div key={task.id} className={cn(
+                              "flex items-start gap-3 p-3 transition-colors",
+                              isPersistable ? "bg-background" : "bg-muted/40 opacity-75"
+                            )}>
+                              <Checkbox
+                                className="mt-1"
+                                checked={isSelected}
+                                disabled={!isPersistable}
+                                onCheckedChange={checked => {
+                                  if (checked) {
+                                    setSelectedTasksForPersist(prev => prev.includes(task.id) ? prev : [...prev, task.id]);
+                                  } else {
+                                    setSelectedTasksForPersist(prev => prev.filter(id => id !== task.id));
+                                  }
+                                }}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="break-words text-sm font-medium leading-5">{task.title}</div>
+                                {task.description && !String(task.description).includes(NOTE_MARKER) && <div className="mt-1 line-clamp-2 break-words text-sm text-muted-foreground">{task.description}</div>}
+                                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                  {person && <div className="flex min-w-0 items-center gap-1">
+                                    <span className="h-2 w-2 shrink-0 rounded" style={{
+                                      backgroundColor: person.color
+                                    }} />
+                                    <span className="truncate">{person.name}</span>
+                                  </div>}
+                                  {!isPersistable && <span>No persistible</span>}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
                 {lastDayTasks.length === 0 && <div className="text-center text-muted-foreground py-8">
                     No hay tareas en el último día con tareas
                   </div>}
@@ -3219,18 +3311,12 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
               <Button variant="outline" onClick={() => setSelectedTasksForPersist(lastDayTasks.filter(t => !isResolvedInPro(t.status, t.status_environment)).map(t => t.id))} disabled={lastDayTasks.length === 0}>
                 Seleccionar todas
               </Button>
-              <Button variant="outline" onClick={() => setSelectedTasksForPersist(prev => prev.filter(taskId => {
-                const task = lastDayTasks.find(t => t.id === taskId);
-                return task ? !isResolvedInPro(task.status, task.status_environment) : true;
-              }))}>
-                Limpiar PRO
-              </Button>
               <Button variant="outline" onClick={() => setSelectedTasksForPersist([])}>
                 Deseleccionar todas
               </Button>
               </div>
-              <Button onClick={persistSelectedTasks} disabled={selectedTasksForPersist.length === 0} className="w-full sm:ml-auto sm:w-auto">
-                Persistir {selectedTasksForPersist.length} tareas
+              <Button onClick={persistSelectedTasks} disabled={selectedPersistableTaskIds.size === 0} className="w-full sm:ml-auto sm:w-auto">
+                Persistir {selectedPersistableTaskIds.size} tareas
               </Button>
             </div>
           </div>
