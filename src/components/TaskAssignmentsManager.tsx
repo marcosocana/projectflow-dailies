@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { X, Plus } from 'lucide-react';
 import { useTaskAssignments } from '@/hooks/useTaskAssignments';
 import { updateTaskStatusFromAssignments } from '@/hooks/useSyncTaskStatus';
-import { supabase } from '@/integrations/supabase/client';
+import { ensureDailyTasksForAssignments } from '@/lib/dailyAssignmentTasks';
 import {
   ASSIGNMENT_STATUS_OPTIONS,
   assignmentToSelectValue,
@@ -29,10 +29,6 @@ export default function TaskAssignmentsManager({
   const { assignments, addAssignment, updateAssignmentStatus, removeAssignment } = useTaskAssignments(taskId);
   const [selectedMember, setSelectedMember] = useState<string>('');
 
-  const notifyDailiesChanged = (projectId: string) => {
-    window.dispatchEvent(new CustomEvent('dailies-task-created', { detail: { projectId } }));
-  };
-
   const handleAddAssignment = async () => {
     if (!selectedMember || !taskId) return;
 
@@ -43,19 +39,13 @@ export default function TaskAssignmentsManager({
 
     try {
       const memberId = selectedMember;
-      await addAssignment(memberId);
+      const createdAssignment = await addAssignment(memberId);
       setSelectedMember('');
       
       // Sincronizar el estado general de la tarea
       await updateTaskStatusFromAssignments(taskId);
 
-      const { data: incident } = await supabase
-        .from('incidents')
-        .select('project_id')
-        .eq('id', taskId)
-        .maybeSingle();
-      
-      if (incident?.project_id) notifyDailiesChanged(incident.project_id);
+      await ensureDailyTasksForAssignments(taskId, createdAssignment ? [createdAssignment] : undefined);
       onAssignmentsChange?.();
     } catch (error) {
       console.error('Error adding assignment:', error);

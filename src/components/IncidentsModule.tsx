@@ -32,6 +32,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import BacklogImportDialog from '@/components/BacklogImportDialog';
 import { recordIncidentCreated, recordIncidentDeleted, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
+import { ensureDailyTasksForAssignments } from '@/lib/dailyAssignmentTasks';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference, formatInternalTaskIdFromValue, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -818,8 +819,9 @@ export default function IncidentsModule({
           const { updateTaskStatusFromAssignments } = await import('@/hooks/useSyncTaskStatus');
           await updateTaskStatusFromAssignments(id);
 
-          // The incident_assignments trigger materializes today's daily tasks.
-          // Avoid inserting them again from the client, which can race the trigger.
+          if (createDailyTasks) {
+            await ensureDailyTasksForAssignments(id, assignmentsToInsert);
+          }
         }
         
         toast({
