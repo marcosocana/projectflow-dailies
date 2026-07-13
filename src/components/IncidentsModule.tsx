@@ -11,7 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, ArrowUp, ArrowDown, MoreVertical, RefreshCcw, AlertTriangle, ListChecks, CheckCircle2, Copy, List, Columns3, Clock, Filter, Check, X, Asterisk } from 'lucide-react';
+import { Download, FileUp, Pencil, Plus, Trash2, Eye, ArrowUpDown, ArrowUp, ArrowDown, MoreVertical, RefreshCcw, AlertTriangle, ListChecks, CheckCircle2, Copy, List, Columns3, Clock, Filter, Check, X, Info, Asterisk } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
@@ -27,6 +28,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import TaskAssignmentCell from '@/components/TaskAssignmentCell';
 import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 import TaskAssignmentsInput from '@/components/TaskAssignmentsInput';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import BacklogImportDialog from '@/components/BacklogImportDialog';
 import { recordIncidentCreated, recordIncidentDeleted, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
@@ -398,6 +400,7 @@ export default function IncidentsModule({
   
   // Estado para asignaciones múltiples durante creación
   const [createAssignments, setCreateAssignments] = useState<Array<{person: string, status: IncidentStatus, environment?: TaskEnvironment | null}>>([]);
+  const [createDailyTasks, setCreateDailyTasks] = useState(true);
   const [manualIncidentIdEnabled, setManualIncidentIdEnabled] = useState(true);
   const importInputRef = useRef<HTMLInputElement>(null);
   const compareInputRef = useRef<HTMLInputElement>(null);
@@ -816,9 +819,9 @@ export default function IncidentsModule({
           const { updateTaskStatusFromAssignments } = await import('@/hooks/useSyncTaskStatus');
           await updateTaskStatusFromAssignments(id);
 
-          // A Home assignment must always be visible in today's daily.
-          // Carrying it to later days remains an explicit manual persistence action.
-          await ensureDailyTasksForAssignments(id, assignmentsToInsert);
+          if (createDailyTasks) {
+            await ensureDailyTasksForAssignments(id, assignmentsToInsert);
+          }
         }
         
         toast({
@@ -2072,8 +2075,32 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                     onAssignmentsChange={setCreateAssignments}
                   />
                 </div>
-                <div className="md:col-span-2 rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                  Cada persona asignada verá la tarea en el Seguimiento diario de hoy. Para que continúe en días posteriores deberá persistirse manualmente.
+                <div className="space-y-2 md:col-span-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="createDailyTasks"
+                      checked={createDailyTasks}
+                      onCheckedChange={(checked) => setCreateDailyTasks(checked as boolean)}
+                    />
+                    <Label
+                      htmlFor="createDailyTasks"
+                      className="text-sm font-normal cursor-pointer"
+                    >
+                      Crear tareas en el seguimiento diario
+                    </Label>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-xs">
+                            Se creará una tarea para cada persona asignada en el Seguimiento diario de hoy. Los días posteriores requieren persistencia manual.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
                 </div>
               </>
             ) : (

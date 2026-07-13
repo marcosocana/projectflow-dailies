@@ -1242,6 +1242,10 @@ export type Database = {
           section: Database["public"]["Enums"]["project_section"]
         }[]
       }
+      ensure_home_assignments_in_daily: {
+        Args: { p_assigned_to?: string[] | null; p_incident_id: string }
+        Returns: string[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
