@@ -718,28 +718,82 @@ export default function DailiesModule({
 
     const primaryPersonId = selectedPersonIds[0] || null;
 
-    const payload: TablesInsert<'tasks'> = {
-      title: taskForm.title,
-      description: taskForm.description || null,
-      project_id: projectId,
-      daily_id: dailyId,
-      person_id: primaryPersonId,
-      assigned_to: primaryPersonId,
-      incident_id: incidentIdToLink,
-      status: taskForm.status ?? 'pending',
-      status_environment: taskEnvironment || null,
-      is_auto_linked: creationMode === 'linked' || creationMode === 'manual',
-      related_ticket: relatedTicket
+    const ensureTaskForPerson = async (personId: string | null) => {
+      const payload: TablesInsert<'tasks'> = {
+        title: taskForm.title,
+        description: taskForm.description || null,
+        project_id: projectId,
+        daily_id: dailyId,
+        person_id: personId,
+        assigned_to: personId,
+        incident_id: incidentIdToLink,
+        status: taskForm.status ?? 'pending',
+        status_environment: taskEnvironment || null,
+        is_auto_linked: creationMode === 'linked' || creationMode === 'manual',
+        related_ticket: relatedTicket
+      };
+
+      // An assignment sync may already have materialized the canonical task.
+      // Reuse it instead of colliding with tasks_unique_project_incident_person.
+      if (incidentIdToLink && personId) {
+        const { data: existingTasks, error: existingError } = await supabase
+          .from('tasks')
+          .select('id')
+          .eq('project_id', projectId)
+          .eq('incident_id', incidentIdToLink)
+          .or(`person_id.eq.${personId},assigned_to.eq.${personId}`)
+          .order('created_at', { ascending: true })
+          .limit(1);
+
+        if (existingError) throw existingError;
+        const existingTaskId = existingTasks?.[0]?.id;
+
+        if (existingTaskId) {
+          const { error: updateError } = await supabase
+            .from('tasks')
+            .update({
+              title: payload.title,
+              description: payload.description,
+              person_id: payload.person_id,
+              assigned_to: payload.assigned_to,
+              status: payload.status,
+              status_environment: payload.status_environment,
+              is_auto_linked: payload.is_auto_linked,
+              related_ticket: payload.related_ticket,
+            })
+            .eq('id', existingTaskId);
+
+          if (updateError) throw updateError;
+          return existingTaskId;
+        }
+      }
+
+      const { data: createdTask, error: createError } = await supabase
+        .from('tasks')
+        .insert(payload)
+        .select('id')
+        .single();
+
+      if (createError) throw createError;
+      return createdTask.id;
     };
-    const {
-      data: created,
-      error
-    } = await supabase.from('tasks').insert(payload).select().single();
-    if (error || !created) return toast({
-      title: 'Error',
-      description: 'No se pudo crear la tarea',
-      variant: 'destructive'
-    });
+
+    let taskIdsToLink: string[];
+    try {
+      taskIdsToLink = [];
+      for (const personId of selectedPersonIds.length > 0 ? selectedPersonIds : [null]) {
+        taskIdsToLink.push(await ensureTaskForPerson(personId));
+      }
+    } catch (taskError) {
+      console.error('Error creating daily task:', taskError);
+      return toast({
+        title: 'Error',
+        description: 'No se pudo crear la tarea',
+        variant: 'destructive'
+      });
+    }
+
+    const createdTaskId = taskIdsToLink[0];
     
     // If automatically linked to incident, sync status
     if (incidentIdToLink && creationMode === 'linked') {
@@ -791,38 +845,6 @@ export default function DailiesModule({
       ? (existingTasks[0].order_position || 0) + 1 
       : 0;
     
-    const additionalCreatedIds: string[] = [];
-    const additionalPersonIds = selectedPersonIds.slice(1);
-    if (additionalPersonIds.length > 0) {
-      const { data: additionalTasks, error: additionalError } = await supabase
-        .from('tasks')
-        .insert(additionalPersonIds.map(personId => ({
-          title: taskForm.title,
-          description: taskForm.description || null,
-          project_id: projectId,
-          daily_id: dailyId,
-          person_id: personId,
-          assigned_to: personId,
-          incident_id: incidentIdToLink,
-          status: taskForm.status ?? 'pending',
-          status_environment: taskEnvironment || null,
-          is_auto_linked: creationMode === 'linked' || creationMode === 'manual',
-          related_ticket: relatedTicket,
-        })) as any)
-        .select('id');
-
-      if (additionalError) {
-        return toast({
-          title: 'Error',
-          description: 'La tarea se creó, pero no se pudieron crear todas las asignaciones en Seguimiento diario',
-          variant: 'destructive',
-        });
-      }
-
-      additionalCreatedIds.push(...((additionalTasks || []).map((task: any) => task.id).filter(Boolean)));
-    }
-
-    const taskIdsToLink = [created.id, ...additionalCreatedIds];
     await supabase.from('daily_tasks').upsert(taskIdsToLink.map((taskId, index) => ({
       daily_id: dailyId,
       task_id: taskId,
@@ -853,7 +875,7 @@ export default function DailiesModule({
 
     await recordDailyTaskCreated({
       projectId,
-      taskId: created.id,
+      taskId: createdTaskId,
       title: taskForm.title,
       relatedTicket,
       taskCount: taskIdsToLink.length,
