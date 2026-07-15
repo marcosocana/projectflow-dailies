@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
@@ -109,6 +109,13 @@ const normalizeTaskEnvironment = (status: TaskStatus, environment: TaskEnvironme
 };
 
 const DAILY_TASK_FORM_STATUS_OPTIONS = ASSIGNMENT_STATUS_OPTIONS.filter(option => option.value !== 'closed');
+const DAILY_STATUS_ORDER: Record<TaskStatus, number> = {
+  in_progress: 0,
+  pending: 1,
+  blocked: 2,
+  resolved: 3,
+  resolved_yesterday: 3,
+};
 
 const chunkArray = <T,>(items: T[], size: number) => {
   const chunks: T[][] = [];
@@ -229,6 +236,7 @@ export default function DailiesModule({
   const [filteredTasks, setFilteredTasks] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [dailyStatusFilter, setDailyStatusFilter] = useState<'all' | AssignmentStatusValue>('all');
   
   // Sorting state
   const [sortField, setSortField] = useState<'status' | 'title' | 'person'>('status');
@@ -1530,15 +1538,7 @@ export default function DailiesModule({
       : activeDailyTasks.filter(task => (task.person_id || task.assigned_to || 'unassigned') === selectedPersonFilter);
   }, [activeDailyTasks, selectedPersonFilter]);
 
-  const statusOrder: Record<TaskStatus, number> = {
-    in_progress: 0,
-    pending: 1,
-    blocked: 2,
-    resolved: 3,
-    resolved_yesterday: 3,
-  };
-
-  const getDisplayedAssignmentStatus = (task: { incident_id?: string | null; person_id?: string | null; assigned_to?: string | null; status: TaskStatus; status_environment?: TaskEnvironment | null }) => {
+  const getDisplayedAssignmentStatus = useCallback((task: { incident_id?: string | null; person_id?: string | null; assigned_to?: string | null; status: TaskStatus; status_environment?: TaskEnvironment | null }) => {
     const assignmentKey = task.incident_id && (task.person_id || task.assigned_to)
       ? `${task.incident_id}:${task.person_id || task.assigned_to}`
       : null;
@@ -1548,9 +1548,9 @@ export default function DailiesModule({
       status: (assignmentStatus?.status ? mapIncidentStatusToTaskStatus(assignmentStatus.status) : task.status) as TaskStatus,
       status_environment: assignmentStatus?.status_environment ?? task.status_environment ?? null,
     };
-  };
+  }, [assignmentStatusesByKey]);
 
-  const getDailyStatusGroup = (task: { incident_id?: string | null; person_id?: string | null; assigned_to?: string | null; status: TaskStatus; status_environment?: TaskEnvironment | null }) => {
+  const getDailyStatusGroup = useCallback((task: { incident_id?: string | null; person_id?: string | null; assigned_to?: string | null; status: TaskStatus; status_environment?: TaskEnvironment | null }) => {
     const displayedStatus = getDisplayedAssignmentStatus(task);
 
     if (displayedStatus.status === 'resolved' || displayedStatus.status === 'resolved_yesterday') {
@@ -1564,12 +1564,21 @@ export default function DailiesModule({
       return `resolved_${resolvedEnvironmentOrder[environment]}`;
     }
 
-    return String(statusOrder[displayedStatus.status] ?? 99);
-  };
+    return String(DAILY_STATUS_ORDER[displayedStatus.status] ?? 99);
+  }, [getDisplayedAssignmentStatus]);
+
+  const statusFilteredDailyTasks = useMemo(() => {
+    if (dailyStatusFilter === 'all') return visibleDailyTasks;
+
+    return visibleDailyTasks.filter((task) => {
+      const displayedStatus = getDisplayedAssignmentStatus(task);
+      return assignmentToSelectValue(displayedStatus.status, displayedStatus.status_environment) === dailyStatusFilter;
+    });
+  }, [visibleDailyTasks, dailyStatusFilter, getDisplayedAssignmentStatus]);
 
   // Daily list is always sorted by status groups: WIP, Pending, Block, Resolved DEV/PRE/PRO.
   const sortedTasks = useMemo(() => {
-    return [...visibleDailyTasks].sort((a, b) => {
+    return [...statusFilteredDailyTasks].sort((a, b) => {
       if (Boolean(a.is_urgent) !== Boolean(b.is_urgent)) {
         return a.is_urgent ? -1 : 1;
       }
@@ -1583,7 +1592,7 @@ export default function DailiesModule({
       if (byStatus !== 0) return byStatus;
       return (a.order_position ?? 0) - (b.order_position ?? 0);
     });
-  }, [visibleDailyTasks]);
+  }, [statusFilteredDailyTasks, getDailyStatusGroup]);
 
   const copyDailySummary = async () => {
     const getSummaryTaskType = (task: any) => {
@@ -2418,6 +2427,22 @@ export default function DailiesModule({
             <div className="w-full">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
+                  <Select
+                    value={dailyStatusFilter}
+                    onValueChange={(value) => setDailyStatusFilter(value as 'all' | AssignmentStatusValue)}
+                  >
+                    <SelectTrigger className="w-[190px]" aria-label="Filtrar tareas por estado">
+                      <SelectValue placeholder="Todos los estados" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los estados</SelectItem>
+                      {DAILY_TASK_FORM_STATUS_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button
                     variant="outline"
                     onClick={() => {
@@ -2566,7 +2591,9 @@ export default function DailiesModule({
                         {sortedTasks.length === 0 && (
                           <TableRow>
                             <TableCell colSpan={7} className="text-center text-muted-foreground">
-                              Sin tareas para este día
+                              {dailyStatusFilter !== 'all' || selectedPersonFilter !== 'all'
+                                ? 'No hay tareas que coincidan con los filtros'
+                                : 'Sin tareas para este día'}
                             </TableCell>
                           </TableRow>
                         )}
