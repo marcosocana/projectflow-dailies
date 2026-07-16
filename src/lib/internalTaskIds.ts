@@ -50,9 +50,8 @@ export async function loadNextInternalTaskId(projectId: string) {
       .eq('project_id', projectId),
     supabase
       .from('incidents')
-      .select('incident_number, additional_comments')
-      .eq('project_id', projectId)
-      .ilike('additional_comments', `%${INTERNAL_TASK_ID_MARKER}%`),
+      .select('incident_number')
+      .eq('project_id', projectId),
   ]);
 
   const taskNumbers = (taskRows || [])
@@ -61,9 +60,14 @@ export async function loadNextInternalTaskId(projectId: string) {
 
   const incidentNumbers = (incidentRows || [])
     .map(row => Number(row.incident_number))
-    .filter(value => Number.isFinite(value));
+    .filter(value => Number.isInteger(value) && value > 0);
 
-  const nextNumber = Math.max(0, ...taskNumbers, ...incidentNumbers) + 1;
+  const usedNumbers = new Set([
+    ...taskNumbers.filter(value => Number.isInteger(value) && value > 0),
+    ...incidentNumbers,
+  ]);
+  let nextNumber = 1;
+  while (usedNumbers.has(nextNumber)) nextNumber += 1;
 
   return {
     number: nextNumber,
