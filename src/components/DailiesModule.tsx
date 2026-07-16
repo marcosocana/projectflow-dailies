@@ -2390,7 +2390,7 @@ export default function DailiesModule({
               <Button variant="outline" onClick={() => { loadAllTasks(); setViewAllTasksOpen(true); }}>Ver todas</Button>
               <Button
                 variant="outline"
-                onClick={() => window.open('https://cepsacorp.sharepoint.com/:x:/s/EnergyParks-Aplicacionesmviles/IQCYSpOGmtWnTapOf5J-ytbyAROm3UjaCgYH8ORv13rZXro?e=fA8BrC', '_blank', 'noopener,noreferrer')}
+                onClick={() => window.open('https://cepsacorp.sharepoint.com/:x:/s/EnergyParks-Aplicacionesmviles/IQD_DeAu2nejTpDp29OlAO-dAbS2JgKj4HbxTfpEaOIK6tM?e=sZvhfh', '_blank', 'noopener,noreferrer')}
               >
                 Ver Excel Incidencias
               </Button>
