@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -11,29 +11,35 @@ import { useToast } from '@/hooks/use-toast';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
 import { supabase } from '@/integrations/supabase/client';
 import { getActivityLogLastSeen, subscribeToActivityLogReadState } from '@/lib/activityLogReadState';
-import CreateProjectForm from '@/components/CreateProjectForm';
-import IncidentsModule from '@/components/IncidentsModule';
-import ActivityLogModule from '@/components/ActivityLogModule';
-import ReleasesModule from '@/components/ReleasesModule';
-import InterestingLinksModule from '@/components/InterestingLinksModule';
-import VacationsModule from '@/components/VacationsModule';
-import NotesModule from '@/components/NotesModule';
-import ContactsModule from '@/components/ContactsModule';
-import RepositoryModule from '@/components/RepositoryModule';
-// import HomeModule from '@/components/HomeModule';
-import InternalConfigModule from '@/components/InternalConfigModule';
-import ConfigurationModule from '@/components/ConfigurationModule';
-import UsersModule from '@/components/UsersModule';
-import UserProfileModule from '@/components/UserProfileModule';
 import { AppSidebar } from '@/components/AppSidebar';
-import BacklogComparePanel from '@/components/BacklogComparePanel';
-import NoteDetail from '@/components/NoteDetail';
-import NoteCreate from '@/components/NoteCreate';
 import ScrollToTop from '@/components/ScrollToTop';
 import { GitCompareArrows, LogOut, Menu, Shield, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import vecturaLogo from '@/assets/vectura-logo.png';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+
+const ActivityLogModule = lazy(() => import('@/components/ActivityLogModule'));
+const BacklogComparePanel = lazy(() => import('@/components/BacklogComparePanel'));
+const ConfigurationModule = lazy(() => import('@/components/ConfigurationModule'));
+const ContactsModule = lazy(() => import('@/components/ContactsModule'));
+const CreateProjectForm = lazy(() => import('@/components/CreateProjectForm'));
+const IncidentsModule = lazy(() => import('@/components/IncidentsModule'));
+const InterestingLinksModule = lazy(() => import('@/components/InterestingLinksModule'));
+const InternalConfigModule = lazy(() => import('@/components/InternalConfigModule'));
+const NoteCreate = lazy(() => import('@/components/NoteCreate'));
+const NoteDetail = lazy(() => import('@/components/NoteDetail'));
+const NotesModule = lazy(() => import('@/components/NotesModule'));
+const ReleasesModule = lazy(() => import('@/components/ReleasesModule'));
+const RepositoryModule = lazy(() => import('@/components/RepositoryModule'));
+const UserProfileModule = lazy(() => import('@/components/UserProfileModule'));
+const UsersModule = lazy(() => import('@/components/UsersModule'));
+const VacationsModule = lazy(() => import('@/components/VacationsModule'));
+
+const ModuleLoading = () => (
+  <div className="flex min-h-32 items-center justify-center text-sm text-muted-foreground">
+    Cargando...
+  </div>
+);
 
 const Dashboard = () => {
   const [projectPassword, setProjectPassword] = useState('');
@@ -56,7 +62,6 @@ const Dashboard = () => {
     userProjects,
   } = useProjectAccess();
   const navigate = useNavigate();
-  const location = useLocation();
   const isSuperUser = user?.email?.toLowerCase() === 'mocanat@minsait.com';
   const hasAdminPasswordAccess = sessionStorage.getItem('projectflow_admin_access') === 'true';
   const canOpenAdmin = isSuperUser || isAdminRole || hasAdminPasswordAccess;
@@ -331,7 +336,11 @@ const Dashboard = () => {
                   </div>
                 )}
                 <div className="mt-6">
-                  {currentProject && <UserProfileModule projectId={currentProject.id} />}
+                  {currentProject && (
+                    <Suspense fallback={<ModuleLoading />}>
+                      <UserProfileModule projectId={currentProject.id} />
+                    </Suspense>
+                  )}
                 </div>
               </SheetContent>
             </Sheet>
@@ -436,7 +445,9 @@ const Dashboard = () => {
                   <DialogTitle>Crear nuevo proyecto</DialogTitle>
                   <DialogDescription>Completa la información del proyecto</DialogDescription>
                 </DialogHeader>
-                <CreateProjectForm onProjectCreated={handleProjectCreated} onClose={() => setCreateProjectOpen(false)} />
+                <Suspense fallback={<ModuleLoading />}>
+                  <CreateProjectForm onProjectCreated={handleProjectCreated} onClose={() => setCreateProjectOpen(false)} />
+                </Suspense>
               </DialogContent>
             </Dialog>
             </>
@@ -444,40 +455,39 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="min-h-screen">
-            {!location.pathname.endsWith('/tasks') && (
-              <div className="hidden">
-                <IncidentsModule projectId={currentProject.id} />
-              </div>
-            )}
             <AppSidebar currentProject={currentProject} />
             <main className="ml-0 md:ml-16 p-4 md:p-6 2xl:px-10 pt-[64px]">
               <div className="flex items-start gap-4">
                 <div className="min-w-0 flex-1">
                   <ScrollToTop />
-                  <Routes>
-                    <Route path="/" element={<Navigate to="tasks" replace />} />
-                    <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
-                    <Route path="activity" element={<ActivityLogModule projectId={currentProject.id} />} />
-                    <Route path="releases" element={<ReleasesModule projectId={currentProject.id} />} />
-                    <Route path="vacations" element={<VacationsModule projectId={currentProject.id} />} />
-                    <Route path="repository" element={<RepositoryModule projectId={currentProject.id} />} />
-                    <Route path="notes" element={<NotesModule projectId={currentProject.id} />} />
-                    <Route path="notes/new" element={<NoteCreate projectId={currentProject.id} />} />
-                    <Route path="notes/:noteId" element={<NoteDetail projectId={currentProject.id} />} />
-                    <Route path="contacts" element={<ContactsModule projectId={currentProject.id} />} />
-                    <Route path="links" element={<InterestingLinksModule projectId={currentProject.id} />} />
-                    <Route path="config" element={<InternalConfigModule projectId={currentProject.id} dailiesPassword={(currentProject as any).dailies_password || 'default'} />} />
-                    <Route path="imputaciones" element={<ConfigurationModule projectId={currentProject.id} />} />
-                    <Route path="settings" element={<Navigate to="/imputaciones" replace />} />
-                    <Route path="users" element={<UsersModule projectId={currentProject.id} />} />
-                  </Routes>
+                  <Suspense fallback={<ModuleLoading />}>
+                    <Routes>
+                      <Route path="/" element={<Navigate to="tasks" replace />} />
+                      <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
+                      <Route path="activity" element={<ActivityLogModule projectId={currentProject.id} />} />
+                      <Route path="releases" element={<ReleasesModule projectId={currentProject.id} />} />
+                      <Route path="vacations" element={<VacationsModule projectId={currentProject.id} />} />
+                      <Route path="repository" element={<RepositoryModule projectId={currentProject.id} />} />
+                      <Route path="notes" element={<NotesModule projectId={currentProject.id} />} />
+                      <Route path="notes/new" element={<NoteCreate projectId={currentProject.id} />} />
+                      <Route path="notes/:noteId" element={<NoteDetail projectId={currentProject.id} />} />
+                      <Route path="contacts" element={<ContactsModule projectId={currentProject.id} />} />
+                      <Route path="links" element={<InterestingLinksModule projectId={currentProject.id} />} />
+                      <Route path="config" element={<InternalConfigModule projectId={currentProject.id} dailiesPassword={(currentProject as any).dailies_password || 'default'} />} />
+                      <Route path="imputaciones" element={<ConfigurationModule projectId={currentProject.id} />} />
+                      <Route path="settings" element={<Navigate to="/imputaciones" replace />} />
+                      <Route path="users" element={<UsersModule projectId={currentProject.id} />} />
+                    </Routes>
+                  </Suspense>
                 </div>
                 {compareBacklogOpen && (
-                  <BacklogComparePanel
-                    projectId={currentProject.id}
-                    onClose={() => setCompareBacklogOpen(false)}
-                    onSelectId={handleCompareIdSelect}
-                  />
+                  <Suspense fallback={<ModuleLoading />}>
+                    <BacklogComparePanel
+                      projectId={currentProject.id}
+                      onClose={() => setCompareBacklogOpen(false)}
+                      onSelectId={handleCompareIdSelect}
+                    />
+                  </Suspense>
                 )}
               </div>
             </main>
