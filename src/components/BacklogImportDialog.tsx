@@ -13,6 +13,7 @@ import type { Database } from '@/integrations/supabase/types';
 import { recordIncidentCreated } from '@/lib/incidentActivityLog';
 import { useAuth } from '@/hooks/useAuth';
 import { normalizeEnvironment } from '@/lib/taskStatus';
+import Papa from 'papaparse';
 
 type IncidentCategory = Database['public']['Enums']['incident_category'];
 
@@ -31,6 +32,41 @@ interface BacklogImportDialogProps {
   teamMembers: Array<{ id: string; name: string; color: string }>;
   onImportComplete: () => void;
 }
+
+const parseBacklogRows = (text: string): ParsedRow[] => {
+  const delimiter = text.includes('\t') ? '\t' : text.includes('|') ? '|' : null;
+  let columnsByRow: string[][];
+
+  if (delimiter) {
+    const result = Papa.parse<string[]>(text.trim(), {
+      delimiter,
+      quoteChar: '"',
+      skipEmptyLines: 'greedy',
+    });
+
+    if (result.errors.length > 0) {
+      throw new Error('El texto contiene comillas sin cerrar o columnas incompletas.');
+    }
+
+    columnsByRow = result.data;
+  } else {
+    columnsByRow = text
+      .trim()
+      .split(/\r?\n/)
+      .filter((line) => line.trim())
+      .map((line) => line.split(/\s{2,}/));
+  }
+
+  return columnsByRow
+    .filter((columns) => columns.length >= 5)
+    .map((columns) => ({
+      number: columns[0]?.trim() || '',
+      epic: columns[1]?.trim() || '',
+      category: columns[2]?.trim() || '',
+      name: columns[3]?.trim() || '',
+      description: columns.slice(4).join(delimiter || ' ').trim(),
+    }));
+};
 
 export default function BacklogImportDialog({
   open,
@@ -60,27 +96,17 @@ export default function BacklogImportDialog({
   };
 
   const handleParse = () => {
-    const lines = pastedText.trim().split('\n');
-    const rows: ParsedRow[] = [];
+    let rows: ParsedRow[];
 
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      
-      // Split by tab or multiple spaces
-      const columns = line.split(/\t+|\s{2,}/);
-      
-      if (columns.length >= 5) {
-        const number = columns[0]?.trim() || '';
-        const name = columns[3]?.trim() || '';
-        
-        rows.push({
-          number,
-          epic: columns[1]?.trim() || '',
-          category: columns[2]?.trim() || '',
-          name,
-          description: columns[4]?.trim() || ''
-        });
-      }
+    try {
+      rows = parseBacklogRows(pastedText);
+    } catch (error) {
+      toast({
+        title: 'Error al parsear',
+        description: error instanceof Error ? error.message : 'No se pudo interpretar el texto del backlog.',
+        variant: 'destructive',
+      });
+      return;
     }
 
     if (rows.length === 0) {
@@ -263,7 +289,7 @@ export default function BacklogImportDialog({
                 className="min-h-[200px] font-mono text-sm"
               />
               <p className="text-xs text-muted-foreground">
-                Cada fila debe tener 5 columnas separadas por tabulaciones o múltiples espacios
+                Cada fila debe tener 5 columnas separadas por tabulaciones, barras verticales o múltiples espacios. Las descripciones entre comillas pueden incluir saltos de línea.
               </p>
             </div>
 
