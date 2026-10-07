@@ -18,6 +18,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/hooks/useAuth';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Database } from '@/integrations/supabase/types';
 import type React from 'react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu';
@@ -93,6 +94,8 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const MADRID_TIME_ZONE = 'Europe/Madrid';
+const INCIDENT_COLUMNS = 'id,project_id,incident_number,name,description,category,additional_comments,status,status_environment,environment,device,assigned_to,occurred_at,created_at,updated_at,created_by,evidence,order_position';
+const PERSON_COLUMNS = 'id,project_id,name,role,color,user_id,order_position,created_at,updated_at';
 
 const formatManualId = (value: string | number | null | undefined) =>
   String(value ?? '').replace(/\D/g, '').slice(0, 6);
@@ -313,6 +316,7 @@ export default function IncidentsModule({
   const {
     user
   } = useAuth();
+  const queryClient = useQueryClient();
   const {
     getUrl
   } = useSignedUrl('project-files');
@@ -573,17 +577,22 @@ export default function IncidentsModule({
   const fetchIncidents = async () => {
     setLoading(true);
     try {
-      const {
-        data,
-        error
-      } = await supabase.from('incidents').select('*').eq('project_id', projectId).order('occurred_at', {
-        ascending: true
+      const data = await queryClient.fetchQuery({
+        queryKey: ['incidents', projectId],
+        queryFn: async () => {
+          const { data, error } = await supabase
+            .from('incidents')
+            .select(INCIDENT_COLUMNS)
+            .eq('project_id', projectId)
+            .order('occurred_at', { ascending: true });
+          if (error) throw error;
+          return data || [];
+        },
       });
-      if (error) throw error;
-      setIncidents(data || []);
+      setIncidents(data);
 
       // Calculate KPIs using helper function
-      calculateKPIs(data || []);
+      calculateKPIs(data);
     } catch (e: any) {
       toast({
         title: 'Error',
@@ -614,6 +623,7 @@ export default function IncidentsModule({
                 const updated = prev.filter(i => i.id !== id);
                 // Recalculate KPIs after delete
                 calculateKPIs(updated);
+                queryClient.setQueryData(['incidents', projectId], updated);
                 return updated;
               });
             }
@@ -631,6 +641,7 @@ export default function IncidentsModule({
             }
             // Recalculate KPIs after insert/update
             calculateKPIs(updated);
+            queryClient.setQueryData(['incidents', projectId], updated);
             return updated;
           });
         }
@@ -640,13 +651,13 @@ export default function IncidentsModule({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [projectId]);
+  }, [projectId, queryClient]);
   const fetchTeamMembers = async () => {
     try {
       const {
         data,
         error
-      } = await supabase.from('people').select('*').eq('project_id', projectId).order('name', {
+      } = await supabase.from('people').select(PERSON_COLUMNS).eq('project_id', projectId).order('name', {
         ascending: true
       });
       if (error) throw error;

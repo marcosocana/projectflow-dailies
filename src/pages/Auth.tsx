@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import vecturaLogo from '@/assets/vectura-logo.png';
+import vecturaLogo from '@/assets/vectura-logo.webp';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
@@ -132,6 +132,8 @@ const Auth = () => {
             <img 
               src={vecturaLogo} 
               alt="Vectorea" 
+              width={1114}
+              height={1114}
               className="h-16 w-auto object-contain"
             />
           </div>

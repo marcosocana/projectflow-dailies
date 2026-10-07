@@ -6,7 +6,16 @@ import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ProjectThemeProvider } from "@/contexts/ProjectThemeContext";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 const AdminProjects = lazy(() => import("./pages/AdminProjects"));
 const Auth = lazy(() => import("./pages/Auth"));
 const ExternalIncident = lazy(() => import("./pages/ExternalIncident"));

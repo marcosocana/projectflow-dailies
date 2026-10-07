@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import { recordAssignmentStatusChange, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
@@ -7,6 +7,7 @@ import { getMinimumIncidentAssignmentState, mapIncidentStatusToTaskStatus, norma
 type IncidentStatus = Database['public']['Enums']['incident_status'];
 // Map task_status for syncing with daily tasks
 type TaskStatus = Database['public']['Enums']['task_status'];
+const ASSIGNMENT_COLUMNS = 'id,incident_id,assigned_to,status,status_environment,created_at,updated_at';
 
 export interface TaskAssignment {
   id: string;
@@ -18,29 +19,58 @@ export interface TaskAssignment {
   updated_at: string;
 }
 
+const toTaskAssignment = (assignment: Omit<TaskAssignment, 'status' | 'status_environment'> & {
+  status: IncidentStatus;
+  status_environment: string | null;
+}): TaskAssignment => ({
+  ...assignment,
+  status: assignment.status,
+  status_environment: normalizeEnvironment(assignment.status_environment),
+});
+
 export const useTaskAssignments = (taskId: string | null) => {
   const [assignments, setAssignments] = useState<TaskAssignment[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchAssignments = async () => {
-    if (!taskId) return;
+  const fetchAssignments = useCallback(async () => {
+    if (!taskId) {
+      setAssignments([]);
+      return;
+    }
     
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('incident_assignments')
-        .select('*')
+      .select(ASSIGNMENT_COLUMNS)
         .eq('incident_id', taskId)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-      setAssignments(data || []);
+      setAssignments((data || []).map(toTaskAssignment));
     } catch (error) {
       console.error('Error fetching task assignments:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [taskId]);
+
+  const applyRealtimeAssignment = useCallback((payload: { eventType: string; new: TaskAssignment | null; old: { id?: string } | null }) => {
+    if (payload.eventType === 'DELETE') {
+      setAssignments((current) => current.filter((assignment) => assignment.id !== payload.old?.id));
+      return;
+    }
+
+    if (!payload.new) return;
+
+    setAssignments((current) => {
+      const exists = current.some((assignment) => assignment.id === payload.new!.id);
+      const next = exists
+        ? current.map((assignment) => assignment.id === payload.new!.id ? payload.new! : assignment)
+        : [...current, payload.new!];
+      return next.sort((left, right) => left.created_at.localeCompare(right.created_at));
+    });
+  }, []);
 
   useEffect(() => {
     fetchAssignments();
@@ -50,13 +80,17 @@ export const useTaskAssignments = (taskId: string | null) => {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'incident_assignments', filter: `incident_id=eq.${taskId}` },
-        () => fetchAssignments()
+        (payload: any) => applyRealtimeAssignment({
+          eventType: payload.eventType,
+          new: payload.new ? toTaskAssignment(payload.new) : null,
+          old: payload.old,
+        })
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [taskId]);
+  }, [taskId, fetchAssignments, applyRealtimeAssignment]);
 
   const addAssignment = async (assignedTo: string, status: IncidentStatus = 'pending') => {
     if (!taskId) return;
@@ -69,11 +103,11 @@ export const useTaskAssignments = (taskId: string | null) => {
           assigned_to: assignedTo,
           status: status
         })
-        .select()
+        .select(ASSIGNMENT_COLUMNS)
         .single();
 
       if (error) throw error;
-      await fetchAssignments();
+      if (data) applyRealtimeAssignment({ eventType: 'INSERT', new: toTaskAssignment(data), old: null });
       return data;
     } catch (error) {
       console.error('Error adding assignment:', error);
@@ -96,6 +130,10 @@ export const useTaskAssignments = (taskId: string | null) => {
         .eq('id', assignmentId);
 
       if (error) throw error;
+
+      setAssignments((current) => current.map((assignment) => assignment.id === assignmentId
+        ? { ...assignment, status, status_environment: normalizeEnvironment(statusEnvironment) }
+        : assignment));
 
       // 2) Buscar la asignación para obtener incidencia y persona
       const { data: assignmentRow } = await supabase
@@ -179,7 +217,6 @@ export const useTaskAssignments = (taskId: string | null) => {
         }
       }
 
-      await fetchAssignments();
     } catch (error) {
       console.error('Error updating assignment status:', error);
       throw error;
@@ -203,6 +240,8 @@ export const useTaskAssignments = (taskId: string | null) => {
 
       if (error) throw error;
 
+      setAssignments((current) => current.filter((assignment) => assignment.id !== assignmentId));
+
       if (assignmentToRemove?.incident_id) {
         const { data: remainingAssignments, error: remainingError } = await supabase
           .from('incident_assignments')
@@ -222,7 +261,6 @@ export const useTaskAssignments = (taskId: string | null) => {
         }
       }
 
-      await fetchAssignments();
     } catch (error) {
       console.error('Error removing assignment:', error);
       throw error;

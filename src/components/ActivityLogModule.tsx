@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type React from 'react';
-import { useLocation } from 'react-router-dom';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getStatusLogLabel } from '@/lib/taskStatus';
 import { useAuth } from '@/hooks/useAuth';
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Copy, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getActivityLogLastSeen, setActivityLogLastSeen } from '@/lib/activityLogReadState';
-import { format, parseISO } from 'date-fns';
+import { addDays, format, parseISO, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 
@@ -86,6 +86,8 @@ const MONTH_OPTIONS = [
 ];
 
 const TEAMS_LOGS_URL = 'https://teams.microsoft.com/l/chat/19:63ce0f3b03274bf5965c1fa39434813d@thread.v2/conversations?context=%7B%22contextType%22%3A%22chat%22%7D';
+const ACTIVITY_LOG_PAGE_SIZE = 50;
+const ACTIVITY_LOG_COLUMNS = 'id,created_at,incident_id,actor_name,actor_color,incident_name,incident_number,incident_category,from_status,to_status,event_type,message,metadata';
 
 const buildTeamsUrl = (message: string) => {
   const separator = TEAMS_LOGS_URL.includes('?') ? '&' : '?';
@@ -95,9 +97,7 @@ const buildTeamsUrl = (message: string) => {
 export default function ActivityLogModule({ projectId }: ActivityLogModuleProps) {
   const { toast } = useToast();
   const { user } = useAuth();
-  const location = useLocation();
-  const [logs, setLogs] = useState<ActivityLogRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [unreadSince, setUnreadSince] = useState<string | null>(null);
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(String(today.getDate()));
@@ -107,39 +107,70 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
   const [detailIncidentId, setDetailIncidentId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
-  const loadLogs = useCallback(async () => {
-    setLoading(true);
-    const previousLastSeen = getActivityLogLastSeen(projectId, user?.id);
-    setUnreadSince(previousLastSeen);
-
-    try {
+  const selectedDayKey = format(queryDate, 'yyyy-MM-dd');
+  const dayStart = startOfDay(queryDate).toISOString();
+  const nextDayStart = startOfDay(addDays(queryDate, 1)).toISOString();
+  const activityQueryKey = useMemo(
+    () => ['activity-logs', projectId, selectedDayKey] as const,
+    [projectId, selectedDayKey],
+  );
+  const latestActivityQuery = useQuery({
+    queryKey: ['activity-log-latest', projectId],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('incident_activity_logs')
-        .select('*')
+        .select('created_at')
         .eq('project_id', projectId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
       if (error) throw error;
-      const allLogs = (data || []) as ActivityLogRow[];
-      const dayKey = format(queryDate, 'yyyy-MM-dd');
-      const filtered = allLogs.filter(log => format(parseISO(log.created_at), 'yyyy-MM-dd') === dayKey);
-      setLogs(filtered);
-      if (allLogs.length > 0) {
-        setActivityLogLastSeen(projectId, user?.id, allLogs[0].created_at);
-      }
-    } catch (error: any) {
+      return data?.created_at ?? null;
+    },
+  });
+  const activityQuery = useInfiniteQuery({
+    queryKey: activityQueryKey,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      const from = pageParam * ACTIVITY_LOG_PAGE_SIZE;
+      const { data, error } = await supabase
+        .from('incident_activity_logs')
+        .select(ACTIVITY_LOG_COLUMNS)
+        .eq('project_id', projectId)
+        .gte('created_at', dayStart)
+        .lt('created_at', nextDayStart)
+        .order('created_at', { ascending: false })
+        .range(from, from + ACTIVITY_LOG_PAGE_SIZE - 1);
+      if (error) throw error;
+      return (data || []) as ActivityLogRow[];
+    },
+    getNextPageParam: (lastPage, _pages, lastPageParam) =>
+      lastPage.length === ACTIVITY_LOG_PAGE_SIZE ? lastPageParam + 1 : undefined,
+  });
+
+  const logs = activityQuery.data?.pages.flat() ?? [];
+  const loading = activityQuery.isLoading;
+
+  useEffect(() => {
+    setUnreadSince(getActivityLogLastSeen(projectId, user?.id));
+  }, [projectId, user?.id]);
+
+  useEffect(() => {
+    if (latestActivityQuery.data) {
+      setActivityLogLastSeen(projectId, user?.id, latestActivityQuery.data);
+    }
+  }, [latestActivityQuery.data, projectId, user?.id]);
+
+  useEffect(() => {
+    if (activityQuery.error) {
+      const error = activityQuery.error as Error;
       toast({
         title: 'Error',
         description: error.message || 'No se pudo cargar el registro',
         variant: 'destructive',
       });
-    } finally {
-      setLoading(false);
     }
-  }, [projectId, user?.id, queryDate]);
-
-  useEffect(() => {
-    loadLogs();
-  }, [loadLogs, location.pathname]);
+  }, [activityQuery.error, toast]);
 
   useEffect(() => {
     const channel = supabase
@@ -153,7 +184,8 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
           filter: `project_id=eq.${projectId}`,
         },
         () => {
-          loadLogs();
+          queryClient.invalidateQueries({ queryKey: activityQueryKey });
+          queryClient.invalidateQueries({ queryKey: ['activity-log-latest', projectId] });
         },
       )
       .subscribe();
@@ -161,7 +193,7 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [projectId, loadLogs]);
+  }, [activityQueryKey, projectId, queryClient]);
 
   const formatEntry = (log: ActivityLogRow) => {
     if (log.event_type === 'daily_task_created' || log.event_type === 'daily_tasks_persisted') {
@@ -241,7 +273,8 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
 
       if (error) throw error;
 
-      setLogs(currentLogs => currentLogs.filter(currentLog => currentLog.id !== log.id));
+      queryClient.invalidateQueries({ queryKey: activityQueryKey });
+      queryClient.invalidateQueries({ queryKey: ['activity-log-latest', projectId] });
       toast({
         title: 'Log eliminado',
         description: 'Se eliminó el registro correctamente.',
@@ -297,7 +330,6 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
     setQueryDate(date);
   };
 
-  const selectedDayKey = format(queryDate, 'yyyy-MM-dd');
   const dayTitle = formatDayTitle(selectedDayKey);
 
   return (
@@ -496,6 +528,17 @@ export default function ActivityLogModule({ projectId }: ActivityLogModuleProps)
                     </div>
                   );
               })}
+              {activityQuery.hasNextPage && (
+                <div className="flex justify-center pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => activityQuery.fetchNextPage()}
+                    disabled={activityQuery.isFetchingNextPage}
+                  >
+                    {activityQuery.isFetchingNextPage ? 'Cargando...' : 'Cargar más'}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </>

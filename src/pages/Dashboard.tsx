@@ -15,7 +15,7 @@ import { AppSidebar } from '@/components/AppSidebar';
 import ScrollToTop from '@/components/ScrollToTop';
 import { GitCompareArrows, LogOut, Menu, Shield, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import vecturaLogo from '@/assets/vectura-logo.png';
+import vecturaLogo from '@/assets/vectura-logo.webp';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 
 const ActivityLogModule = lazy(() => import('@/components/ActivityLogModule'));
@@ -229,6 +229,8 @@ const Dashboard = () => {
               <img
                 src={vecturaLogo}
                 alt="Vectorea"
+                width={1114}
+                height={1114}
                 className="h-8 md:h-10 max-w-10 md:max-w-none w-auto shrink-0 object-contain"
               />
             )}
@@ -371,7 +373,7 @@ const Dashboard = () => {
               <Card>
                 <CardHeader className="text-center space-y-4">
                   <div className="flex justify-center">
-                    <img src={vecturaLogo} alt="Vectorea" className="h-16 w-auto object-contain" />
+                    <img src={vecturaLogo} alt="Vectorea" width={1114} height={1114} className="h-16 w-auto object-contain" />
                   </div>
                   <div>
                     <CardTitle>Selecciona un proyecto</CardTitle>
@@ -409,7 +411,7 @@ const Dashboard = () => {
             <Card>
               <CardHeader className="text-center space-y-4">
                 <div className="flex justify-center">
-                  <img src={vecturaLogo} alt="Vectorea" className="h-16 w-auto object-contain" />
+                  <img src={vecturaLogo} alt="Vectorea" width={1114} height={1114} className="h-16 w-auto object-contain" />
                 </div>
                 <div>
                   <CardTitle>Acceso a Proyectos</CardTitle>

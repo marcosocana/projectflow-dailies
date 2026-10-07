@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, Loader2 } from 'lucide-react';
-import vecturaLogo from '@/assets/vectura-logo.png';
+import vecturaLogo from '@/assets/vectura-logo.webp';
 import TaskAssignmentsInput, { type TaskAssignment } from '@/components/TaskAssignmentsInput';
 import type { Database } from '@/integrations/supabase/types';
 import { mapIncidentStatusToTaskStatus, normalizeEnvironment } from '@/lib/taskStatus';
@@ -349,7 +349,7 @@ export default function ExternalTaskCreate() {
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-white h-[64px] flex items-center px-6">
         <div className="flex items-center gap-2">
-          <img src={vecturaLogo} alt="Vectorea" className="h-10 w-auto object-contain" />
+          <img src={vecturaLogo} alt="Vectorea" width={1114} height={1114} className="h-10 w-auto object-contain" />
           <h1 className="text-2xl font-bold">Vectorea</h1>
         </div>
       </header>

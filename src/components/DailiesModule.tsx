@@ -91,6 +91,10 @@ type PersistTaskGroup = {
 };
 const NOTE_MARKER = '[tipo:nota_seguimiento]';
 const CORRECTIVE_CATEGORY_MARKER = '[tipo:mejora_correctiva]';
+const PEOPLE_COLUMNS = 'id,project_id,name,role,color,user_id,order_position,created_at,updated_at';
+const VACATION_COLUMNS = 'id,project_id,person_id,user_id,start_date,end_date,type,description,created_at,updated_at';
+const DAILY_COLUMNS = 'id,project_id,date,content,created_at,updated_at';
+const TASK_COLUMNS = 'id,project_id,daily_id,incident_id,person_id,assigned_to,title,description,related_ticket,status,status_environment,environment,is_completed,is_urgent,is_auto_linked,created_at,updated_at';
 
 const getTaskStatusLabel = (status: TaskStatus) => getSharedTaskStatusLabel(status);
 
@@ -356,7 +360,7 @@ export default function DailiesModule({
   const loadPeopleRows = async () => {
     const ordered = await supabase
       .from('people')
-      .select('*')
+      .select(PEOPLE_COLUMNS)
       .eq('project_id', projectId)
       .order('order_position', {
         ascending: true,
@@ -370,7 +374,7 @@ export default function DailiesModule({
 
     const fallback = await supabase
       .from('people')
-      .select('*')
+      .select(PEOPLE_COLUMNS)
       .eq('project_id', projectId)
       .order('created_at', {
         ascending: true
@@ -388,7 +392,7 @@ export default function DailiesModule({
       value: ppl
     }] = await Promise.all([supabase.from('incidents').select('id,name,description,incident_number,status,category,epic,additional_comments,environment,status_environment').eq('project_id', projectId).order('incident_number', {
       ascending: false
-    }), supabase.from('vacations').select('*').eq('project_id', projectId).order('start_date', {
+    }), supabase.from('vacations').select(VACATION_COLUMNS).eq('project_id', projectId).order('start_date', {
       ascending: true
     }), loadPeopleRows().then(value => ({ value }))]);
     setPeople(ppl || []);
@@ -416,7 +420,7 @@ export default function DailiesModule({
     const {
       data,
       error
-    } = await supabase.from('dailies').select('*').eq('project_id', projectId).eq('date', isoDate).maybeSingle();
+    } = await supabase.from('dailies').select(DAILY_COLUMNS).eq('project_id', projectId).eq('date', isoDate).maybeSingle();
     if (error) throw error;
     if (data) return data.id as string;
     const {
@@ -540,7 +544,7 @@ export default function DailiesModule({
         for (const chunk of chunkArray(taskIds, 100)) {
           const { data: chunkTasks, error: taskError } = await supabase
             .from('tasks')
-            .select('*')
+            .select(TASK_COLUMNS)
             .in('id', chunk);
 
           if (taskError) {
@@ -1434,7 +1438,7 @@ export default function DailiesModule({
     try {
       const {
         data: tasksData
-      } = await supabase.from('tasks').select('*').eq('project_id', projectId).order('created_at', {
+      } = await supabase.from('tasks').select(TASK_COLUMNS).eq('project_id', projectId).order('created_at', {
         ascending: false
       });
       if (tasksData) {
