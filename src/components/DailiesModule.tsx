@@ -3433,7 +3433,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                     <TableHead>ID</TableHead>
                     <TableHead>Tipo</TableHead>
                     <SortableHeader field="person">Persona</SortableHeader>
-                    <TableHead>Creada</TableHead>
+                    <TableHead>Fecha / Días</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -3476,7 +3476,10 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                             </div> : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell>
-                          {new Date(task.created_at).toLocaleDateString()}
+                          <div className="flex flex-col">
+                            <span className="text-sm text-muted-foreground">{new Date(task.created_at).toLocaleDateString('es-ES')}</span>
+                            <span className="text-xs text-muted-foreground">{getTaskDaysPending(task.created_at)}d</span>
+                          </div>
                         </TableCell>
                         <TableCell>
                           {/* Buttons removed from Pipeline view */}
