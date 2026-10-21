@@ -1951,6 +1951,9 @@ export default function DailiesModule({
         <TableCell>
           <span className="text-sm text-muted-foreground">{incident?.epic || '—'}</span>
         </TableCell>
+        <TableCell>
+          <span className="text-sm text-muted-foreground">{new Date(task.created_at).toLocaleDateString('es-ES')}</span>
+        </TableCell>
         <TableCell className="flex gap-1">
           <Button variant="ghost" size="icon" onClick={() => deleteTask(task)} aria-label="Eliminar">
             <Trash2 className="h-4 w-4" />
@@ -2540,6 +2543,7 @@ export default function DailiesModule({
                       <TableHead>Tipo</TableHead>
                       <TableHead>Tarea</TableHead>
                       <TableHead>Épica</TableHead>
+                      <TableHead>Fecha</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
