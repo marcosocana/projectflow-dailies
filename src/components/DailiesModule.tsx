@@ -1857,6 +1857,14 @@ export default function DailiesModule({
     incident: any;
   }
 
+  const getTaskDaysPending = (createdAt: string): number => {
+    const created = new Date(createdAt);
+    const today = new Date();
+    const diffTime = Math.abs(today.getTime() - created.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
   const SortableTaskRow = ({ task, person, incident }: SortableTaskRowProps) => {
     const {
       attributes,
@@ -1952,7 +1960,10 @@ export default function DailiesModule({
           <span className="text-sm text-muted-foreground">{incident?.epic || '—'}</span>
         </TableCell>
         <TableCell>
-          <span className="text-sm text-muted-foreground">{new Date(task.created_at).toLocaleDateString('es-ES')}</span>
+          <div className="flex flex-col">
+            <span className="text-sm text-muted-foreground">{new Date(task.created_at).toLocaleDateString('es-ES')}</span>
+            <span className="text-xs text-muted-foreground">{getTaskDaysPending(task.created_at)}d</span>
+          </div>
         </TableCell>
         <TableCell className="flex gap-1">
           <Button variant="ghost" size="icon" onClick={() => deleteTask(task)} aria-label="Eliminar">
@@ -2543,7 +2554,7 @@ export default function DailiesModule({
                       <TableHead>Tipo</TableHead>
                       <TableHead>Tarea</TableHead>
                       <TableHead>Épica</TableHead>
-                      <TableHead>Fecha</TableHead>
+                      <TableHead>Fecha / Días</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -2573,7 +2584,10 @@ export default function DailiesModule({
                             <Skeleton className="h-4 w-24" />
                           </TableCell>
                           <TableCell>
-                            <Skeleton className="h-4 w-24" />
+                            <div className="space-y-1">
+                              <Skeleton className="h-4 w-24" />
+                              <Skeleton className="h-3 w-8" />
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Skeleton className="h-8 w-8" />
