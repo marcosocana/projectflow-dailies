@@ -1960,10 +1960,10 @@ export default function DailiesModule({
           <span className="text-sm text-muted-foreground">{incident?.epic || '—'}</span>
         </TableCell>
         <TableCell>
-          <div className="flex flex-col">
-            <span className="text-sm text-muted-foreground">{new Date(task.created_at).toLocaleDateString('es-ES')}</span>
-            <span className="text-xs text-muted-foreground">{getTaskDaysPending(task.created_at)}d</span>
-          </div>
+          <span className="text-sm text-muted-foreground">{new Date(task.created_at).toLocaleDateString('es-ES')}</span>
+        </TableCell>
+        <TableCell>
+          <span className="text-sm text-muted-foreground">{getTaskDaysPending(task.created_at)}d</span>
         </TableCell>
         <TableCell className="flex gap-1">
           <Button variant="ghost" size="icon" onClick={() => deleteTask(task)} aria-label="Eliminar">
@@ -2554,7 +2554,8 @@ export default function DailiesModule({
                       <TableHead>Tipo</TableHead>
                       <TableHead>Tarea</TableHead>
                       <TableHead>Épica</TableHead>
-                      <TableHead>Fecha / Días</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Días</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -2584,10 +2585,7 @@ export default function DailiesModule({
                             <Skeleton className="h-4 w-24" />
                           </TableCell>
                           <TableCell>
-                            <div className="space-y-1">
-                              <Skeleton className="h-4 w-24" />
-                              <Skeleton className="h-3 w-8" />
-                            </div>
+                            <Skeleton className="h-4 w-8" />
                           </TableCell>
                           <TableCell>
                             <Skeleton className="h-8 w-8" />
@@ -2615,7 +2613,7 @@ export default function DailiesModule({
                         </SortableContext>
                         {sortedTasks.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={7} className="text-center text-muted-foreground">
+                            <TableCell colSpan={8} className="text-center text-muted-foreground">
                               {dailyStatusFilter !== 'all' || selectedPersonFilter !== 'all'
                                 ? 'No hay tareas que coincidan con los filtros'
                                 : 'Sin tareas para este día'}
@@ -3433,7 +3431,8 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                     <TableHead>ID</TableHead>
                     <TableHead>Tipo</TableHead>
                     <SortableHeader field="person">Persona</SortableHeader>
-                    <TableHead>Fecha / Días</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Días</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -3476,10 +3475,10 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                             </div> : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-col">
-                            <span className="text-sm text-muted-foreground">{new Date(task.created_at).toLocaleDateString('es-ES')}</span>
-                            <span className="text-xs text-muted-foreground">{getTaskDaysPending(task.created_at)}d</span>
-                          </div>
+                          <span className="text-sm text-muted-foreground">{new Date(task.created_at).toLocaleDateString('es-ES')}</span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-muted-foreground">{getTaskDaysPending(task.created_at)}d</span>
                         </TableCell>
                         <TableCell>
                           {/* Buttons removed from Pipeline view */}
@@ -3487,7 +3486,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                       </TableRow>;
                 })}
                   {filteredTasks.length === 0 && <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center text-muted-foreground">
                         No se encontraron tareas
                       </TableCell>
                     </TableRow>}
