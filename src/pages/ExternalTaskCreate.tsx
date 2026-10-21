@@ -51,6 +51,7 @@ const STATUS_BADGE_CLS: Record<string, string> = {
   pending: 'bg-muted text-muted-foreground',
   in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
   resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
+  resolved_local: 'bg-green-200 text-green-900',
   blocked: 'bg-destructive text-destructive-foreground',
   closed: 'bg-destructive text-destructive-foreground'
 };

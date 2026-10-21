@@ -8,6 +8,7 @@ export type AssignmentStatusValue =
   | 'resolved_DEV'
   | 'resolved_PRE'
   | 'resolved_PRO'
+  | 'resolved_local'
   | 'closed';
 
 export const TASK_ENVIRONMENTS: TaskEnvironment[] = ['DEV', 'PRE', 'PRO'];
@@ -26,6 +27,7 @@ export const ASSIGNMENT_STATUS_OPTIONS: Array<{ value: AssignmentStatusValue; la
   { value: 'resolved_DEV', label: 'Resuelta - En DEV' },
   { value: 'resolved_PRE', label: 'Resuelta - En PRE' },
   { value: 'resolved_PRO', label: 'Resuelta - En PRO' },
+  { value: 'resolved_local', label: 'Resuelta - En Local' },
   { value: 'blocked', label: 'Block' },
   { value: 'closed', label: 'Cerrada' },
 ];
@@ -84,6 +86,7 @@ export const getStatusLogLabel = (status: string | null | undefined) => {
   if (status === 'resolved_DEV') return 'Resuelta - En DEV';
   if (status === 'resolved_PRE') return 'Resuelta - En PRE';
   if (status === 'resolved_PRO') return 'Resuelta - En PRO';
+  if (status === 'resolved_local') return 'Resuelta - En Local';
   return getIncidentStatusLabel(status);
 };
 
@@ -175,6 +178,7 @@ export const getIncidentStatusTone = (status: IncidentStatus | string | null | u
 
 export const getAppStatusTone = (status: IncidentStatus | TaskStatus | string | null | undefined) => {
   if (status === 'in_progress') return 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent';
+  if (status === 'resolved_local') return 'bg-green-200 text-green-900 border-transparent';
   if (status === 'resolved' || status === 'resolved_yesterday' || status === 'in_qa' || String(status || '').startsWith('resolved_')) return 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent';
   if (status === 'blocked') return 'bg-destructive text-destructive-foreground border-transparent';
   if (status === 'closed') return 'bg-muted text-muted-foreground border-transparent';
@@ -214,6 +218,7 @@ export const selectValueToAssignment = (
   if (value === 'resolved_DEV') return { status: 'resolved', environment: 'DEV' };
   if (value === 'resolved_PRE') return { status: 'resolved', environment: 'PRE' };
   if (value === 'resolved_PRO') return { status: 'resolved', environment: 'PRO' };
+  if (value === 'resolved_local') return { status: 'resolved', environment: null };
   if (value === 'closed') return { status: 'closed', environment: 'PRO' };
   if (value === 'blocked') return { status: 'blocked', environment: null };
   if (value === 'in_progress') return { status: 'in_progress', environment: null };
