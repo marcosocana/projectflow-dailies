@@ -63,6 +63,7 @@ interface Incident {
   status_environment: string | null;
   device: string | null;
   assigned_to: string | null;
+  epic: string | null;
 }
 
 interface UpcomingVacation {
@@ -626,6 +627,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
                 <TableHead>Nombre</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Categoría</TableHead>
+                <TableHead>Épica</TableHead>
                 <TableHead>Asignado a</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead></TableHead>
@@ -648,6 +650,9 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
                         {getCategoryIcon(getDisplayCategory(incident))}
                         <span>{getCategoryLabel(getDisplayCategory(incident))}</span>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-muted-foreground">{incident.epic || '—'}</span>
                     </TableCell>
                     <TableCell>
                       {assignedPerson ? (
