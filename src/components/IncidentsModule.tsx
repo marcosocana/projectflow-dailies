@@ -94,7 +94,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const MADRID_TIME_ZONE = 'Europe/Madrid';
-const INCIDENT_COLUMNS = 'id,project_id,incident_number,name,description,category,additional_comments,status,status_environment,environment,device,assigned_to,occurred_at,created_at,updated_at,created_by,evidence,order_position';
+const INCIDENT_COLUMNS = 'id,project_id,incident_number,name,description,category,additional_comments,status,status_environment,environment,device,assigned_to,occurred_at,created_at,updated_at,created_by,evidence,order_position,epic';
 const PERSON_COLUMNS = 'id,project_id,name,role,color,user_id,order_position,created_at,updated_at';
 
 const formatManualId = (value: string | number | null | undefined) =>
