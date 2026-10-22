@@ -21,10 +21,10 @@ BEGIN
     description,
     project_id,
     created_by
-  ) SELECT
+  ) SELECT DISTINCT
     'system_auto_persist',
     'Automatic daily task persistence executed at 6:00 AM',
-    DISTINCT(project_id),
+    project_id,
     '00000000-0000-0000-0000-000000000000'::uuid
   FROM public.projects;
 EXCEPTION WHEN OTHERS THEN
