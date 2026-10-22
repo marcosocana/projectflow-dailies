@@ -1,0 +1,8 @@
+{
+  "tasks": {
+    "persist": "deno run --allow-env --allow-net index.ts"
+  },
+  "imports": {
+    "jsr:@supabase/functions-js/": "https://jsr.io/@supabase/functions-js/"
+  }
+}
