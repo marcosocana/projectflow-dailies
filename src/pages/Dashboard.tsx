@@ -34,6 +34,7 @@ const RepositoryModule = lazy(() => import('@/components/RepositoryModule'));
 const UserProfileModule = lazy(() => import('@/components/UserProfileModule'));
 const UsersModule = lazy(() => import('@/components/UsersModule'));
 const VacationsModule = lazy(() => import('@/components/VacationsModule'));
+const VacationsModuleV2 = lazy(() => import('@/components/VacationsModuleV2'));
 
 const ModuleLoading = () => (
   <div className="flex min-h-32 items-center justify-center text-sm text-muted-foreground">
@@ -49,6 +50,7 @@ const Dashboard = () => {
   const [isAdminRole, setIsAdminRole] = useState(false);
   const [projectSelectionReady, setProjectSelectionReady] = useState(false);
   const [hasUnreadActivity, setHasUnreadActivity] = useState(false);
+  const [useVacationsV2, setUseVacationsV2] = useState(() => localStorage.getItem('useVacationsV2') === 'true');
   const { user, signOut } = useAuth();
   const { toast } = useToast();
   const {
@@ -468,7 +470,7 @@ const Dashboard = () => {
                       <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
                       <Route path="activity" element={<ActivityLogModule projectId={currentProject.id} />} />
                       <Route path="releases" element={<ReleasesModule projectId={currentProject.id} />} />
-                      <Route path="vacations" element={<VacationsModule projectId={currentProject.id} />} />
+                      <Route path="vacations" element={useVacationsV2 ? <VacationsModuleV2 projectId={currentProject.id} /> : <VacationsModule projectId={currentProject.id} />} />
                       <Route path="repository" element={<RepositoryModule projectId={currentProject.id} />} />
                       <Route path="notes" element={<NotesModule projectId={currentProject.id} />} />
                       <Route path="notes/new" element={<NoteCreate projectId={currentProject.id} />} />
