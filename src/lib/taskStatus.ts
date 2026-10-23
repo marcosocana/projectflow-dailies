@@ -207,6 +207,10 @@ export const assignmentToSelectValue = (
   if (status === 'blocked') return 'blocked';
   if (status === 'in_progress') return 'in_progress';
   if (status === 'resolved' || status === 'in_qa') {
+    // Special case: if resolved with no environment, it's resolved_local
+    if ((status === 'resolved' && environment === null) || environment === 'local') {
+      return 'resolved_local';
+    }
     return `resolved_${normalizeEnvironment(status === 'in_qa' ? 'PRE' : environment) || 'PRO'}` as AssignmentStatusValue;
   }
   return 'pending';
