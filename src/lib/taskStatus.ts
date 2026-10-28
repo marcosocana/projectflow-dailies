@@ -1,4 +1,4 @@
-export type TaskEnvironment = 'DEV' | 'PRE' | 'PRO';
+export type TaskEnvironment = 'LOCAL' | 'DEV' | 'PRE' | 'PRO';
 export type IncidentStatus = 'pending' | 'in_progress' | 'resolved' | 'closed' | 'in_qa' | 'blocked';
 export type TaskStatus = 'pending' | 'in_progress' | 'resolved' | 'resolved_yesterday' | 'blocked';
 export type AssignmentStatusValue =
@@ -8,10 +8,10 @@ export type AssignmentStatusValue =
   | 'resolved_DEV'
   | 'resolved_PRE'
   | 'resolved_PRO'
-  | 'resolved_local'
+  | 'resolved_LOCAL'
   | 'closed';
 
-export const TASK_ENVIRONMENTS: TaskEnvironment[] = ['DEV', 'PRE', 'PRO'];
+export const TASK_ENVIRONMENTS: TaskEnvironment[] = ['LOCAL', 'DEV', 'PRE', 'PRO'];
 
 export const INCIDENT_STATUS_OPTIONS: Array<{ value: IncidentStatus; label: string }> = [
   { value: 'pending', label: 'Pendiente' },
@@ -27,7 +27,7 @@ export const ASSIGNMENT_STATUS_OPTIONS: Array<{ value: AssignmentStatusValue; la
   { value: 'resolved_DEV', label: 'Resuelta - En DEV' },
   { value: 'resolved_PRE', label: 'Resuelta - En PRE' },
   { value: 'resolved_PRO', label: 'Resuelta - En PRO' },
-  { value: 'resolved_local', label: 'Resuelta - En Local' },
+  { value: 'resolved_LOCAL', label: 'Resuelta - En Local' },
   { value: 'blocked', label: 'Block' },
   { value: 'closed', label: 'Cerrada' },
 ];
@@ -67,7 +67,8 @@ export const getResolvedSubstatusLabel = (
   environment?: string | null,
 ) => {
   if (!isResolvedStatus(status)) return '-';
-  return `En ${normalizeEnvironment(status === 'in_qa' ? 'PRE' : environment) || 'PRO'}`;
+  const normalized = normalizeEnvironment(status === 'in_qa' ? 'PRE' : environment) || 'PRO';
+  return normalized === 'LOCAL' ? 'En Local' : `En ${normalized}`;
 };
 
 export const getStatusLogValue = (
@@ -86,7 +87,7 @@ export const getStatusLogLabel = (status: string | null | undefined) => {
   if (status === 'resolved_DEV') return 'Resuelta - En DEV';
   if (status === 'resolved_PRE') return 'Resuelta - En PRE';
   if (status === 'resolved_PRO') return 'Resuelta - En PRO';
-  if (status === 'resolved_local') return 'Resuelta - En Local';
+  if (status === 'resolved_LOCAL' || status === 'resolved_local') return 'Resuelta - En Local';
   return getIncidentStatusLabel(status);
 };
 
@@ -100,9 +101,10 @@ const INCIDENT_STATUS_RANK: Record<string, number> = {
 };
 
 const ENVIRONMENT_RANK: Record<TaskEnvironment, number> = {
-  DEV: 0,
-  PRE: 1,
-  PRO: 2,
+  LOCAL: 0,
+  DEV: 1,
+  PRE: 2,
+  PRO: 3,
 };
 
 export const getMinimumIncidentAssignmentState = <T extends { status: string; status_environment?: string | null }>(
@@ -178,7 +180,7 @@ export const getIncidentStatusTone = (status: IncidentStatus | string | null | u
 
 export const getAppStatusTone = (status: IncidentStatus | TaskStatus | string | null | undefined) => {
   if (status === 'in_progress') return 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent';
-  if (status === 'resolved_local') return 'bg-green-200 text-green-900 border-transparent';
+  if (status === 'resolved_LOCAL' || status === 'resolved_local') return 'bg-green-200 text-green-900 border-transparent';
   if (status === 'resolved' || status === 'resolved_yesterday' || status === 'in_qa' || String(status || '').startsWith('resolved_')) return 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent';
   if (status === 'blocked') return 'bg-destructive text-destructive-foreground border-transparent';
   if (status === 'closed') return 'bg-muted text-muted-foreground border-transparent';
@@ -207,10 +209,6 @@ export const assignmentToSelectValue = (
   if (status === 'blocked') return 'blocked';
   if (status === 'in_progress') return 'in_progress';
   if (status === 'resolved' || status === 'in_qa') {
-    // Special case: if resolved with no environment, it's resolved_local
-    if ((status === 'resolved' && environment === null) || environment === 'local') {
-      return 'resolved_local';
-    }
     return `resolved_${normalizeEnvironment(status === 'in_qa' ? 'PRE' : environment) || 'PRO'}` as AssignmentStatusValue;
   }
   return 'pending';
@@ -222,7 +220,7 @@ export const selectValueToAssignment = (
   if (value === 'resolved_DEV') return { status: 'resolved', environment: 'DEV' };
   if (value === 'resolved_PRE') return { status: 'resolved', environment: 'PRE' };
   if (value === 'resolved_PRO') return { status: 'resolved', environment: 'PRO' };
-  if (value === 'resolved_local') return { status: 'resolved', environment: null };
+  if (value === 'resolved_LOCAL') return { status: 'resolved', environment: 'LOCAL' };
   if (value === 'closed') return { status: 'closed', environment: 'PRO' };
   if (value === 'blocked') return { status: 'blocked', environment: null };
   if (value === 'in_progress') return { status: 'in_progress', environment: null };

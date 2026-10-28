@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,12 +10,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useProjectAccess } from '@/hooks/useProjectAccess';
 import { supabase } from '@/integrations/supabase/client';
-import { getActivityLogLastSeen, subscribeToActivityLogReadState } from '@/lib/activityLogReadState';
+import { useActivityUnread } from '@/hooks/useActivityUnread';
 import { AppSidebar } from '@/components/AppSidebar';
 import ScrollToTop from '@/components/ScrollToTop';
 import { GitCompareArrows, LogOut, Menu, Shield, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import vecturaLogo from '@/assets/vectura-logo.webp';
+import vecturaLogo from '@/assets/vectura-logo-256.png';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 
 const ActivityLogModule = lazy(() => import('@/components/ActivityLogModule'));
@@ -48,7 +48,6 @@ const Dashboard = () => {
   const [compareBacklogOpen, setCompareBacklogOpen] = useState(false);
   const [isAdminRole, setIsAdminRole] = useState(false);
   const [projectSelectionReady, setProjectSelectionReady] = useState(false);
-  const [hasUnreadActivity, setHasUnreadActivity] = useState(false);
   const { user, signOut } = useAuth();
   const { toast } = useToast();
   const {
@@ -62,6 +61,7 @@ const Dashboard = () => {
     userProjects,
   } = useProjectAccess();
   const navigate = useNavigate();
+  const hasUnreadActivity = useActivityUnread(currentProject?.id, user?.id);
   const isSuperUser = user?.email?.toLowerCase() === 'mocanat@minsait.com';
   const hasAdminPasswordAccess = sessionStorage.getItem('projectflow_admin_access') === 'true';
   const canOpenAdmin = isSuperUser || isAdminRole || hasAdminPasswordAccess;
@@ -84,29 +84,6 @@ const Dashboard = () => {
       isMounted = false;
     };
   }, [user?.id]);
-
-  const refreshUnreadActivity = useCallback(async () => {
-    if (!currentProject?.id) {
-      setHasUnreadActivity(false);
-      return;
-    }
-
-    const lastSeen = getActivityLogLastSeen(currentProject.id, user?.id);
-    const { data, error } = await supabase
-      .from('incident_activity_logs')
-      .select('created_at')
-      .eq('project_id', currentProject.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error || !data?.created_at) {
-      setHasUnreadActivity(false);
-      return;
-    }
-
-    setHasUnreadActivity(!lastSeen || new Date(data.created_at).getTime() > new Date(lastSeen).getTime());
-  }, [currentProject?.id, user?.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -133,39 +110,6 @@ const Dashboard = () => {
       isMounted = false;
     };
   }, [user, currentProject]);
-
-  useEffect(() => {
-    refreshUnreadActivity();
-  }, [refreshUnreadActivity]);
-
-  useEffect(() => {
-    const unsubscribe = subscribeToActivityLogReadState(refreshUnreadActivity);
-    return unsubscribe;
-  }, [refreshUnreadActivity]);
-
-  useEffect(() => {
-    if (!currentProject?.id) return undefined;
-
-    const channel = supabase
-      .channel(`mobile-activity-log-unread-${currentProject.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'incident_activity_logs',
-          filter: `project_id=eq.${currentProject.id}`,
-        },
-        () => {
-          refreshUnreadActivity();
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentProject?.id, refreshUnreadActivity]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -457,7 +401,7 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="min-h-screen">
-            <AppSidebar currentProject={currentProject} />
+            <AppSidebar currentProject={currentProject} hasUnreadActivity={hasUnreadActivity} />
             <main className="ml-0 md:ml-16 p-4 md:p-6 2xl:px-10 pt-[64px]">
               <div className="flex items-start gap-4">
                 <div className="min-w-0 flex-1">

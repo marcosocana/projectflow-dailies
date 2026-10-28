@@ -1,5 +1,4 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { useCallback, useEffect, useState } from 'react';
 import {
   Sidebar,
   SidebarContent,
@@ -10,9 +9,6 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import { getActivityLogLastSeen, subscribeToActivityLogReadState } from '@/lib/activityLogReadState';
 import { 
   Calendar,
   FileText,
@@ -28,10 +24,6 @@ import {
   Clock3,
   type LucideProps
 } from 'lucide-react';
-
-interface AppSidebarProps {
-  currentProject: any;
-}
 
 const UserClockIcon = ({ className }: LucideProps) => (
   <span className={`relative inline-flex ${className || ''}`} aria-hidden="true">
@@ -103,67 +95,14 @@ const menuItems = [
   },
 ];
 
-export function AppSidebar({ currentProject }: AppSidebarProps) {
+interface AppSidebarProps {
+  currentProject: any;
+  hasUnreadActivity: boolean;
+}
+
+export function AppSidebar({ currentProject, hasUnreadActivity }: AppSidebarProps) {
   const location = useLocation();
-  const { user } = useAuth();
   const currentPath = location.pathname;
-  const [hasUnreadActivity, setHasUnreadActivity] = useState(false);
-
-  const refreshUnreadActivity = useCallback(async () => {
-    if (!currentProject?.id) {
-      setHasUnreadActivity(false);
-      return;
-    }
-
-    const lastSeen = getActivityLogLastSeen(currentProject.id, user?.id);
-    const { data, error } = await supabase
-      .from('incident_activity_logs')
-      .select('created_at')
-      .eq('project_id', currentProject.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error || !data?.created_at) {
-      setHasUnreadActivity(false);
-      return;
-    }
-
-    setHasUnreadActivity(!lastSeen || new Date(data.created_at).getTime() > new Date(lastSeen).getTime());
-  }, [currentProject?.id, user?.id]);
-
-  useEffect(() => {
-    refreshUnreadActivity();
-  }, [refreshUnreadActivity, location.pathname]);
-
-  useEffect(() => {
-    const unsubscribe = subscribeToActivityLogReadState(refreshUnreadActivity);
-    return unsubscribe;
-  }, [refreshUnreadActivity]);
-
-  useEffect(() => {
-    if (!currentProject?.id) return undefined;
-
-    const channel = supabase
-      .channel(`sidebar-activity-log-unread-${currentProject.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'incident_activity_logs',
-          filter: `project_id=eq.${currentProject.id}`,
-        },
-        () => {
-          refreshUnreadActivity();
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentProject?.id, refreshUnreadActivity]);
 
   return (
     <aside 

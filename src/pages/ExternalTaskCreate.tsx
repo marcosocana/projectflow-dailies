@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, Loader2 } from 'lucide-react';
-import vecturaLogo from '@/assets/vectura-logo.webp';
+import vecturaLogo from '@/assets/vectura-logo-256.png';
 import TaskAssignmentsInput, { type TaskAssignment } from '@/components/TaskAssignmentsInput';
 import type { Database } from '@/integrations/supabase/types';
 import { mapIncidentStatusToTaskStatus, normalizeEnvironment } from '@/lib/taskStatus';
@@ -52,6 +52,7 @@ const STATUS_BADGE_CLS: Record<string, string> = {
   in_progress: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
   resolved: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
   resolved_local: 'bg-green-200 text-green-900',
+  resolved_LOCAL: 'bg-green-200 text-green-900',
   blocked: 'bg-destructive text-destructive-foreground',
   closed: 'bg-destructive text-destructive-foreground'
 };

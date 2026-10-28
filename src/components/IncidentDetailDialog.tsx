@@ -35,6 +35,7 @@ const CATEGORY_OPTIONS = [
 ] as const;
 
 const ENV_OPTIONS = ['DEV','PRE','PRO','Otro'] as const;
+const STATUS_ENV_OPTIONS = ['LOCAL','DEV','PRE','PRO'] as const;
 const DEVICE_OPTIONS = ['Web','APP','Otro'] as const;
 
 const MADRID_TIME_ZONE = 'Europe/Madrid';
@@ -226,7 +227,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           epic: data.epic || '',
           additionalComments: cleanAdditionalComments(data.additional_comments),
           env: pick(data.environment || '', ENV_OPTIONS),
-          statusEnv: data.status === 'in_qa' ? 'PRE' : pick(data.status_environment || '', ENV_OPTIONS),
+          statusEnv: data.status === 'in_qa' ? 'PRE' : pick(data.status_environment || '', STATUS_ENV_OPTIONS),
           dev: pick(data.device || '', DEVICE_OPTIONS),
           evidenceLink: data.evidence && !String(data.evidence).startsWith('incidents/') ? data.evidence : '',
           assignedTo: data.assigned_to || 'unassigned',

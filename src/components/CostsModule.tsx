@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowDown, ArrowUp, ArrowUpDown, Download, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 interface CostsModuleProps {
   projectId: string;
@@ -494,7 +493,8 @@ export default function CostsModule({ projectId }: CostsModuleProps) {
 
   const totalMargin = totals.sale > 0 ? (1 - totals.cost / totals.sale) * 100 : null;
 
-  const exportCosts = () => {
+  const exportCosts = async () => {
+    const XLSX = await import('xlsx');
     const exportRows = sortedRows.map(row => ({
       Persona: row.person.name,
       Etiqueta: row.tag,

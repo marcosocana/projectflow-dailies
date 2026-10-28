@@ -67,7 +67,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 type TaskStatus = 'pending' | 'in_progress' | 'resolved' | 'resolved_yesterday' | 'blocked';
 type IncidentCategory = 'incident' | 'improvement' | 'corrective_improvement';
-type TaskEnvironment = 'DEV' | 'PRE' | 'PRO';
+type TaskEnvironment = 'LOCAL' | 'DEV' | 'PRE' | 'PRO';
 type DailyPersistenceSummary = {
   tasksPersisted: number;
   persistedAt: string;
@@ -1560,9 +1560,10 @@ export default function DailiesModule({
     if (displayedStatus.status === 'resolved' || displayedStatus.status === 'resolved_yesterday') {
       const environment = normalizeEnvironment(displayedStatus.status_environment) || 'PRO';
       const resolvedEnvironmentOrder: Record<TaskEnvironment, number> = {
-        DEV: 0,
-        PRE: 1,
-        PRO: 2,
+        LOCAL: 0,
+        DEV: 1,
+        PRE: 2,
+        PRO: 3,
       };
 
       return `resolved_${resolvedEnvironmentOrder[environment]}`;

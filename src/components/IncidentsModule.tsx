@@ -16,7 +16,6 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useDroppable,
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import * as XLSX from 'xlsx';
 import { useAuth } from '@/hooks/useAuth';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Database } from '@/integrations/supabase/types';
@@ -26,6 +25,7 @@ import IncidentDetailDialog from '@/components/IncidentDetailDialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import TaskAssignmentCell from '@/components/TaskAssignmentCell';
+import { useIncidentAssignees } from '@/hooks/useIncidentAssignees';
 import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 import TaskAssignmentsInput from '@/components/TaskAssignmentsInput';
 import { Switch } from '@/components/ui/switch';
@@ -536,6 +536,8 @@ export default function IncidentsModule({
     return sorted.slice(start, end);
   }, [sorted, currentPage, pageSize]);
   const totalPages = Math.ceil(sorted.length / pageSize);
+  const pageIncidentIds = useMemo(() => paginatedIncidents.map((i: any) => i.id as string), [paginatedIncidents]);
+  const assigneesByIncident = useIncidentAssignees(pageIncidentIds);
   
   // Helper function to calculate KPIs from incidents array
   const calculateKPIs = (all: any[]) => {
@@ -1069,7 +1071,8 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
       });
     }
   };
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
+    const XLSX = await import('xlsx');
     const headers = [['Name', 'Description', 'Environment', 'Device', 'OccurredAt(ISO)', 'Status', 'Category', 'Epic', 'Evidence(Url)', 'AdditionalComments']];
     const ws = XLSX.utils.aoa_to_sheet(headers);
     const wb = XLSX.utils.book_new();
@@ -1077,6 +1080,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
     XLSX.writeFile(wb, 'incidents_template.xlsx');
   };
   const exportCurrent = async () => {
+    const XLSX = await import('xlsx');
     const rows = (incidents || []).map(i => ({
       Name: i.name,
       Description: i.description,
@@ -1206,6 +1210,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
   }, [filtered]);
   const importFromExcel = async (file: File) => {
     try {
+      const XLSX = await import('xlsx');
       const data = await file.arrayBuffer();
       const wb = XLSX.read(data);
       const ws = wb.Sheets[wb.SheetNames[0]];
@@ -1264,7 +1269,8 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
 
   const normalizeCompareId = (value: unknown) => String(value ?? '').trim().replace(/^INT/i, '').replace(/\D/g, '');
 
-  const downloadBacklogCompareTemplate = () => {
+  const downloadBacklogCompareTemplate = async () => {
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.aoa_to_sheet([['ID', 'Tipo', 'Estado']]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Plantilla');
@@ -1273,6 +1279,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
 
   const compareWithBacklogFile = async (file: File) => {
     try {
+      const XLSX = await import('xlsx');
       const data = await file.arrayBuffer();
       const wb = XLSX.read(data);
       const ws = wb.Sheets[wb.SheetNames[0]];
@@ -1659,7 +1666,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                       <TableCell>{new Date(i.occurred_at).toLocaleDateString('es-ES')}</TableCell>
                       <TableCell className="w-32"><StatusBadge status={i.status} environment={i.status_environment} /></TableCell>
                       <TableCell className="w-16">
-                        <TaskAssignmentCell taskId={i.id} teamMembers={teamMembers} />
+                        <TaskAssignmentCell assignedIds={assigneesByIncident[i.id]} teamMembers={teamMembers} />
                       </TableCell>
                       <TableCell className="w-24">
                         <div className="flex items-center gap-1">

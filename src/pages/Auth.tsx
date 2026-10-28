@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import vecturaLogo from '@/assets/vectura-logo.webp';
+import vecturaLogo from '@/assets/vectura-logo-256.png';
 
 const Auth = () => {
   const [email, setEmail] = useState('');

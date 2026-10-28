@@ -1,10 +1,15 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { memo, useMemo } from 'react';
 import { Users } from 'lucide-react';
 
+interface Member {
+  id: string;
+  name: string;
+  color: string;
+}
+
 interface TaskAssignmentCellProps {
-  taskId: string;
-  teamMembers: Array<{ id: string; name: string; color: string }>;
+  assignedIds: string[] | undefined;
+  teamMembers: Member[];
 }
 
 const getInitials = (name: string): string => {
@@ -16,49 +21,14 @@ const getInitials = (name: string): string => {
   return (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase();
 };
 
-export default function TaskAssignmentCell({ taskId, teamMembers }: TaskAssignmentCellProps) {
-  const [assignedCount, setAssignedCount] = useState(0);
-  const [assignedMembers, setAssignedMembers] = useState<Array<{ id: string; name: string; color: string }>>([]);
-
-  useEffect(() => {
-    const fetchAssignments = async () => {
-      const { data, error } = await supabase
-        .from('incident_assignments')
-        .select('assigned_to')
-        .eq('incident_id', taskId);
-
-      if (!error && data) {
-        const members = data
-          .map(a => teamMembers.find(m => m.id === a.assigned_to))
-          .filter(Boolean) as Array<{ id: string; name: string; color: string }>;
-        setAssignedCount(members.length);
-        setAssignedMembers(members);
-      }
-    };
-
-    fetchAssignments();
-
-    // Suscribirse a cambios en tiempo real
-    const channel = supabase
-      .channel(`assignments-${taskId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'incident_assignments',
-          filter: `incident_id=eq.${taskId}`
-        },
-        () => {
-          fetchAssignments();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [taskId, teamMembers]);
+function TaskAssignmentCell({ assignedIds, teamMembers }: TaskAssignmentCellProps) {
+  const assignedMembers = useMemo(
+    () => (assignedIds || [])
+      .map(id => teamMembers.find(m => m.id === id))
+      .filter(Boolean) as Member[],
+    [assignedIds, teamMembers]
+  );
+  const assignedCount = assignedMembers.length;
 
   if (assignedCount === 0) {
     return <span className="text-muted-foreground">-</span>;
@@ -66,9 +36,6 @@ export default function TaskAssignmentCell({ taskId, teamMembers }: TaskAssignme
 
   if (assignedCount === 1) {
     const member = assignedMembers[0];
-    if (!member) {
-      return <span className="text-muted-foreground">-</span>;
-    }
     return (
       <div className="flex items-center justify-center">
         <div 
@@ -94,3 +61,5 @@ export default function TaskAssignmentCell({ taskId, teamMembers }: TaskAssignme
     </div>
   );
 }
+
+export default memo(TaskAssignmentCell);

@@ -33,6 +33,7 @@ const STATUS_BADGE_CLS = {
   in_progress: 'bg-info text-info-foreground', 
   resolved: 'bg-success text-success-foreground',
   resolved_local: 'bg-green-200 text-green-900',
+  resolved_LOCAL: 'bg-green-200 text-green-900',
   blocked: 'bg-destructive text-destructive-foreground',
   closed: 'bg-destructive text-destructive-foreground',
 } as const;

@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from 'react';
-import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -110,7 +109,8 @@ export default function BacklogComparePanel({ projectId, onClose, onSelectId }: 
     vectoreaStatuses: [],
   });
 
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.aoa_to_sheet([['ID', 'Tipo', 'Estado']]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Plantilla');
@@ -119,6 +119,7 @@ export default function BacklogComparePanel({ projectId, onClose, onSelectId }: 
 
   const compareWithFile = async (file: File) => {
     try {
+      const XLSX = await import('xlsx');
       const data = await file.arrayBuffer();
       const wb = XLSX.read(data);
       const ws = wb.Sheets[wb.SheetNames[0]];
