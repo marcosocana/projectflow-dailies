@@ -5,6 +5,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { findIncidentByIdAndType } from '@/lib/incidentCategory';
 import { RefreshCcw } from 'lucide-react';
 
 type BacklogCompareRow = {
@@ -127,26 +128,29 @@ export default function BacklogComparePanel({ projectId, onClose, onSelectId }: 
 
       const { data: incidents, error } = await supabase
         .from('incidents')
-        .select('incident_number,status')
+        .select('incident_number,status,category,additional_comments')
         .eq('project_id', projectId);
       if (error) throw error;
 
-      const byId = new Map<string, any>();
+      const byId = new Map<string, any[]>();
       (incidents || []).forEach((incident: any) => {
         const id = normalizeCompareId(incident.incident_number);
-        if (id) byId.set(id, incident);
+        if (id) byId.set(id, [...(byId.get(id) || []), incident]);
       });
 
       const result = excelRows
         .map((row) => {
           const idRaw = row.ID ?? row.Id ?? row.id ?? '';
+          const type = String(row.Tipo ?? row.tipo ?? '').trim();
           const normalizedId = normalizeCompareId(idRaw);
-          const incident = normalizedId ? byId.get(normalizedId) : null;
+          const { incident, ambiguous } = findIncidentByIdAndType(normalizedId ? byId.get(normalizedId) : undefined, type);
           return {
             id: String(idRaw || '').trim(),
-            type: String(row.Tipo ?? row.tipo ?? '').trim(),
+            type,
             excelStatus: String(row.Estado ?? row.estado ?? '').trim(),
-            vectoreaStatus: incident ? (STATUS_LABELS[incident.status] || incident.status) : 'No existe en Vectorea',
+            vectoreaStatus: incident
+              ? (STATUS_LABELS[incident.status] || incident.status)
+              : ambiguous ? 'ID repetido: indica el Tipo' : 'No existe en Vectorea',
           };
         })
         .filter((row) => row.id);

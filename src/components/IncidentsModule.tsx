@@ -26,6 +26,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import TaskAssignmentCell from '@/components/TaskAssignmentCell';
 import { useIncidentAssignees } from '@/hooks/useIncidentAssignees';
+import { findIncidentByIdAndType } from '@/lib/incidentCategory';
 import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 import TaskAssignmentsInput from '@/components/TaskAssignmentsInput';
 import { Switch } from '@/components/ui/switch';
@@ -902,7 +903,7 @@ export default function IncidentsModule({
       toast({
         title: isDuplicateId ? 'ID duplicado' : 'Error',
         description: isDuplicateId
-          ? 'Ya existe una tarea con ese ID en este proyecto. Usa otro ID.'
+          ? 'Ya existe una tarea con ese ID en esta categoría. Usa otro ID.'
           : err?.message || 'No se pudo guardar la incidencia',
         variant: 'destructive'
       });
@@ -987,7 +988,7 @@ export default function IncidentsModule({
         toast({
           title: isDuplicateId ? 'ID duplicado' : 'Error',
           description: isDuplicateId
-            ? 'Ya existe una tarea con ese ID en este proyecto. Usa otro ID.'
+            ? 'Ya existe una tarea con ese ID en esta categoría. Usa otro ID.'
             : err?.message || 'No se pudo guardar la tarea',
           variant: 'destructive'
         });
@@ -1285,10 +1286,10 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { defval: '' }) as Array<Record<string, unknown>>;
 
-      const byId = new Map<string, any>();
+      const byId = new Map<string, any[]>();
       incidents.forEach((incident) => {
         const id = normalizeCompareId(incident.incident_number);
-        if (id) byId.set(id, incident);
+        if (id) byId.set(id, [...(byId.get(id) || []), incident]);
       });
 
       const result = rows
@@ -1297,12 +1298,14 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
           const type = String(row.Tipo ?? row.tipo ?? '').trim();
           const excelStatus = String(row.Estado ?? row.estado ?? '').trim();
           const normalizedId = normalizeCompareId(idRaw);
-          const incident = normalizedId ? byId.get(normalizedId) : null;
+          const { incident, ambiguous } = findIncidentByIdAndType(normalizedId ? byId.get(normalizedId) : undefined, type);
           return {
             id: String(idRaw || '').trim(),
             type,
             excelStatus,
-            vectoreaStatus: incident ? getIncidentStatusLabel(incident.status) : 'No existe en Vectorea',
+            vectoreaStatus: incident
+              ? getIncidentStatusLabel(incident.status)
+              : ambiguous ? 'ID repetido: indica el Tipo' : 'No existe en Vectorea',
             include: true,
           };
         })

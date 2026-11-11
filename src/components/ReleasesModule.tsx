@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useReleases, Release, ReleaseIncludedTask } from '@/hooks/useReleases';
+import { CATEGORY_LABELS, getEffectiveCategory } from '@/lib/incidentCategory';
 
 import { Plus, Smartphone, Globe, Eye, Trash2, Edit, ChevronDown, ChevronUp, Copy, X } from 'lucide-react';
 
@@ -19,6 +20,7 @@ interface ReleasesModuleProps {
 export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
   const { releases, loading, createRelease, updateRelease, deleteRelease } = useReleases(projectId);
   const [availableTasks, setAvailableTasks] = useState<ReleaseIncludedTask[]>([]);
+  const [taskCategories, setTaskCategories] = useState<Record<string, string>>({});
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
@@ -45,7 +47,7 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
     const fetchAvailableTasks = async () => {
       const { data, error } = await supabase
         .from('incidents')
-        .select('id, incident_number, name')
+        .select('id, incident_number, name, category, additional_comments')
         .eq('project_id', projectId)
         .order('incident_number', { ascending: false });
 
@@ -54,6 +56,10 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
         return;
       }
 
+      setTaskCategories(Object.fromEntries((data || []).map(task => [
+        task.id,
+        CATEGORY_LABELS[getEffectiveCategory(task)],
+      ])));
       setAvailableTasks((data || []).map(task => ({
         id: String(task.incident_number),
         title: task.name,
@@ -377,7 +383,9 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
                       className="h-4 w-4 shrink-0 cursor-pointer rounded border-input accent-primary"
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block font-mono text-xs text-muted-foreground">{task.id}</span>
+                      <span className="block font-mono text-xs text-muted-foreground">
+                        {task.id}{task.taskId && taskCategories[task.taskId] ? ` · ${taskCategories[task.taskId]}` : ''}
+                      </span>
                       <span className="block truncate">{task.title}</span>
                     </span>
                   </div>

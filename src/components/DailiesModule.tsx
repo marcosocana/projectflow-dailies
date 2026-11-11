@@ -708,7 +708,7 @@ export default function DailiesModule({
         return toast({
           title: 'Error',
           description: isDuplicateId
-            ? 'Ya existe una tarea con ese ID en este proyecto. Usa otro ID.'
+            ? 'Ya existe una tarea con ese ID en esta categoría. Usa otro ID.'
             : 'No se pudo crear la tarea en Home',
           variant: 'destructive',
         });
@@ -1602,7 +1602,7 @@ export default function DailiesModule({
   const copyDailySummary = async () => {
     const getSummaryTaskType = (task: any) => {
       const ticket = String(task.related_ticket ?? '').trim();
-      const linkedIncident = incidents.find((incident) => {
+      const linkedIncident = incidents.find((incident) => incident.id === task.incident_id) || incidents.find((incident) => {
         const incidentReference = formatIncidentReference(incident);
         return incidentReference === ticket || String(incident.incident_number ?? '') === ticket;
       });
