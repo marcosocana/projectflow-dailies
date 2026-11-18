@@ -469,14 +469,14 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle>Releases</CardTitle>
               <CardDescription>
-                Registro de versiones de Web y App
+                Registro de versiones de Back, Web y App
               </CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {hasMoreThanThree() && (
                 <Button 
                   variant="outline" 

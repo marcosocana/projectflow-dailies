@@ -1387,8 +1387,8 @@ const AdminProjects = () => {
                           const currentRole: ProjectUserRole = profile.is_admin ? 'admin' : access?.role === 'client' ? 'client' : 'team';
                           return (
                             <div key={profile.user_id} className="space-y-3 rounded-md border p-3">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="min-w-0">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="min-w-0 flex-1 basis-40">
                                   <div className="flex items-center gap-2 font-medium">
                                     <span className="truncate">{profile.full_name}</span>
                                     {!profile.is_active && <Badge variant="secondary">Baja</Badge>}

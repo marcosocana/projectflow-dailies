@@ -1541,7 +1541,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
               </CardTitle>
             </CardHeader>
             <CardContent className="p-2 pt-0">
-              <div className="flex items-stretch justify-between gap-1">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(46px,1fr))] items-stretch gap-1">
                 {(() => {
                   const selected = statusFilter.length === 0 && categoryFilter === group.category;
                   return <div className={`min-w-0 flex-1 text-center cursor-pointer select-none rounded-md px-1 py-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
@@ -1586,8 +1586,8 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
 
       <Card>
       <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <CardTitle>Gestión de tareas</CardTitle>
               <div className="flex items-center gap-0 bg-muted rounded-lg p-1">
                 <ProjectButton variant={viewMode === 'list' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('list')} className="rounded-md" title="Lista">
@@ -1704,8 +1704,8 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                   <col className="w-44" />
                   <col className="w-20" />
                   <col className="w-28" />
-                  <col className="w-32" />
-                  <col className="w-16" />
+                  <col className="w-24" />
+                  <col className={isClient ? 'w-28' : 'w-16'} />
                   <col className="w-24" />
                 </colgroup>
                 <TableHeader>

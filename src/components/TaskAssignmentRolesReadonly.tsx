@@ -37,14 +37,14 @@ export default function TaskAssignmentRolesReadonly({ taskId, roleByPersonId }: 
   return (
     <div className="space-y-2">
       {groups.map(group => (
-        <div key={group.key} className="flex items-center gap-3 p-3 border rounded-lg">
+        <div key={group.key} className="flex flex-wrap items-center gap-3 p-3 border rounded-lg">
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
             style={{ backgroundColor: getRoleColor(group.label) }}
           >
             {getRoleInitial(group.label)}
           </div>
-          <span className="flex-1 font-medium">{group.label}</span>
+          <span className="min-w-0 flex-1 font-medium">{group.label}</span>
           <div className="flex flex-wrap items-center gap-1">
             {group.statuses.map(status => (
               <Badge key={status} variant="outline" className={`${getAppStatusTone(status)} border-transparent`}>
