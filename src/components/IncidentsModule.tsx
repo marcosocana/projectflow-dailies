@@ -736,7 +736,7 @@ export default function IncidentsModule({
       evidenceLink: '',
       environment: 'N/A',
       statusEnvironment: '',
-      device: 'N/A',
+      device: '',
       epic: projectRole.allowedEpics?.length === 1 ? projectRole.allowedEpics[0] : '',
       requester: '',
       informed: false,
@@ -835,7 +835,15 @@ export default function IncidentsModule({
       });
       return;
     }
-    if (projectRole.isClient && projectRole.allowedEpics && !form.epic.trim()) {
+    if (!form.device) {
+      toast({
+        title: 'Canal obligatorio',
+        description: 'Selecciona el canal de la tarea.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    if (!form.epic.trim()) {
       toast({
         title: 'Proceso obligatorio',
         description: 'Selecciona un proceso o da de alta uno nuevo.',
@@ -2120,7 +2128,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
             </Select>
           </div>
           <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex h-8 items-center justify-between gap-3">
               <RequiredLabel>ID</RequiredLabel>
               <div className={`flex items-center gap-2 ${isClient ? 'hidden' : ''}`}>
                 <Label htmlFor="internal-incident-id" className="text-xs text-muted-foreground">Interna</Label>
@@ -2164,7 +2172,9 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
             </div>
           </div>
           <div className="space-y-2">
-            <RequiredLabel>Nombre</RequiredLabel>
+            <div className="flex h-8 items-center">
+              <RequiredLabel>Nombre</RequiredLabel>
+            </div>
             <Input value={form.name} onChange={e => setForm(f => ({
               ...f,
               name: e.target.value
@@ -2183,7 +2193,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Canal</Label>
+            <RequiredLabel>Canal</RequiredLabel>
             <Select value={form.device} onValueChange={v => setForm(f => ({
               ...f,
               device: v
@@ -2196,7 +2206,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
           </div>
           {showsAppVersion(form.device) && (
             <div className="space-y-2">
-              <Label>Versión de la app (opcional)</Label>
+              <Label>Versión de la app</Label>
               <Input value={form.appVersion} placeholder="Ej. 2.4.1" onChange={e => setForm(f => ({
                 ...f,
                 appVersion: e.target.value
@@ -2204,7 +2214,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
             </div>
           )}
           <div className="space-y-2">
-            <Label>Proceso</Label>
+            <RequiredLabel>Proceso</RequiredLabel>
             <ProcessSelect
               value={form.epic}
               options={epicOptions}
@@ -2222,14 +2232,14 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
             }))} />
           </div>
           <div className="space-y-2">
-            <Label>Rol con el que sucede (opcional)</Label>
+            <Label>Rol con el que sucede</Label>
             <Input value={form.affectedRole} placeholder="Rol del usuario afectado" onChange={e => setForm(f => ({
               ...f,
               affectedRole: e.target.value
             }))} />
           </div>
           <div className="space-y-2">
-            <Label>Usuario al que le sucede (opcional)</Label>
+            <Label>Usuario al que le sucede</Label>
             <Input value={form.affectedUser} placeholder="Usuario afectado" onChange={e => setForm(f => ({
               ...f,
               affectedUser: e.target.value
@@ -2294,7 +2304,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
             ) : !editingId ? (
               <>
                 <div className="space-y-2 md:col-span-2">
-                  <Label>Personas asignadas (opcional)</Label>
+                  <Label>Personas asignadas</Label>
                   <TaskAssignmentsInput 
                     teamMembers={teamMembers}
                     assignments={createAssignments}

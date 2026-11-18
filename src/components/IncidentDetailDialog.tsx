@@ -597,11 +597,11 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                 <Input placeholder="Quién lo ha solicitado" value={detailForm.requester} onChange={(e) => setDetailForm((f) => ({ ...f, requester: e.target.value }))} />
               </div>
               <div>
-                <Label>Rol con el que sucede (opcional)</Label>
+                <Label>Rol con el que sucede</Label>
                 <Input placeholder="Rol del usuario afectado" value={detailForm.affectedRole} onChange={(e) => setDetailForm((f) => ({ ...f, affectedRole: e.target.value }))} />
               </div>
               <div>
-                <Label>Usuario al que le sucede (opcional)</Label>
+                <Label>Usuario al que le sucede</Label>
                 <Input placeholder="Usuario afectado" value={detailForm.affectedUser} onChange={(e) => setDetailForm((f) => ({ ...f, affectedUser: e.target.value }))} />
               </div>
               <div className="flex items-center gap-2 self-end pb-2">
@@ -635,7 +635,7 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
               </div>
               {showsAppVersion(detailForm.dev) && (
                 <div>
-                  <Label>Versión de la app (opcional)</Label>
+                  <Label>Versión de la app</Label>
                   <Input placeholder="Ej. 2.4.1" value={detailForm.appVersion} onChange={(e) => setDetailForm((f) => ({ ...f, appVersion: e.target.value }))} />
                 </div>
               )}
