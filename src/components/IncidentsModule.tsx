@@ -91,7 +91,7 @@ const DEVICE_OPTIONS = ['APP', 'Web', 'Ambos', 'Otro', 'N/A'] as const;
 // Status constants available module-wide to avoid TDZ issues
 const statusOrder = ['pending', 'in_progress', 'resolved', 'blocked', 'closed'] as const;
 // Estados de las tarjetas de filtro de Home: los mismos que las tareas (Resuelta por entorno).
-const KPI_STATUS_KEYS = ['pending', 'in_progress', 'resolved_DEV', 'resolved_PRE', 'resolved_PRO', 'resolved_LOCAL', 'blocked', 'closed'] as const;
+const KPI_STATUS_KEYS = ['pending', 'in_progress', 'resolved_LOCAL', 'resolved_DEV', 'resolved_PRE', 'resolved_PRO', 'blocked', 'closed'] as const;
 const KPI_STATUS_SHORT_LABELS: Record<string, string> = {
   pending: 'Pend.',
   in_progress: 'WIP',
