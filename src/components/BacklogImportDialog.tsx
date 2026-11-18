@@ -273,7 +273,7 @@ export default function BacklogImportDialog({
           </DialogTitle>
           <DialogDescription>
             {step === 'paste' 
-              ? 'Pega la información del backlog con la siguiente estructura: ID Excel | Épica | Categoría | Nombre | Descripción'
+              ? 'Pega la información del backlog con la siguiente estructura: ID Excel | Proceso | Categoría | Nombre | Descripción'
               : 'Revisa los datos y asigna personas antes de crear la tarea'}
           </DialogDescription>
         </DialogHeader>
@@ -285,7 +285,7 @@ export default function BacklogImportDialog({
               <Textarea
                 value={pastedText}
                 onChange={(e) => setPastedText(e.target.value)}
-                placeholder={`ID Excel | Épica | Categoría | Nombre | Descripción\n756    Planificación del mantenimiento    Incidencia    WEB/PRO: El filtro de fecha planificada no funciona, lo muestra todo    Descripción detallada\n757    Gestión de usuarios    Evolutivo    Añadir filtros avanzados en el listado    Descripción del evolutivo\n758    Operativa    Mejora correctiva    Ajustar validación de estados    Descripción de la mejora correctiva\n...`}
+                placeholder={`ID Excel | Proceso | Categoría | Nombre | Descripción\n756    Planificación del mantenimiento    Incidencia    WEB/PRO: El filtro de fecha planificada no funciona, lo muestra todo    Descripción detallada\n757    Gestión de usuarios    Evolutivo    Añadir filtros avanzados en el listado    Descripción del evolutivo\n758    Operativa    Mejora correctiva    Ajustar validación de estados    Descripción de la mejora correctiva\n...`}
                 className="min-h-[200px] font-mono text-sm"
               />
               <p className="text-xs text-muted-foreground">
@@ -313,8 +313,8 @@ export default function BacklogImportDialog({
                       <p className="text-sm font-medium">{currentRow.number || 'Sin ID'}</p>
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Épica</Label>
-                      <p className="text-sm font-medium">{currentRow.epic || 'Sin épica'}</p>
+                      <Label className="text-xs text-muted-foreground">Proceso</Label>
+                      <p className="text-sm font-medium">{currentRow.epic || 'Sin proceso'}</p>
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">Categoría</Label>

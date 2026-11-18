@@ -334,9 +334,9 @@ export default function ExternalIncident() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Épica</Label>
+                <Label>Proceso</Label>
                 <Select value={form.epic} onValueChange={(v) => setForm((f) => ({ ...f, epic: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar épica (opcional)" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Seleccionar proceso (opcional)" /></SelectTrigger>
                   <SelectContent>
                     {availableEpics.map((opt) => (
                       <SelectItem key={opt} value={opt}>{opt}</SelectItem>

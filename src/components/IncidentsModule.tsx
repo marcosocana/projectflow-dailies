@@ -31,9 +31,11 @@ import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 import TaskAssignmentsInput from '@/components/TaskAssignmentsInput';
 import { Switch } from '@/components/ui/switch';
 import BacklogImportDialog from '@/components/BacklogImportDialog';
+import { matchesChannelFilter, showsAppVersion } from '@/lib/incidentChannel';
 import TaskAssignmentRolesReadonly from '@/components/TaskAssignmentRolesReadonly';
 import { useProjectPeopleRoles } from '@/hooks/useProjectPeopleRoles';
-import { isCategoryAllowed, isEpicAllowed, useProjectRole } from '@/contexts/ProjectRoleContext';
+import { ensureClientProcessAllowed, isCategoryAllowed, useProjectRole } from '@/contexts/ProjectRoleContext';
+import ProcessSelect from '@/components/ProcessSelect';
 import { recordIncidentCreated, recordIncidentDeleted, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { ensureDailyTasksForAssignments } from '@/lib/dailyAssignmentTasks';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference, formatInternalTaskIdFromValue, hasInternalTaskIdMarker, loadNextInternalTaskId } from '@/lib/internalTaskIds';
@@ -83,7 +85,7 @@ const CATEGORY_OPTIONS = [{
   label: 'Mejora correctiva'
 }];
 const ENV_OPTIONS = ['DEV', 'PRE', 'PRO', 'Otro', 'N/A'] as const;
-const DEVICE_OPTIONS = ['APP', 'Web', 'Otro', 'N/A'] as const;
+const DEVICE_OPTIONS = ['APP', 'Web', 'Ambos', 'Otro', 'N/A'] as const;
 // Dynamic epic options will be calculated from database
 
 // Status constants available module-wide to avoid TDZ issues
@@ -110,7 +112,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const MADRID_TIME_ZONE = 'Europe/Madrid';
-const INCIDENT_COLUMNS = 'id,project_id,incident_number,name,description,category,additional_comments,status,status_environment,environment,device,assigned_to,occurred_at,created_at,updated_at,created_by,evidence,order_position,epic,requester,informed';
+const INCIDENT_COLUMNS = 'id,project_id,incident_number,name,description,category,additional_comments,status,status_environment,environment,device,assigned_to,occurred_at,created_at,updated_at,created_by,evidence,order_position,epic,requester,informed,app_version,affected_role,affected_user';
 const PERSON_COLUMNS = 'id,project_id,name,role,color,user_id,order_position,created_at,updated_at';
 
 const formatManualId = (value: string | number | null | undefined) =>
@@ -405,6 +407,9 @@ export default function IncidentsModule({
     epic: '',
     requester: '',
     informed: false,
+    appVersion: '',
+    affectedRole: '',
+    affectedUser: '',
     occurredAt: new Date().toISOString(),
     status: 'pending',
     category: 'incident',
@@ -513,7 +518,7 @@ export default function IncidentsModule({
     const term = search.trim().toLowerCase();
     return incidents.filter(i => {
       // Basic filters
-      const matchesChannel = channelFilter === 'all' || i.device === channelFilter;
+      const matchesChannel = matchesChannelFilter(i.device, channelFilter);
       const matchesEnvironment = environmentFilter === 'all' || i.environment === environmentFilter;
       const matchesEpic = epicFilter === 'all' || i.epic === epicFilter;
       const normalizedStatus = getStatusLogValue(i.status, i.status_environment);
@@ -732,6 +737,9 @@ export default function IncidentsModule({
       epic: projectRole.allowedEpics?.length === 1 ? projectRole.allowedEpics[0] : '',
       requester: '',
       informed: false,
+      appVersion: '',
+      affectedRole: '',
+      affectedUser: '',
       occurredAt: new Date().toISOString(),
       status: 'pending',
       category: projectRole.allowedCategories?.[0] ?? 'incident',
@@ -807,10 +815,21 @@ export default function IncidentsModule({
       });
       return;
     }
-    if (!isEpicAllowed(projectRole, form.epic)) {
+    if (projectRole.isClient && projectRole.allowedEpics && !form.epic.trim()) {
       toast({
-        title: 'Épica obligatoria',
-        description: 'Selecciona una de las épicas que tienes asignadas.',
+        title: 'Proceso obligatorio',
+        description: 'Selecciona un proceso o da de alta uno nuevo.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    try {
+      // Un cliente con procesos limitados puede crear uno nuevo: se añade a su lista.
+      await ensureClientProcessAllowed(projectId, form.epic, projectRole);
+    } catch (processError: any) {
+      toast({
+        title: 'No se pudo usar el proceso',
+        description: processError?.message || 'Elige uno de los procesos que tienes asignados.',
         variant: 'destructive'
       });
       return;
@@ -855,6 +874,9 @@ export default function IncidentsModule({
           device: deviceValue,
           epic: form.epic,
           requester: form.requester.trim() || null,
+          app_version: showsAppVersion(form.device) ? form.appVersion.trim() || null : null,
+          affected_role: form.affectedRole.trim() || null,
+          affected_user: form.affectedUser.trim() || null,
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
           category: categoryPayload.category,
@@ -917,6 +939,9 @@ export default function IncidentsModule({
           device: deviceValue,
           epic: form.epic,
           requester: form.requester.trim() || null,
+          app_version: showsAppVersion(form.device) ? form.appVersion.trim() || null : null,
+          affected_role: form.affectedRole.trim() || null,
+          affected_user: form.affectedUser.trim() || null,
           informed: form.informed,
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
@@ -993,6 +1018,7 @@ export default function IncidentsModule({
 
     const handler = setTimeout(async () => {
       try {
+        await ensureClientProcessAllowed(projectId, form.epic, projectRole);
         const currentIncident = incidents.find(incident => incident.id === editingId);
         const categoryPayload = serializeCategory(
           form.category,
@@ -1010,6 +1036,9 @@ export default function IncidentsModule({
           device: form.device || '',
           epic: form.epic,
           requester: form.requester.trim() || null,
+          app_version: showsAppVersion(form.device) ? form.appVersion.trim() || null : null,
+          affected_role: form.affectedRole.trim() || null,
+          affected_user: form.affectedUser.trim() || null,
           informed: form.informed,
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
@@ -1085,6 +1114,9 @@ export default function IncidentsModule({
       epic: incident.epic || '',
       requester: incident.requester || '',
       informed: !!incident.informed,
+      appVersion: incident.app_version || '',
+      affectedRole: incident.affected_role || '',
+      affectedUser: incident.affected_user || '',
       occurredAt: incident.occurred_at ? new Date(incident.occurred_at).toISOString() : new Date().toISOString(),
       status: incident.status === 'in_qa' ? 'resolved' : incident.status || 'pending',
       category: getDisplayCategory(incident),
@@ -1098,7 +1130,7 @@ export default function IncidentsModule({
     const basicInfo = `ID: ${formatIncidentReference(incident) ?? 'Sin ID'}
 Nombre: ${incident.name}
 Descripción: ${incident.description || 'Sin descripción'}
-Épica: ${incident.epic || 'No asignada'}
+Proceso: ${incident.epic || 'No asignado'}
 Canal: ${incident.device || 'No especificado'}
 Entorno: ${incident.environment || 'No especificado'}
 Fecha: ${new Date(incident.occurred_at).toLocaleDateString('es-ES')}
@@ -1303,7 +1335,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
           description: r.Description ?? r.Descripción ?? '',
           environment: r.Environment ?? r.Entorno ?? '',
           device: r.Device ?? r.Dispositivo ?? '',
-          epic: r.Epic ?? r['Épica'] ?? r.Epica ?? '',
+          epic: r.Proceso ?? r.Epic ?? r['Épica'] ?? r.Epica ?? '',
           occurred_at: r.OccurredAt ?? r.Fecha ?? new Date().toISOString(),
           status: r.Status ?? 'pending',
           category: categoryPayload.category,
@@ -1671,11 +1703,11 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
             </Select>
           </div>
           <div>
-            <Label>Épica</Label>
+            <Label>Proceso</Label>
             <Select value={epicFilter} onValueChange={setEpicFilter}>
-              <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="all">Todos</SelectItem>
                 {epicOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -1718,7 +1750,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                       Nombre {sortKey === 'name' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
                     <TableHead className="w-44 cursor-pointer select-none" onClick={() => toggleSort('epic')}>
-                      Épica {sortKey === 'epic' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
+                      Proceso {sortKey === 'epic' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
                     <TableHead className="w-20 cursor-pointer select-none" onClick={() => toggleSort('device')}>
                       Canal {sortKey === 'device' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
@@ -2049,7 +2081,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
         resetForm();
       }
     }}>
-      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{editingId ? 'Editar tarea' : 'Crear tarea'}</DialogTitle>
           <DialogDescription>Completa la información de la tarea</DialogDescription>
@@ -2126,17 +2158,25 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
   </SelectContent>
             </Select>
           </div>
+          {showsAppVersion(form.device) && (
+            <div className="space-y-2">
+              <Label>Versión de la app (opcional)</Label>
+              <Input value={form.appVersion} placeholder="Ej. 2.4.1" onChange={e => setForm(f => ({
+                ...f,
+                appVersion: e.target.value
+              }))} />
+            </div>
+          )}
           <div className="space-y-2">
-            <Label>Épica</Label>
-            <Select value={form.epic} onValueChange={v => setForm(f => ({
-              ...f,
-              epic: v
-            }))}>
-  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-  <SelectContent>
-    {epicOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-  </SelectContent>
-            </Select>
+            <Label>Proceso</Label>
+            <ProcessSelect
+              value={form.epic}
+              options={epicOptions}
+              onChange={v => setForm(f => ({
+                ...f,
+                epic: v
+              }))}
+            />
           </div>
           <div className="space-y-2">
             <Label>Solicitante</Label>
@@ -2145,6 +2185,26 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
               requester: e.target.value
             }))} />
           </div>
+          <div className="space-y-2">
+            <Label>Rol con el que sucede (opcional)</Label>
+            <Input value={form.affectedRole} placeholder="Rol del usuario afectado" onChange={e => setForm(f => ({
+              ...f,
+              affectedRole: e.target.value
+            }))} />
+          </div>
+          <div className="space-y-2">
+            <Label>Usuario al que le sucede (opcional)</Label>
+            <Input value={form.affectedUser} placeholder="Usuario afectado" onChange={e => setForm(f => ({
+              ...f,
+              affectedUser: e.target.value
+            }))} />
+          </div>
+          {!editingId && (
+            <div className="space-y-2">
+              <Label>Creado por</Label>
+              <Input value={user?.email ?? ''} readOnly disabled />
+            </div>
+          )}
           {editingId && (
             <div className="flex items-center gap-2 self-end pb-2">
               <Switch id="incident-informed" checked={form.informed} onCheckedChange={checked => setForm(f => ({

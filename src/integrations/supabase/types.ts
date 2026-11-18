@@ -203,6 +203,9 @@ export type Database = {
       incidents: {
         Row: {
           additional_comments: string | null
+          affected_role: string | null
+          affected_user: string | null
+          app_version: string | null
           assigned_to: string | null
           category: Database["public"]["Enums"]["incident_category"]
           created_at: string
@@ -226,6 +229,9 @@ export type Database = {
         }
         Insert: {
           additional_comments?: string | null
+          affected_role?: string | null
+          affected_user?: string | null
+          app_version?: string | null
           assigned_to?: string | null
           category?: Database["public"]["Enums"]["incident_category"]
           created_at?: string
@@ -249,6 +255,9 @@ export type Database = {
         }
         Update: {
           additional_comments?: string | null
+          affected_role?: string | null
+          affected_user?: string | null
+          app_version?: string | null
           assigned_to?: string | null
           category?: Database["public"]["Enums"]["incident_category"]
           created_at?: string

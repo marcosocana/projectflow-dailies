@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { CATEGORY_LABELS, type EffectiveCategory } from '@/lib/incidentCategory';
 
@@ -9,9 +9,11 @@ export interface ProjectRoleState {
   isClient: boolean;
   /** null = todas las categorías */
   allowedCategories: EffectiveCategory[] | null;
-  /** null = todas las épicas */
+  /** null = todos los procesos */
   allowedEpics: string[] | null;
   loading: boolean;
+  /** Vuelve a leer el rol y los filtros sin mostrar el estado de carga. */
+  reload: () => Promise<void>;
 }
 
 const DEFAULT_STATE: ProjectRoleState = {
@@ -20,6 +22,7 @@ const DEFAULT_STATE: ProjectRoleState = {
   allowedCategories: null,
   allowedEpics: null,
   loading: false,
+  reload: async () => {},
 };
 
 const ProjectRoleContext = createContext<ProjectRoleState>(DEFAULT_STATE);
@@ -36,48 +39,48 @@ const normalizeList = <T extends string>(value: unknown, allowed?: readonly T[])
 };
 
 export function useLoadProjectRole(projectId: string | undefined, userId: string | undefined): ProjectRoleState {
-  const [state, setState] = useState<ProjectRoleState>({ ...DEFAULT_STATE, loading: true });
+  const [state, setState] = useState<Omit<ProjectRoleState, 'reload'>>({ ...DEFAULT_STATE, loading: true });
+
+  const fetchRole = useCallback(async (showLoading: boolean) => {
+    if (!projectId || !userId) {
+      setState(DEFAULT_STATE);
+      return;
+    }
+
+    if (showLoading) setState(prev => ({ ...prev, loading: true }));
+
+    const [{ data: isAdmin }, { data: access }] = await Promise.all([
+      supabase.rpc('current_user_is_admin'),
+      (supabase.from('project_access') as any)
+        .select('role, allowed_categories, allowed_epics')
+        .eq('user_id', userId)
+        .eq('project_id', projectId)
+        .maybeSingle(),
+    ]);
+
+    const isClient = !isAdmin && access?.role === 'client';
+    setState({
+      role: isClient ? 'client' : 'team',
+      isClient,
+      allowedCategories: isClient ? normalizeList(access?.allowed_categories, VALID_CATEGORIES) : null,
+      allowedEpics: isClient ? normalizeList(access?.allowed_epics) : null,
+      loading: false,
+    });
+  }, [projectId, userId]);
 
   useEffect(() => {
     let isMounted = true;
-
-    const load = async () => {
-      if (!projectId || !userId) {
-        setState(DEFAULT_STATE);
-        return;
-      }
-
-      setState(prev => ({ ...prev, loading: true }));
-
-      const [{ data: isAdmin }, { data: access }] = await Promise.all([
-        supabase.rpc('current_user_is_admin'),
-        (supabase.from('project_access') as any)
-          .select('role, allowed_categories, allowed_epics')
-          .eq('user_id', userId)
-          .eq('project_id', projectId)
-          .maybeSingle(),
-      ]);
-
-      if (!isMounted) return;
-
-      const isClient = !isAdmin && access?.role === 'client';
-      setState({
-        role: isClient ? 'client' : 'team',
-        isClient,
-        allowedCategories: isClient ? normalizeList(access?.allowed_categories, VALID_CATEGORIES) : null,
-        allowedEpics: isClient ? normalizeList(access?.allowed_epics) : null,
-        loading: false,
-      });
-    };
-
-    load();
-
+    fetchRole(true).catch(() => {
+      if (isMounted) setState(prev => ({ ...prev, loading: false }));
+    });
     return () => {
       isMounted = false;
     };
-  }, [projectId, userId]);
+  }, [fetchRole]);
 
-  return state;
+  const reload = useCallback(() => fetchRole(false), [fetchRole]);
+
+  return useMemo(() => ({ ...state, reload }), [state, reload]);
 }
 
 export function ProjectRoleProvider({ value, children }: { value: ProjectRoleState; children: ReactNode }) {
@@ -94,3 +97,21 @@ export const isCategoryAllowed = (scope: ProjectRoleState, category: string) =>
 
 export const isEpicAllowed = (scope: ProjectRoleState, epic: string | null | undefined) =>
   !scope.allowedEpics || (!!epic && scope.allowedEpics.includes(epic));
+
+/**
+ * Un cliente con procesos limitados puede dar de alta uno nuevo: la base de datos lo
+ * añade a su lista permitida (solo si no existe ya en el proyecto). Debe llamarse antes
+ * de guardar la tarea. Lanza error si el proceso existe y el cliente no tiene acceso a él.
+ */
+export const ensureClientProcessAllowed = async (
+  projectId: string,
+  process: string | null | undefined,
+  scope: ProjectRoleState,
+) => {
+  const value = String(process ?? '').trim();
+  if (!scope.isClient || !scope.allowedEpics || !value || scope.allowedEpics.includes(value)) return;
+
+  const { error } = await (supabase.rpc as any)('add_client_process', { _project_id: projectId, _process: value });
+  if (error) throw error;
+  await scope.reload();
+};

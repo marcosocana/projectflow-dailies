@@ -419,7 +419,7 @@ export default function ExternalTaskCreate() {
               </div>
 
               <div className="space-y-2">
-                <Label>Épica</Label>
+                <Label>Proceso</Label>
                 <Select 
                   value={form.epic} 
                   onValueChange={v => setForm(f => ({ ...f, epic: v }))}

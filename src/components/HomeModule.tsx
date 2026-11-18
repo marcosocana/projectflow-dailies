@@ -627,7 +627,7 @@ export default function HomeModule({ projectId }: HomeModuleProps) {
                 <TableHead>Nombre</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Categoría</TableHead>
-                <TableHead>Épica</TableHead>
+                <TableHead>Proceso</TableHead>
                 <TableHead>Asignado a</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead></TableHead>

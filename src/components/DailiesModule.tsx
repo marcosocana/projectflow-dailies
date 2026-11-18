@@ -2554,7 +2554,7 @@ export default function DailiesModule({
                       <TableHead>ID</TableHead>
                       <TableHead>Tipo</TableHead>
                       <TableHead>Tarea</TableHead>
-                      <TableHead>Épica</TableHead>
+                      <TableHead>Proceso</TableHead>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Días</TableHead>
                       <TableHead></TableHead>
@@ -2832,11 +2832,11 @@ export default function DailiesModule({
               )}
               {(creationMode === 'linked' || creationMode === 'manual') && (
                 <div>
-                  <Label>Épica</Label>
+                  <Label>Proceso</Label>
                   <Select value={taskForm.epic || '__none__'} onValueChange={value => setTaskForm(f => ({ ...f, epic: value === '__none__' ? '' : value }))}>
-                    <SelectTrigger><SelectValue placeholder="Sin épica" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Sin proceso" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">Sin épica</SelectItem>
+                      <SelectItem value="__none__">Sin proceso</SelectItem>
                       {availableEpics.map(epic => (
                         <SelectItem key={epic} value={epic}>{epic}</SelectItem>
                       ))}
@@ -3245,13 +3245,13 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                   </Select>
                 </div>
                 <div>
-                  <Label>Épica</Label>
+                  <Label>Proceso</Label>
                   <Select value={editForm.epic || '__none__'} onValueChange={value => setEditForm(f => ({ ...f, epic: value === '__none__' ? '' : value }))}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Sin épica" />
+                      <SelectValue placeholder="Sin proceso" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">Sin épica</SelectItem>
+                      <SelectItem value="__none__">Sin proceso</SelectItem>
                       {availableEpics.map(epic => (
                         <SelectItem key={epic} value={epic}>{epic}</SelectItem>
                       ))}

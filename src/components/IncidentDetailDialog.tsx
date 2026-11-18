@@ -12,12 +12,14 @@ import { Trash2, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 import { Switch } from '@/components/ui/switch';
+import { showsAppVersion } from '@/lib/incidentChannel';
 import TaskAssignmentRolesReadonly from '@/components/TaskAssignmentRolesReadonly';
 import { useProjectPeopleRoles } from '@/hooks/useProjectPeopleRoles';
 import { syncSingleAssignmentStatus } from '@/hooks/useSyncTaskStatus';
 import { useTaskAssignments } from '@/hooks/useTaskAssignments';
 import { recordIncidentDeleted, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
-import { isCategoryAllowed, useProjectRole } from '@/contexts/ProjectRoleContext';
+import { ensureClientProcessAllowed, isCategoryAllowed, useProjectRole } from '@/contexts/ProjectRoleContext';
+import ProcessSelect from '@/components/ProcessSelect';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, extractInternalTaskNumber, formatIncidentReference, formatInternalTaskIdFromValue } from '@/lib/internalTaskIds';
 import {
   ASSIGNMENT_STATUS_OPTIONS,
@@ -40,7 +42,7 @@ const CATEGORY_OPTIONS = [
 
 const ENV_OPTIONS = ['DEV','PRE','PRO','Otro'] as const;
 const STATUS_ENV_OPTIONS = ['LOCAL','DEV','PRE','PRO'] as const;
-const DEVICE_OPTIONS = ['Web','APP','Otro'] as const;
+const DEVICE_OPTIONS = ['Web','APP','Ambos','Otro'] as const;
 
 const MADRID_TIME_ZONE = 'Europe/Madrid';
 
@@ -149,6 +151,9 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     epic: '',
     requester: '',
     informed: false,
+    appVersion: '',
+    affectedRole: '',
+    affectedUser: '',
     additionalComments: '',
     env: '',
     statusEnv: '',
@@ -160,7 +165,10 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
   useEffect(() => {
     if (!open) return;
     const loadEpics = async () => {
-      const { data } = await supabase.from('incidents').select('epic').not('epic','is', null);
+      if (!incidentId) return;
+      const { data: ownIncident } = await supabase.from('incidents').select('project_id').eq('id', incidentId).single();
+      if (!ownIncident) return;
+      const { data } = await supabase.from('incidents').select('epic').eq('project_id', ownIncident.project_id).not('epic','is', null);
       const uniq = Array.from(new Set((data || []).map((d: any) => d.epic).filter(Boolean)));
       setEpicOptions(uniq as string[]);
     };
@@ -188,7 +196,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     setDetailEvidenceFile(null);
     isInitialDetailLoad.current = true;
     setDetailForm({
-      incidentNumber: '', name: '', description: '', occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', epic: '', requester: '', informed: false, additionalComments: '', env: '', statusEnv: '', dev: '', evidenceLink: '', assignedTo: 'unassigned'
+      incidentNumber: '', name: '', description: '', occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', epic: '', requester: '', informed: false, appVersion: '', affectedRole: '', affectedUser: '', additionalComments: '', env: '', statusEnv: '', dev: '', evidenceLink: '', assignedTo: 'unassigned'
     });
   };
 
@@ -238,6 +246,9 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           epic: data.epic || '',
           requester: data.requester || '',
           informed: !!data.informed,
+          appVersion: data.app_version || '',
+          affectedRole: data.affected_role || '',
+          affectedUser: data.affected_user || '',
           additionalComments: cleanAdditionalComments(data.additional_comments),
           env: pick(data.environment || '', ENV_OPTIONS),
           statusEnv: data.status === 'in_qa' ? 'PRE' : pick(data.status_environment || '', STATUS_ENV_OPTIONS),
@@ -269,6 +280,17 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     const handler = setTimeout(async () => {
       const incidentNumber = extractInternalTaskNumber(detailForm.incidentNumber);
       if (!incidentNumber) return;
+      try {
+        // Un cliente con procesos limitados puede crear uno nuevo: se añade a su lista.
+        await ensureClientProcessAllowed(selected.project_id, detailForm.epic, projectRole);
+      } catch (processError: any) {
+        toast({
+          title: 'No se pudo usar el proceso',
+          description: processError?.message || 'Elige uno de los procesos que tienes asignados.',
+          variant: 'destructive',
+        });
+        return;
+      }
       const isInternalIncident = String(selected.additional_comments ?? '').includes(INTERNAL_TASK_ID_MARKER);
       const incidentReference = isInternalIncident ? formatInternalTaskIdFromValue(incidentNumber) : String(incidentNumber);
       const categoryPayload = serializeCategory(
@@ -294,6 +316,9 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         epic: detailForm.epic,
         requester: detailForm.requester.trim() || null,
         informed: detailForm.informed,
+        app_version: showsAppVersion(detailForm.dev) ? detailForm.appVersion.trim() || null : null,
+        affected_role: detailForm.affectedRole.trim() || null,
+        affected_user: detailForm.affectedUser.trim() || null,
         evidence: selected.evidence,
         assigned_to: detailForm.assignedTo === 'unassigned' ? null : detailForm.assignedTo,
       };
@@ -314,7 +339,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         toast({
           title: 'No se pudo guardar',
           description: projectRole.isClient
-            ? 'El cambio deja la tarea fuera de los tipos o épicas que tienes asignados.'
+            ? 'El cambio deja la tarea fuera de los tipos o procesos que tienes asignados.'
             : updateError.message,
           variant: 'destructive',
         });
@@ -452,7 +477,7 @@ Sub-estado: ${getResolvedSubstatusLabel(selected.status, selected.status_environ
 Fecha: ${new Date(selected.occurred_at).toLocaleDateString()}
 Entorno: ${selected.environment || 'N/A'}
 Canal: ${selected.device || 'N/A'}
-Épica: ${selected.epic || 'N/A'}
+Proceso: ${selected.epic || 'N/A'}
 Descripción: ${selected.description || 'Sin descripción'}
 Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
 
@@ -465,7 +490,7 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {selected ? `Detalle ${formatIncidentReference(selected) ?? 'sin ID'}` : 'Detalle de incidencia'}
@@ -560,26 +585,24 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                 </Select>
               </div>
               <div>
-                <Label>Épica</Label>
-                {projectRole.allowedEpics ? (
-                  <Select value={detailForm.epic} onValueChange={(v) => setDetailForm((f) => ({ ...f, epic: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                    <SelectContent>
-                      {projectRole.allowedEpics.map((opt) => (<SelectItem key={opt} value={opt}>{opt}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <>
-                    <Input list="epic-suggestions" placeholder="Escribe o selecciona..." value={detailForm.epic} onChange={(e) => setDetailForm((f) => ({ ...f, epic: e.target.value }))} />
-                    <datalist id="epic-suggestions">
-                      {epicOptions.map((opt) => (<option key={opt} value={opt} />))}
-                    </datalist>
-                  </>
-                )}
+                <Label>Proceso</Label>
+                <ProcessSelect
+                  value={detailForm.epic}
+                  options={projectRole.allowedEpics ?? epicOptions}
+                  onChange={(v) => setDetailForm((f) => ({ ...f, epic: v }))}
+                />
               </div>
               <div>
                 <Label>Solicitante</Label>
                 <Input placeholder="Quién lo ha solicitado" value={detailForm.requester} onChange={(e) => setDetailForm((f) => ({ ...f, requester: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Rol con el que sucede (opcional)</Label>
+                <Input placeholder="Rol del usuario afectado" value={detailForm.affectedRole} onChange={(e) => setDetailForm((f) => ({ ...f, affectedRole: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Usuario al que le sucede (opcional)</Label>
+                <Input placeholder="Usuario afectado" value={detailForm.affectedUser} onChange={(e) => setDetailForm((f) => ({ ...f, affectedUser: e.target.value }))} />
               </div>
               <div className="flex items-center gap-2 self-end pb-2">
                 <Switch id="detail-informed" checked={detailForm.informed} onCheckedChange={(checked) => setDetailForm((f) => ({ ...f, informed: checked }))} />
@@ -610,6 +633,12 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                   </SelectContent>
                 </Select>
               </div>
+              {showsAppVersion(detailForm.dev) && (
+                <div>
+                  <Label>Versión de la app (opcional)</Label>
+                  <Input placeholder="Ej. 2.4.1" value={detailForm.appVersion} onChange={(e) => setDetailForm((f) => ({ ...f, appVersion: e.target.value }))} />
+                </div>
+              )}
               <div className="md:col-span-2">
                 <Label>{projectRole.isClient ? 'Roles asignados' : 'Personas asignadas'}</Label>
                 {projectRole.isClient ? (

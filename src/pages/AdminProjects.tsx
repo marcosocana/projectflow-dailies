@@ -612,9 +612,9 @@ const AdminProjects = () => {
           {!access.allowed_categories?.length && <p className="text-xs text-muted-foreground">Todos los tipos</p>}
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Épicas visibles</Label>
+          <Label className="text-xs">Procesos visibles</Label>
           {projectEpics.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Este proyecto no tiene épicas.</p>
+            <p className="text-xs text-muted-foreground">Este proyecto no tiene procesos.</p>
           ) : (
             <div className="max-h-40 space-y-1 overflow-y-auto">
               {projectEpics.map(epic => (
@@ -630,7 +630,7 @@ const AdminProjects = () => {
               ))}
             </div>
           )}
-          {!access.allowed_epics?.length && <p className="text-xs text-muted-foreground">Todas las épicas</p>}
+          {!access.allowed_epics?.length && <p className="text-xs text-muted-foreground">Sin límite: ve todos los procesos</p>}
         </div>
       </div>
     );
@@ -1352,7 +1352,7 @@ const AdminProjects = () => {
 
                   <TabsContent value="users" className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                      Equipo ve todo el proyecto. Cliente solo ve Home y Releases, limitado a los tipos y épicas que marques (sin marcar = todos).
+                      Equipo ve todo el proyecto. Cliente solo ve Home y Releases, limitado a los tipos y procesos que marques (sin marcar = todos).
                       Admin es un permiso global: da acceso de administrador en todos los proyectos.
                     </p>
 
