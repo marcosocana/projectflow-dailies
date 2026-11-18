@@ -127,7 +127,7 @@ export default function TaskAssignmentsInput({
                   {ASSIGNMENT_STATUS_OPTIONS.map(opt => (
                     <SelectItem key={opt.value} value={opt.value}>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={`${getAppStatusTone(selectValueToAssignment(opt.value).status)} text-[10px] px-1 py-0.5`}>
+                        <Badge variant="outline" className={`${getAppStatusTone(opt.value)} text-[10px] px-1 py-0.5`}>
                           {opt.label}
                         </Badge>
                       </div>
@@ -136,7 +136,7 @@ export default function TaskAssignmentsInput({
                 </SelectContent>
               </Select>
 
-              <Badge variant="outline" className={`${getAppStatusTone(assignment.status)} border-transparent`}>
+              <Badge variant="outline" className={`${getAppStatusTone(assignment.status, assignment.environment ?? null)} border-transparent`}>
                 {getIncidentStatusLabel(assignment.status)}
               </Badge>
 

@@ -13,7 +13,7 @@ export interface ReleaseIncludedTask {
 export interface Release {
   id: string;
   project_id: string;
-  platform: 'web' | 'app';
+  platform: 'back' | 'web' | 'app';
   environment: 'dev' | 'pre' | 'pro';
   version: string;
   description: string | null;

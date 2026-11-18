@@ -11,7 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useReleases, Release, ReleaseIncludedTask } from '@/hooks/useReleases';
 import { CATEGORY_LABELS, getEffectiveCategory } from '@/lib/incidentCategory';
 
-import { Plus, Smartphone, Globe, Eye, Trash2, Edit, ChevronDown, ChevronUp, Copy, X } from 'lucide-react';
+import { Plus, Smartphone, Globe, Server, Eye, Trash2, Edit, ChevronDown, ChevronUp, Copy, X } from 'lucide-react';
 
 interface ReleasesModuleProps {
   projectId: string;
@@ -26,7 +26,7 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [platform, setPlatform] = useState<'web' | 'app'>('web');
+  const [platform, setPlatform] = useState<'back' | 'web' | 'app'>('web');
   const [environment, setEnvironment] = useState<'dev' | 'pre' | 'pro'>('pro');
   const [version, setVersion] = useState('');
   const [includedTasks, setIncludedTasks] = useState<ReleaseIncludedTask[]>([]);
@@ -35,7 +35,7 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
   const [manualTaskTitle, setManualTaskTitle] = useState('');
   
   // Edit form states
-  const [editPlatform, setEditPlatform] = useState<'web' | 'app'>('web');
+  const [editPlatform, setEditPlatform] = useState<'back' | 'web' | 'app'>('web');
   const [editEnvironment, setEditEnvironment] = useState<'dev' | 'pre' | 'pro'>('pro');
   const [editVersion, setEditVersion] = useState('');
   const [editIncludedTasks, setEditIncludedTasks] = useState<ReleaseIncludedTask[]>([]);
@@ -141,11 +141,9 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
 
   // Check if any environment has more than 3 releases
   const hasMoreThanThree = () => {
-    const webByEnv = groupReleasesByEnvironment(releases.filter(r => r.platform === 'web'));
-    const appByEnv = groupReleasesByEnvironment(releases.filter(r => r.platform === 'app'));
-    
-    return Object.values(webByEnv).some(envReleases => envReleases.length > 3) ||
-           Object.values(appByEnv).some(envReleases => envReleases.length > 3);
+    return [backReleases, webReleases, appReleases].some(platformReleases =>
+      Object.values(groupReleasesByEnvironment(platformReleases)).some(envReleases => envReleases.length > 3)
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -255,7 +253,7 @@ export default function ReleasesModule({ projectId }: ReleasesModuleProps) {
   };
 
   const copyReleaseInfo = async (release: Release) => {
-    const platformLabel = release.platform === 'web' ? 'Web' : 'App';
+    const platformLabel = release.platform === 'back' ? 'Back' : release.platform === 'web' ? 'Web' : 'App';
     const environmentLabel = getEnvironmentLabel(release.environment);
     const formattedDate = new Date(release.created_at).toLocaleDateString('es-ES', {
       year: 'numeric',
@@ -291,8 +289,11 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
     }, {} as Record<string, Release[]>);
   };
 
-  const webReleases = releases.filter(r => r.platform === 'web');
+  // Web ya no tiene entorno Desarrollo: los releases antiguos siguen en la base de datos pero no se muestran.
+  const backReleases = releases.filter(r => r.platform === 'back');
+  const webReleases = releases.filter(r => r.platform === 'web' && r.environment !== 'dev');
   const appReleases = releases.filter(r => r.platform === 'app');
+  const backByEnvironment = groupReleasesByEnvironment(backReleases);
   const webByEnvironment = groupReleasesByEnvironment(webReleases);
   const appByEnvironment = groupReleasesByEnvironment(appReleases);
 
@@ -311,8 +312,8 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
     return colors[env as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
-  const getAvailableEnvironments = (platform: 'web' | 'app'): Array<'dev' | 'pre' | 'pro'> => {
-    return platform === 'web' ? ['dev', 'pre', 'pro'] : ['pre', 'pro'];
+  const getAvailableEnvironments = (_platform: 'back' | 'web' | 'app'): Array<'dev' | 'pre' | 'pro'> => {
+    return ['pre', 'pro'];
   };
 
   const dialogContentClassName = 'w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] overflow-hidden sm:w-[720px] sm:max-w-[720px]';
@@ -509,144 +510,80 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
               <div className="text-muted-foreground">Cargando releases...</div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Web Section */}
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Globe className="h-5 w-5 text-blue-500" />
-                  <h3 className="text-lg font-semibold">Web</h3>
-                  <Badge variant="secondary">{webReleases.length}</Badge>
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  {['dev', 'pre', 'pro'].map(env => {
-                    const envReleases = webByEnvironment[env] || [];
-                    return (
-                      <div key={env} className="space-y-2">
-                        <div className="text-center">
-                          <Badge className={getEnvironmentColor(env)} variant="secondary">
-                            {getEnvironmentLabel(env)}
-                          </Badge>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {envReleases.length} ver{envReleases.length !== 1 ? 's' : ''}
+            <div className="grid grid-cols-1 gap-8 xl:grid-cols-3 xl:gap-6">
+              {([
+                { key: 'back', label: 'Back', icon: <Server className="h-5 w-5 text-orange-500" />, list: backReleases, byEnvironment: backByEnvironment },
+                { key: 'web', label: 'Web', icon: <Globe className="h-5 w-5 text-blue-500" />, list: webReleases, byEnvironment: webByEnvironment },
+                { key: 'app', label: 'App', icon: <Smartphone className="h-5 w-5 text-green-500" />, list: appReleases, byEnvironment: appByEnvironment },
+              ] as const).map(section => (
+                <div key={section.key} className="min-w-0">
+                  <div className="flex items-center gap-2 mb-4">
+                    {section.icon}
+                    <h3 className="text-lg font-semibold">{section.label}</h3>
+                    <Badge variant="secondary">{section.list.length}</Badge>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {(['pre', 'pro'] as const).map(env => {
+                      const envReleases = section.byEnvironment[env] || [];
+                      return (
+                        <div key={env} className="min-w-0 space-y-2">
+                          <div className="text-center">
+                            <Badge className={getEnvironmentColor(env)} variant="secondary">
+                              {getEnvironmentLabel(env)}
+                            </Badge>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {envReleases.length} ver{envReleases.length !== 1 ? 's' : ''}
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            {envReleases.length === 0 ? (
+                              <div className="text-center py-4 text-muted-foreground text-xs">
+                                Sin releases
+                              </div>
+                            ) : (
+                              getDisplayedReleases(envReleases).map((release, index) => (
+                                <Card key={release.id} className="border">
+                                  <CardContent className="p-2">
+                                    <div className="space-y-1">
+                                      <div className="flex items-center justify-between gap-1">
+                                        <Badge variant="outline" className="min-w-0 truncate font-mono text-xs px-1 py-0">
+                                          v{release.version}
+                                        </Badge>
+                                        {index === 0 && (
+                                          <Badge variant="default" className="text-xs px-1 py-0">
+                                            Actual
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-xs text-muted-foreground">
+                                          {new Date(release.created_at).toLocaleDateString('es-ES', {
+                                            day: '2-digit',
+                                            month: '2-digit'
+                                          })}
+                                        </span>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleViewDetail(release)}
+                                          aria-label="Ver detalle"
+                                          className="h-5 w-5 p-0"
+                                        >
+                                          <Eye className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              ))
+                            )}
                           </div>
                         </div>
-                        <div className="space-y-1">
-                          {envReleases.length === 0 ? (
-                            <div className="text-center py-4 text-muted-foreground text-xs">
-                              Sin releases
-                            </div>
-                          ) : (
-                            getDisplayedReleases(envReleases).map((release, index) => (
-                              <Card key={release.id} className="border">
-                                <CardContent className="p-2">
-                                  <div className="space-y-1">
-                                    <div className="flex items-center justify-between">
-                                      <Badge variant="outline" className="font-mono text-xs px-1 py-0">
-                                        v{release.version}
-                                      </Badge>
-                                      {index === 0 && (
-                                        <Badge variant="default" className="text-xs px-1 py-0">
-                                          Actual
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-xs text-muted-foreground">
-                                        {new Date(release.created_at).toLocaleDateString('es-ES', { 
-                                          day: '2-digit', 
-                                          month: '2-digit' 
-                                        })}
-                                      </span>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleViewDetail(release)}
-                                        aria-label="Ver detalle"
-                                        className="h-5 w-5 p-0"
-                                      >
-                                        <Eye className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-
-              {/* App Section */}
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Smartphone className="h-5 w-5 text-green-500" />
-                  <h3 className="text-lg font-semibold">App</h3>
-                  <Badge variant="secondary">{appReleases.length}</Badge>
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {['pre', 'pro'].map(env => {
-                    const envReleases = appByEnvironment[env] || [];
-                    return (
-                      <div key={env} className="space-y-2">
-                        <div className="text-center">
-                          <Badge className={getEnvironmentColor(env)} variant="secondary">
-                            {getEnvironmentLabel(env)}
-                          </Badge>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {envReleases.length} ver{envReleases.length !== 1 ? 's' : ''}
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          {envReleases.length === 0 ? (
-                            <div className="text-center py-4 text-muted-foreground text-xs">
-                              Sin releases
-                            </div>
-                          ) : (
-                            getDisplayedReleases(envReleases).map((release, index) => (
-                              <Card key={release.id} className="border">
-                                <CardContent className="p-2">
-                                  <div className="space-y-1">
-                                    <div className="flex items-center justify-between">
-                                      <Badge variant="outline" className="font-mono text-xs px-1 py-0">
-                                        v{release.version}
-                                      </Badge>
-                                      {index === 0 && (
-                                        <Badge variant="default" className="text-xs px-1 py-0">
-                                          Actual
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-xs text-muted-foreground">
-                                        {new Date(release.created_at).toLocaleDateString('es-ES', { 
-                                          day: '2-digit', 
-                                          month: '2-digit' 
-                                        })}
-                                      </span>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleViewDetail(release)}
-                                        aria-label="Ver detalle"
-                                        className="h-5 w-5 p-0"
-                                      >
-                                        <Eye className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              ))}
             </div>
           )}
         </CardContent>
@@ -666,7 +603,7 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
             <div className="grid min-w-0 max-w-full gap-3 md:grid-cols-3">
               <div className={formGroupClassName}>
                 <Label htmlFor="platform">Plataforma</Label>
-                <Select value={platform} onValueChange={(value: 'web' | 'app') => {
+                <Select value={platform} onValueChange={(value: 'back' | 'web' | 'app') => {
                   setPlatform(value);
                   const defaultEnv = value === 'web' ? 'pro' : 'pro';
                   setEnvironment(defaultEnv);
@@ -675,6 +612,12 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
                     <SelectValue placeholder="Selecciona la plataforma" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="back">
+                      <div className="flex items-center gap-2">
+                        <Server className="h-4 w-4" />
+                        Back
+                      </div>
+                    </SelectItem>
                     <SelectItem value="web">
                       <div className="flex items-center gap-2">
                         <Globe className="h-4 w-4" />
@@ -761,7 +704,7 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
               <div className={formGroupClassName}>
                 <Label>Plataforma</Label>
                 {isEditing ? (
-                  <Select value={editPlatform} onValueChange={(value: 'web' | 'app') => {
+                  <Select value={editPlatform} onValueChange={(value: 'back' | 'web' | 'app') => {
                     setEditPlatform(value);
                     // Reset environment when platform changes and set default
                     const defaultEnv = value === 'web' ? 'pro' : 'pro';
@@ -771,6 +714,12 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
                       <SelectValue placeholder="Selecciona la plataforma" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="back">
+                        <div className="flex items-center gap-2">
+                          <Server className="h-4 w-4" />
+                          Back
+                        </div>
+                      </SelectItem>
                       <SelectItem value="web">
                         <div className="flex items-center gap-2">
                           <Globe className="h-4 w-4" />
@@ -787,7 +736,12 @@ ${formatIncludedTasks(normalizeIncludedTasks(release.included_tasks), release.de
                   </Select>
                 ) : (
                   <div className="flex items-center gap-2 mt-1">
-                    {selectedRelease.platform === 'web' ? (
+                    {selectedRelease.platform === 'back' ? (
+                      <>
+                        <Server className="h-4 w-4 text-orange-500" />
+                        <span>Back</span>
+                      </>
+                    ) : selectedRelease.platform === 'web' ? (
                       <>
                         <Globe className="h-4 w-4 text-blue-500" />
                         <span>Web</span>

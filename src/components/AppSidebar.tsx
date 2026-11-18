@@ -24,6 +24,7 @@ import {
   Clock3,
   type LucideProps
 } from 'lucide-react';
+import { CLIENT_ALLOWED_ROUTES } from '@/contexts/ProjectRoleContext';
 
 const UserClockIcon = ({ className }: LucideProps) => (
   <span className={`relative inline-flex ${className || ''}`} aria-hidden="true">
@@ -98,11 +99,15 @@ const menuItems = [
 interface AppSidebarProps {
   currentProject: any;
   hasUnreadActivity: boolean;
+  isClient?: boolean;
 }
 
-export function AppSidebar({ currentProject, hasUnreadActivity }: AppSidebarProps) {
+export function AppSidebar({ currentProject, hasUnreadActivity, isClient = false }: AppSidebarProps) {
   const location = useLocation();
   const currentPath = location.pathname;
+  const visibleItems = isClient
+    ? menuItems.filter(item => (CLIENT_ALLOWED_ROUTES as readonly string[]).includes(item.url))
+    : menuItems;
 
   return (
     <aside 
@@ -112,7 +117,7 @@ export function AppSidebar({ currentProject, hasUnreadActivity }: AppSidebarProp
       <div className="p-2">
         <nav className="flex flex-col items-center gap-4">
           <TooltipProvider>
-            {menuItems.map((item) => {
+            {visibleItems.map((item) => {
               const isActive = currentPath.includes(`/${item.url}`);
               const showUnreadBullet = item.url === 'activity' && hasUnreadActivity && !isActive;
               

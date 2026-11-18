@@ -16,6 +16,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Pencil, Trash2, Upload, Save, RefreshCcw, ArrowLeft, Eye, EyeOff, UserCog, UserX } from 'lucide-react';
 import { Navigate, useNavigate } from 'react-router-dom';
+import { CATEGORY_LABELS, type EffectiveCategory } from '@/lib/incidentCategory';
 
 interface ProjectRow {
   id: string;
@@ -44,7 +45,12 @@ interface ProjectAccessRow {
   id: string;
   user_id: string;
   project_id: string;
+  role: 'team' | 'client';
+  allowed_categories: string[] | null;
+  allowed_epics: string[] | null;
 }
+
+const CLIENT_CATEGORY_OPTIONS = Object.entries(CATEGORY_LABELS) as Array<[EffectiveCategory, string]>;
 
 interface PersonRow {
   id: string;
@@ -61,6 +67,7 @@ const AdminProjects = () => {
   const [profiles, setProfiles] = useState<AdminProfile[]>([]);
   const [projectAccess, setProjectAccess] = useState<ProjectAccessRow[]>([]);
   const [people, setPeople] = useState<PersonRow[]>([]);
+  const [epicsByProject, setEpicsByProject] = useState<Record<string, string[]>>({});
   const [linkedProjectId, setLinkedProjectId] = useState('');
   const [search, setSearch] = useState('');
   const [userSearch, setUserSearch] = useState('');
@@ -145,13 +152,27 @@ const AdminProjects = () => {
         { data: accessData, error: accessError },
       ] = await Promise.all([
         supabase.rpc('list_registered_users'),
-        supabase
-          .from('project_access')
-          .select('id, user_id, project_id'),
+        (supabase
+          .from('project_access') as any)
+          .select('id, user_id, project_id, role, allowed_categories, allowed_epics'),
       ]);
 
       if (registeredUsersError) throw registeredUsersError;
       if (accessError) throw accessError;
+
+      const { data: epicRows } = await supabase
+        .from('incidents')
+        .select('project_id, epic')
+        .not('epic', 'is', null);
+      const nextEpicsByProject: Record<string, string[]> = {};
+      (epicRows || []).forEach((row: any) => {
+        const epic = String(row.epic ?? '').trim();
+        if (!epic) return;
+        const list = nextEpicsByProject[row.project_id] ?? (nextEpicsByProject[row.project_id] = []);
+        if (!list.includes(epic)) list.push(epic);
+      });
+      Object.values(nextEpicsByProject).forEach(list => list.sort((a, b) => a.localeCompare(b, 'es')));
+      setEpicsByProject(nextEpicsByProject);
 
       const peopleWithLink = await supabase
         .from('people')
@@ -513,10 +534,114 @@ const AdminProjects = () => {
     return projectAccess.filter(access => access.user_id === userId);
   };
 
-  const hasProjectAccess = (userId: string, projectId: string) => {
-    if (!userId) return false;
-    return projectAccess.some(access => access.user_id === userId && access.project_id === projectId);
+  const getProjectAccessRow = (userId: string, projectId: string) =>
+    projectAccess.find(access => access.user_id === userId && access.project_id === projectId) || null;
+
+  const updateProjectAccessScope = async (
+    profile: AdminProfile,
+    project: ProjectRow,
+    patch: Partial<Pick<ProjectAccessRow, 'role' | 'allowed_categories' | 'allowed_epics'>>,
+  ) => {
+    const normalizedPatch = { ...patch };
+    if (normalizedPatch.allowed_categories && normalizedPatch.allowed_categories.length === 0) normalizedPatch.allowed_categories = null;
+    if (normalizedPatch.allowed_epics && normalizedPatch.allowed_epics.length === 0) normalizedPatch.allowed_epics = null;
+    if (normalizedPatch.role === 'team') {
+      normalizedPatch.allowed_categories = null;
+      normalizedPatch.allowed_epics = null;
+    }
+
+    setProjectAccess(prev => prev.map(access =>
+      access.user_id === profile.user_id && access.project_id === project.id ? { ...access, ...normalizedPatch } : access
+    ));
+
+    const { error } = await (supabase.from('project_access') as any)
+      .update(normalizedPatch)
+      .eq('user_id', profile.user_id)
+      .eq('project_id', project.id);
+
+    if (error) {
+      toast({ title: 'Error', description: error.message || 'No se pudo actualizar el rol', variant: 'destructive' });
+      await loadUsers();
+      return;
+    }
+
+    if (patch.role) {
+      toast({
+        title: 'Rol actualizado',
+        description: `${profile.full_name} es ahora ${patch.role === 'client' ? 'Cliente' : 'Equipo'} en ${project.name}.`,
+      });
+    }
   };
+
+  const toggleListValue = (list: string[] | null, value: string, checked: boolean) => {
+    const current = list ?? [];
+    return checked ? [...new Set([...current, value])] : current.filter(item => item !== value);
+  };
+
+  type ProjectUserRole = 'team' | 'admin' | 'client';
+
+  // Admin es global (user_roles); Equipo y Cliente son por proyecto (project_access.role).
+  const handleProjectRoleChange = async (profile: AdminProfile, project: ProjectRow, role: ProjectUserRole) => {
+    if (role === 'admin') {
+      if (!profile.is_admin) await handleToggleAdminRole(profile, true);
+      return;
+    }
+    if (profile.is_admin) await handleToggleAdminRole(profile, false);
+    await updateProjectAccessScope(profile, project, { role });
+  };
+
+  const renderClientScope = (profile: AdminProfile, project: ProjectRow, access: ProjectAccessRow) => {
+    const projectEpics = [...new Set([...(epicsByProject[project.id] || []), ...(access.allowed_epics || [])])];
+    return (
+      <div className="space-y-3 rounded-md bg-muted/40 p-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Tipos visibles</Label>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {CLIENT_CATEGORY_OPTIONS.map(([value, label]) => (
+              <label key={value} className="flex cursor-pointer items-center gap-2 text-sm">
+                <Checkbox
+                  checked={!!access.allowed_categories?.includes(value)}
+                  onCheckedChange={(checked) => updateProjectAccessScope(profile, project, {
+                    allowed_categories: toggleListValue(access.allowed_categories, value, !!checked),
+                  })}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          {!access.allowed_categories?.length && <p className="text-xs text-muted-foreground">Todos los tipos</p>}
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Épicas visibles</Label>
+          {projectEpics.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Este proyecto no tiene épicas.</p>
+          ) : (
+            <div className="max-h-40 space-y-1 overflow-y-auto">
+              {projectEpics.map(epic => (
+                <label key={epic} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={!!access.allowed_epics?.includes(epic)}
+                    onCheckedChange={(checked) => updateProjectAccessScope(profile, project, {
+                      allowed_epics: toggleListValue(access.allowed_epics, epic, !!checked),
+                    })}
+                  />
+                  <span className="truncate">{epic}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          {!access.allowed_epics?.length && <p className="text-xs text-muted-foreground">Todas las épicas</p>}
+        </div>
+      </div>
+    );
+  };
+
+  const projectUsers = editingProject
+    ? profiles.filter(profile => profile.is_admin || !!getProjectAccessRow(profile.user_id, editingProject.id))
+    : [];
+  const addableUsers = editingProject
+    ? profiles.filter(profile => profile.is_active && !profile.is_admin && !getProjectAccessRow(profile.user_id, editingProject.id))
+    : [];
 
   const accessiblePeopleForSelectedUser = selectedProfile
     ? people.filter(person => {
@@ -1098,7 +1223,7 @@ const AdminProjects = () => {
 
         {/* Edit Project Dialog */}
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="sm:max-w-[760px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Editar Proyecto</DialogTitle>
               <DialogDescription>
@@ -1108,6 +1233,13 @@ const AdminProjects = () => {
             
             {editingProject && (
               <div className="space-y-6">
+                <Tabs defaultValue="general" className="space-y-4">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="general">General</TabsTrigger>
+                    <TabsTrigger value="users">Usuarios ({projectUsers.length})</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="general">
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="edit-name">Nombre del proyecto</Label>
@@ -1216,6 +1348,92 @@ const AdminProjects = () => {
                     </div>
                   </div>
                 </div>
+                  </TabsContent>
+
+                  <TabsContent value="users" className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Equipo ve todo el proyecto. Cliente solo ve Home y Releases, limitado a los tipos y épicas que marques (sin marcar = todos).
+                      Admin es un permiso global: da acceso de administrador en todos los proyectos.
+                    </p>
+
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value=""
+                        onValueChange={(userId) => {
+                          const profile = profiles.find(item => item.user_id === userId);
+                          if (profile) handleProjectAccessToggle(profile, editingProject, true);
+                        }}
+                        disabled={addableUsers.length === 0}
+                      >
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder={addableUsers.length === 0 ? 'No hay más usuarios para añadir' : 'Añadir usuario al proyecto...'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {addableUsers.map(profile => (
+                            <SelectItem key={profile.user_id} value={profile.user_id}>
+                              {profile.full_name}{profile.email ? ` (${profile.email})` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {projectUsers.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Este proyecto todavía no tiene usuarios.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {projectUsers.map(profile => {
+                          const access = getProjectAccessRow(profile.user_id, editingProject.id);
+                          const currentRole: ProjectUserRole = profile.is_admin ? 'admin' : access?.role === 'client' ? 'client' : 'team';
+                          return (
+                            <div key={profile.user_id} className="space-y-3 rounded-md border p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 font-medium">
+                                    <span className="truncate">{profile.full_name}</span>
+                                    {!profile.is_active && <Badge variant="secondary">Baja</Badge>}
+                                  </div>
+                                  <div className="truncate text-xs text-muted-foreground">{profile.email}</div>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <Select
+                                    value={currentRole}
+                                    onValueChange={(value) => handleProjectRoleChange(profile, editingProject, value as ProjectUserRole)}
+                                    disabled={(profile.user_id === user?.id && profile.is_admin) || (!access && !profile.is_admin)}
+                                  >
+                                    <SelectTrigger className="h-8 w-32">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="team">Equipo</SelectItem>
+                                      <SelectItem value="admin">Admin</SelectItem>
+                                      <SelectItem value="client">Cliente</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  {access && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      aria-label={`Quitar a ${profile.full_name} del proyecto`}
+                                      onClick={() => handleProjectAccessToggle(profile, editingProject, false)}
+                                      disabled={profile.user_id === user?.id}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                              {currentRole === 'client' && access && renderClientScope(profile, editingProject, access)}
+                              {currentRole === 'admin' && !access && (
+                                <p className="text-xs text-muted-foreground">Admin global: accede a todos los proyectos.</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
 
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <Button variant="outline" onClick={() => setEditOpen(false)}>
@@ -1363,24 +1581,32 @@ const AdminProjects = () => {
                 <div className="rounded-md border p-4">
                   <div className="mb-3">
                     <h3 className="font-semibold">Acceso a proyectos</h3>
-                    <p className="text-sm text-muted-foreground">Marca los proyectos disponibles para este usuario.</p>
+                    <p className="text-sm text-muted-foreground">
+                      Marca los proyectos disponibles para este usuario. El rol (Equipo, Admin o Cliente) y los filtros del Cliente se editan en la pestaña Usuarios del detalle de cada proyecto.
+                    </p>
                   </div>
                   <div className="grid gap-2 md:grid-cols-2">
                     {projects.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No hay proyectos disponibles.</p>
                     ) : (
-                      projects.map(project => (
-                        <label key={project.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-md border p-3">
-                          <div className="min-w-0">
-                            <div className="font-medium truncate">{project.name}</div>
-                            <div className="text-xs text-muted-foreground">Proyecto #{project.project_number}</div>
-                          </div>
-                          <Checkbox
-                            checked={hasProjectAccess(selectedProfile.user_id, project.id)}
-                            onCheckedChange={(checked) => handleProjectAccessToggle(selectedProfile, project, !!checked)}
-                          />
-                        </label>
-                      ))
+                      projects.map(project => {
+                        const access = getProjectAccessRow(selectedProfile.user_id, project.id);
+                        return (
+                          <label key={project.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-md border p-3">
+                            <div className="min-w-0">
+                              <div className="font-medium truncate">{project.name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                Proyecto #{project.project_number}
+                                {access && ` · ${selectedProfile.is_admin ? 'Admin' : access.role === 'client' ? 'Cliente' : 'Equipo'}`}
+                              </div>
+                            </div>
+                            <Checkbox
+                              checked={!!access}
+                              onCheckedChange={(checked) => handleProjectAccessToggle(selectedProfile, project, !!checked)}
+                            />
+                          </label>
+                        );
+                      })
                     )}
                   </div>
                 </div>

@@ -12,6 +12,7 @@ import { useProjectAccess } from '@/hooks/useProjectAccess';
 import { supabase } from '@/integrations/supabase/client';
 import { useActivityUnread } from '@/hooks/useActivityUnread';
 import { AppSidebar } from '@/components/AppSidebar';
+import { ProjectRoleProvider, useLoadProjectRole } from '@/contexts/ProjectRoleContext';
 import ScrollToTop from '@/components/ScrollToTop';
 import { GitCompareArrows, LogOut, Menu, Shield, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -65,6 +66,8 @@ const Dashboard = () => {
   const isSuperUser = user?.email?.toLowerCase() === 'mocanat@minsait.com';
   const hasAdminPasswordAccess = sessionStorage.getItem('projectflow_admin_access') === 'true';
   const canOpenAdmin = isSuperUser || isAdminRole || hasAdminPasswordAccess;
+  const projectRole = useLoadProjectRole(currentProject?.id, user?.id);
+  const isClient = projectRole.isClient;
 
   useEffect(() => {
     let isMounted = true;
@@ -158,6 +161,7 @@ const Dashboard = () => {
   };
 
   return (
+    <ProjectRoleProvider value={projectRole}>
     <div className="min-h-screen bg-background">
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-white h-[64px] flex items-center">
         <div className="relative w-full h-full flex items-center justify-center px-3 md:px-6">
@@ -203,6 +207,7 @@ const Dashboard = () => {
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/tasks">Home</a>
                   </Button>
+                  {!isClient && (
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/activity">
                       <span>Actividad</span>
@@ -211,9 +216,12 @@ const Dashboard = () => {
                       )}
                     </a>
                   </Button>
+                  )}
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/releases">Releases</a>
                   </Button>
+                  {!isClient && (
+                  <>
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/vacations">Ausencias</a>
                   </Button>
@@ -235,7 +243,9 @@ const Dashboard = () => {
                   <Button asChild variant="ghost" className="justify-start">
                     <a href="/imputaciones">Imputaciones</a>
                   </Button>
-                  {currentProject && (
+                  </>
+                  )}
+                  {currentProject && !isClient && (
                     <Button variant="ghost" className="justify-start" onClick={() => setCompareBacklogOpen(true)}>
                       Comparar con backlog
                     </Button>
@@ -244,7 +254,7 @@ const Dashboard = () => {
               </SheetContent>
             </Sheet>
 
-            {currentProject && (
+            {currentProject && !isClient && (
               <Button
                 variant="outline"
                 size="sm"
@@ -282,7 +292,7 @@ const Dashboard = () => {
                   </div>
                 )}
                 <div className="mt-6">
-                  {currentProject && (
+                  {currentProject && !isClient && (
                     <Suspense fallback={<ModuleLoading />}>
                       <UserProfileModule projectId={currentProject.id} />
                     </Suspense>
@@ -401,12 +411,21 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="min-h-screen">
-            <AppSidebar currentProject={currentProject} hasUnreadActivity={hasUnreadActivity} />
+            <AppSidebar currentProject={currentProject} hasUnreadActivity={hasUnreadActivity} isClient={isClient} />
             <main className="ml-0 md:ml-16 p-4 md:p-6 2xl:px-10 pt-[64px]">
               <div className="flex items-start gap-4">
                 <div className="min-w-0 flex-1">
                   <ScrollToTop />
                   <Suspense fallback={<ModuleLoading />}>
+                    {projectRole.loading ? (
+                      <ModuleLoading />
+                    ) : isClient ? (
+                    <Routes>
+                      <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
+                      <Route path="releases" element={<ReleasesModule projectId={currentProject.id} />} />
+                      <Route path="*" element={<Navigate to="/tasks" replace />} />
+                    </Routes>
+                    ) : (
                     <Routes>
                       <Route path="/" element={<Navigate to="tasks" replace />} />
                       <Route path="tasks" element={<IncidentsModule projectId={currentProject.id} />} />
@@ -424,9 +443,10 @@ const Dashboard = () => {
                       <Route path="settings" element={<Navigate to="/imputaciones" replace />} />
                       <Route path="users" element={<UsersModule projectId={currentProject.id} />} />
                     </Routes>
+                    )}
                   </Suspense>
                 </div>
-                {compareBacklogOpen && (
+                {compareBacklogOpen && !isClient && (
                   <Suspense fallback={<ModuleLoading />}>
                     <BacklogComparePanel
                       projectId={currentProject.id}
@@ -441,6 +461,7 @@ const Dashboard = () => {
         )}
       </main>
     </div>
+    </ProjectRoleProvider>
   );
 };
 

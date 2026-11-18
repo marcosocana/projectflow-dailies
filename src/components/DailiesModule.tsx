@@ -98,8 +98,8 @@ const TASK_COLUMNS = 'id,project_id,daily_id,incident_id,person_id,assigned_to,t
 
 const getTaskStatusLabel = (status: TaskStatus) => getSharedTaskStatusLabel(status);
 
-const getTaskStatusTone = (status: TaskStatus) => {
-  return getAppStatusTone(status);
+const getTaskStatusTone = (status: TaskStatus, environment?: string | null) => {
+  return getAppStatusTone(status, environment ?? null);
 };
 
 const getTaskCompositeStatusLabel = (status: TaskStatus | string, environment?: string | null) =>
@@ -3317,7 +3317,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                             onCheckedChange={checked => togglePersistStatusGroup(group.persistableTaskIds, checked === true)}
                           />
                           <div className="flex min-w-0 flex-wrap items-center gap-2">
-                            <Badge variant="outline" className={getTaskStatusTone(group.tasks[0]?.status as TaskStatus)}>
+                            <Badge variant="outline" className={getTaskStatusTone(group.tasks[0]?.status as TaskStatus, group.tasks[0]?.status_environment)}>
                               {group.label}
                             </Badge>
                             <span className="text-sm text-muted-foreground">
@@ -3445,7 +3445,7 @@ Descripción: ${selectedTask.description || 'Sin descripción'}`;
                         <TableCell>
                           <Badge 
                             variant="outline"
-                            className={getTaskStatusTone(task.status as TaskStatus)}
+                            className={getTaskStatusTone(task.status as TaskStatus, task.status_environment)}
                           >
                             {getTaskCompositeStatusLabel(task.status as TaskStatus, task.status_environment)}
                           </Badge>

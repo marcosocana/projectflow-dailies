@@ -31,9 +31,12 @@ import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
 import TaskAssignmentsInput from '@/components/TaskAssignmentsInput';
 import { Switch } from '@/components/ui/switch';
 import BacklogImportDialog from '@/components/BacklogImportDialog';
+import TaskAssignmentRolesReadonly from '@/components/TaskAssignmentRolesReadonly';
+import { useProjectPeopleRoles } from '@/hooks/useProjectPeopleRoles';
+import { isCategoryAllowed, isEpicAllowed, useProjectRole } from '@/contexts/ProjectRoleContext';
 import { recordIncidentCreated, recordIncidentDeleted, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
 import { ensureDailyTasksForAssignments } from '@/lib/dailyAssignmentTasks';
-import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference, formatInternalTaskIdFromValue, loadNextInternalTaskId } from '@/lib/internalTaskIds';
+import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, formatIncidentReference, formatInternalTaskIdFromValue, hasInternalTaskIdMarker, loadNextInternalTaskId } from '@/lib/internalTaskIds';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ASSIGNMENT_STATUS_OPTIONS,
@@ -85,6 +88,18 @@ const DEVICE_OPTIONS = ['APP', 'Web', 'Otro', 'N/A'] as const;
 
 // Status constants available module-wide to avoid TDZ issues
 const statusOrder = ['pending', 'in_progress', 'resolved', 'blocked', 'closed'] as const;
+// Estados de las tarjetas de filtro de Home: los mismos que las tareas (Resuelta por entorno).
+const KPI_STATUS_KEYS = ['pending', 'in_progress', 'resolved_DEV', 'resolved_PRE', 'resolved_PRO', 'resolved_LOCAL', 'blocked', 'closed'] as const;
+const KPI_STATUS_SHORT_LABELS: Record<string, string> = {
+  pending: 'Pend.',
+  in_progress: 'WIP',
+  resolved_DEV: 'DEV',
+  resolved_PRE: 'PRE',
+  resolved_PRO: 'PRO',
+  resolved_LOCAL: 'Local',
+  blocked: 'Block',
+  closed: 'Cerr.'
+};
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Pendiente',
   in_progress: 'WIP',
@@ -175,7 +190,7 @@ function StatusBadge({
   environment?: string | null;
 }) {
   return (
-    <Badge variant="outline" className={`${getAppStatusTone(status)} border-transparent`}>
+    <Badge variant="outline" className={`${getAppStatusTone(status, environment ?? null)} border-transparent`}>
       {getStatusLogLabel(getStatusLogValue(status, environment))}
     </Badge>
   );
@@ -268,7 +283,7 @@ const SortableIncidentCard = ({
           <CategoryIcon category={getDisplayCategory(incident)} />
           <span className="font-medium text-sm">{formatIncidentReference(incident) ?? 'Sin ID'}</span>
         </div>
-        <Badge variant="outline" className={`text-xs ${getAppStatusTone(incident.status)} border-transparent`}>
+        <Badge variant="outline" className={`text-xs ${getAppStatusTone(incident.status, incident.status_environment ?? null)} border-transparent`}>
           {getIncidentStatusLabel(incident.status)}
         </Badge>
       </div>
@@ -318,6 +333,9 @@ export default function IncidentsModule({
     user
   } = useAuth();
   const queryClient = useQueryClient();
+  const projectRole = useProjectRole();
+  const isClient = projectRole.isClient;
+  const roleByPersonId = useProjectPeopleRoles(projectId, isClient);
   const {
     getUrl
   } = useSignedUrl('project-files');
@@ -331,6 +349,8 @@ export default function IncidentsModule({
   const [environmentFilter, setEnvironmentFilter] = useState<string>('all');
   const [epicFilter, setEpicFilter] = useState<string>('all');
   const [availableEpics, setAvailableEpics] = useState<string[]>([]);
+  const epicOptions = projectRole.allowedEpics ?? availableEpics;
+  const categoryOptions = CATEGORY_OPTIONS.filter(option => isCategoryAllowed(projectRole, option.value));
 
   // Confirmation modal states
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -346,7 +366,7 @@ export default function IncidentsModule({
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
-  const [sortKey, setSortKey] = useState<'name' | 'status' | 'occurred_at' | 'incident_number' | 'epic' | 'device' | 'environment' | 'assigned_to'>('occurred_at');
+  const [sortKey, setSortKey] = useState<'name' | 'status' | 'occurred_at' | 'incident_number' | 'epic' | 'device' | 'environment' | 'assigned_to'>('incident_number');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const toggleSort = (key: 'name' | 'status' | 'occurred_at' | 'incident_number' | 'epic' | 'device' | 'environment' | 'assigned_to') => {
     setSortDir(d => sortKey === key ? d === 'asc' ? 'desc' : 'asc' : 'asc');
@@ -404,6 +424,9 @@ export default function IncidentsModule({
   // Estado para asignaciones múltiples durante creación
   const [createAssignments, setCreateAssignments] = useState<Array<{person: string, status: IncidentStatus, environment?: TaskEnvironment | null}>>([]);
   const [manualIncidentIdEnabled, setManualIncidentIdEnabled] = useState(true);
+  // Admin/Equipo: oculta las tareas internas (INT) para ver lo mismo que un cliente.
+  const [excludeInternal, setExcludeInternal] = useState(false);
+  const excludeInternalRef = useRef(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const compareInputRef = useRef<HTMLInputElement>(null);
 
@@ -480,9 +503,10 @@ export default function IncidentsModule({
       const matchesChannel = channelFilter === 'all' || i.device === channelFilter;
       const matchesEnvironment = environmentFilter === 'all' || i.environment === environmentFilter;
       const matchesEpic = epicFilter === 'all' || i.epic === epicFilter;
-      const normalizedStatus = i.status === 'in_qa' ? 'resolved' : i.status;
+      const normalizedStatus = getStatusLogValue(i.status, i.status_environment);
       const matchesStatus = statusFilter.length === 0 || statusFilter.includes(normalizedStatus);
       const matchesCategory = categoryFilter === 'all' || getDisplayCategory(i) === categoryFilter;
+      const matchesInternal = !excludeInternal || !hasInternalTaskIdMarker(i.additional_comments);
       const matchesAssignee = assigneeFilter === 'all' || 
         (assigneeFilter === 'unassigned' && !i.assigned_to) ||
         (i.assigned_to && assigneeFilter === i.assigned_to);
@@ -500,9 +524,9 @@ export default function IncidentsModule({
         i.additional_comments
       ].filter(Boolean).some((v: any) => String(v).toLowerCase().includes(term));
       
-      return matchesChannel && matchesEnvironment && matchesEpic && matchesStatus && matchesCategory && matchesAssignee && matchesSearch;
+      return matchesChannel && matchesEnvironment && matchesEpic && matchesStatus && matchesCategory && matchesInternal && matchesAssignee && matchesSearch;
     });
-  }, [incidents, channelFilter, environmentFilter, epicFilter, statusFilter, categoryFilter, assigneeFilter, search]);
+  }, [incidents, channelFilter, environmentFilter, epicFilter, statusFilter, categoryFilter, excludeInternal, assigneeFilter, search]);
   const sorted = useMemo(() => {
     const arr = [...filtered];
     arr.sort((a, b) => {
@@ -541,13 +565,16 @@ export default function IncidentsModule({
   const assigneesByIncident = useIncidentAssignees(pageIncidentIds);
   
   // Helper function to calculate KPIs from incidents array
-  const calculateKPIs = (all: any[]) => {
+  const calculateKPIs = (allIncidents: any[]) => {
+    const all = excludeInternalRef.current
+      ? allIncidents.filter(i => !hasInternalTaskIdMarker(i.additional_comments))
+      : allIncidents;
     // Incidencias (categoría incident)
     const onlyIncidents = all.filter(i => getDisplayCategory(i) === 'incident');
     setTotalIncidents(onlyIncidents.length);
     const statusGrouped: Record<string, number> = {};
     onlyIncidents.forEach(incident => {
-      const status = incident.status === 'in_qa' ? 'resolved' : incident.status;
+      const status = getStatusLogValue(incident.status, incident.status_environment);
       statusGrouped[status] = (statusGrouped[status] || 0) + 1;
     });
     setStatusCounts(statusGrouped);
@@ -557,7 +584,7 @@ export default function IncidentsModule({
     setTotalImprovements(onlyImprovements.length);
     const improvementGrouped: Record<string, number> = {};
     onlyImprovements.forEach(imp => {
-      const status = imp.status === 'in_qa' ? 'resolved' : imp.status;
+      const status = getStatusLogValue(imp.status, imp.status_environment);
       improvementGrouped[status] = (improvementGrouped[status] || 0) + 1;
     });
     setImprovementStatusCounts(improvementGrouped);
@@ -567,7 +594,7 @@ export default function IncidentsModule({
     setTotalCorrectiveImprovements(onlyCorrectiveImprovements.length);
     const correctiveImprovementGrouped: Record<string, number> = {};
     onlyCorrectiveImprovements.forEach(imp => {
-      const status = imp.status === 'in_qa' ? 'resolved' : imp.status;
+      const status = getStatusLogValue(imp.status, imp.status_environment);
       correctiveImprovementGrouped[status] = (correctiveImprovementGrouped[status] || 0) + 1;
     });
     setCorrectiveImprovementStatusCounts(correctiveImprovementGrouped);
@@ -577,6 +604,12 @@ export default function IncidentsModule({
     setAvailableEpics(epics);
   };
   
+  useEffect(() => {
+    excludeInternalRef.current = excludeInternal;
+    calculateKPIs(incidents);
+    setCurrentPage(1);
+  }, [excludeInternal]);
+
   const fetchIncidents = async () => {
     setLoading(true);
     try {
@@ -656,6 +689,11 @@ export default function IncidentsModule({
     };
   }, [projectId, queryClient]);
   const fetchTeamMembers = async () => {
+    // El cliente no puede leer people (nombres); solo ve roles.
+    if (isClient) {
+      setTeamMembers([]);
+      return;
+    }
     try {
       const {
         data,
@@ -678,10 +716,10 @@ export default function IncidentsModule({
       environment: 'N/A',
       statusEnvironment: '',
       device: 'N/A',
-      epic: '',
+      epic: projectRole.allowedEpics?.length === 1 ? projectRole.allowedEpics[0] : '',
       occurredAt: new Date().toISOString(),
       status: 'pending',
-      category: 'incident',
+      category: projectRole.allowedCategories?.[0] ?? 'incident',
       additionalComments: '',
       createdBy: '',
       assignedTo: 'unassigned'
@@ -746,6 +784,22 @@ export default function IncidentsModule({
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingId) return;
+    if (!isCategoryAllowed(projectRole, form.category)) {
+      toast({
+        title: 'Tipo no permitido',
+        description: 'No tienes permiso para crear tareas de este tipo.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    if (!isEpicAllowed(projectRole, form.epic)) {
+      toast({
+        title: 'Épica obligatoria',
+        description: 'Selecciona una de las épicas que tienes asignadas.',
+        variant: 'destructive'
+      });
+      return;
+    }
     let savedSuccessfully = false;
     try {
       let id = editingId ?? crypto.randomUUID();
@@ -1419,7 +1473,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
   // Detalle de incidencia gestionado por componente reutilizable
   const kpiGridClass = compareBacklogOpen
     ? 'grid grid-cols-2 gap-2 max-[900px]:grid-cols-1'
-    : 'grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(110px,0.45fr)_repeat(3,minmax(0,1fr))]';
+    : 'grid grid-cols-1 gap-2 sm:grid-cols-2 2xl:grid-cols-[minmax(110px,0.45fr)_repeat(3,minmax(0,1fr))]';
   const contentLayoutClass = compareBacklogOpen
     ? 'flex flex-col items-stretch gap-4 2xl:flex-row 2xl:items-start'
     : 'flex flex-col items-stretch gap-4 xl:flex-row xl:items-start';
@@ -1457,7 +1511,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
           { category: 'incident', title: 'Incidencias', total: totalIncidents, counts: statusCounts },
           { category: 'improvement', title: 'Evolutivos', total: totalImprovements, counts: improvementStatusCounts },
           { category: 'corrective_improvement', title: 'Mejoras correctivas', total: totalCorrectiveImprovements, counts: correctiveImprovementStatusCounts },
-        ].map((group) => (
+        ].filter(group => isCategoryAllowed(projectRole, group.category)).map((group) => (
           <Card key={group.category}>
             <CardHeader className="p-2">
               <CardTitle className="flex items-center gap-2 text-sm">
@@ -1476,11 +1530,12 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                       </div>;
                 })()}
 
-                {(statusOrder as readonly string[]).map((key) => {
+                {(KPI_STATUS_KEYS as readonly string[]).map((key) => {
                   const selected = categoryFilter === group.category && statusFilter.includes(key);
-                  return <div key={key} className={`min-w-0 flex-1 text-center cursor-pointer select-none rounded-md px-1 py-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
+                  const fullLabel = getStatusLogLabel(key);
+                  return <div key={key} title={fullLabel} className={`min-w-0 flex-1 text-center cursor-pointer select-none rounded-md px-0.5 py-1 ${selected ? 'ring-2 ring-primary bg-primary/10' : 'hover:opacity-80'}`} onClick={() => {
                     toggleCategoryStatus(group.category, key);
-                  }} role="button" aria-label={`Filtrar ${group.title} por estado ${STATUS_LABELS[key] || key}`}>
+                  }} role="button" aria-label={`Filtrar ${group.title} por estado ${fullLabel}`}>
                         <div className="text-lg font-bold leading-5">{group.counts[key] || 0}</div>
                         {compareBacklogOpen ? (
                           <div className="mt-1 flex justify-center">
@@ -1488,13 +1543,13 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                           </div>
                         ) : (
                           <Badge variant="outline" className={`${getAppStatusTone(key)} border-transparent mt-1 text-[9px] px-1 py-0.5`}>
-                            {STATUS_LABELS[key] || key}
+                            {KPI_STATUS_SHORT_LABELS[key] || key}
                           </Badge>
                         )}
                       </div>;
                 })}
 
-                {Object.keys(group.counts).filter(k => !(statusOrder as readonly string[]).includes(k)).map(k => (
+                {Object.keys(group.counts).filter(k => !(KPI_STATUS_KEYS as readonly string[]).includes(k)).map(k => (
                   <div key={k} className="min-w-0 flex-1 text-center cursor-pointer select-none rounded-md px-1 py-1 hover:opacity-80" onClick={() => setCurrentPage(1)}>
                     <div className="text-lg font-bold leading-5">{group.counts[k] || 0}</div>
                     <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[9px] px-1 py-0.5">{k}</Badge>
@@ -1558,17 +1613,17 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={downloadTemplate}>Plantilla</DropdownMenuItem>
+                  {!isClient && <DropdownMenuItem onSelect={downloadTemplate}>Plantilla</DropdownMenuItem>}
                   <DropdownMenuItem onSelect={exportCurrent}>Exportar</DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => importInputRef.current?.click()}>Importar</DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setBacklogImportOpen(true)}>Importar desde Backlog</DropdownMenuItem>
+                  {!isClient && <DropdownMenuItem onSelect={() => importInputRef.current?.click()}>Importar</DropdownMenuItem>}
+                  {!isClient && <DropdownMenuItem onSelect={() => setBacklogImportOpen(true)}>Importar desde Backlog</DropdownMenuItem>}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+        <div className={`grid grid-cols-1 md:grid-cols-4 gap-3 mb-4 ${isClient ? '' : 'xl:grid-cols-5'}`}>
           <div>
             <Label>Buscar</Label>
             <Input placeholder="Buscar por texto o ID" value={search} onChange={e => setSearch(e.target.value)} />
@@ -1599,10 +1654,22 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
               <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas</SelectItem>
-                {availableEpics.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                {epicOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
+          {!isClient && (
+            <div className="flex items-end">
+              <label className="flex h-10 cursor-pointer items-center gap-2 text-sm">
+                <Switch
+                  checked={excludeInternal}
+                  onCheckedChange={setExcludeInternal}
+                  aria-label="Excluir internas"
+                />
+                Excluir internas
+              </label>
+            </div>
+          )}
         </div>
 
 
@@ -1640,7 +1707,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                     <TableHead className="w-32 cursor-pointer select-none" onClick={() => toggleSort('status')}>
                       Estado {sortKey === 'status' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
-                    <TableHead className="w-16 cursor-pointer select-none" onClick={() => toggleSort('assigned_to')}>
+                    <TableHead className={`${isClient ? 'w-28' : 'w-16'} cursor-pointer select-none`} onClick={() => toggleSort('assigned_to')}>
                       Asign. {sortKey === 'assigned_to' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
                     <TableHead className="w-24">Acciones</TableHead>
@@ -1668,8 +1735,8 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                       <TableCell className="w-20">{i.device || '-'}</TableCell>
                       <TableCell>{new Date(i.occurred_at).toLocaleDateString('es-ES')}</TableCell>
                       <TableCell className="w-32"><StatusBadge status={i.status} environment={i.status_environment} /></TableCell>
-                      <TableCell className="w-16">
-                        <TaskAssignmentCell assignedIds={assigneesByIncident[i.id]} teamMembers={teamMembers} />
+                      <TableCell className={isClient ? 'w-28' : 'w-16'}>
+                        <TaskAssignmentCell assignedIds={assigneesByIncident[i.id]} teamMembers={teamMembers} roleByPersonId={isClient ? roleByPersonId : undefined} />
                       </TableCell>
                       <TableCell className="w-24">
                         <div className="flex items-center gap-1">
@@ -1969,7 +2036,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">
               <RequiredLabel>ID</RequiredLabel>
-              <div className="flex items-center gap-2">
+              <div className={`flex items-center gap-2 ${isClient ? 'hidden' : ''}`}>
                 <Label htmlFor="manual-incident-id" className="text-xs text-muted-foreground">Manual</Label>
                 <Switch
                   id="manual-incident-id"
@@ -2043,7 +2110,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
             }))}>
   <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
   <SelectContent>
-    {availableEpics.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+    {epicOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
   </SelectContent>
             </Select>
           </div>
@@ -2081,7 +2148,14 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                </SelectContent>
 	             </Select>
 	           </div>
-           {!editingId ? (
+           {isClient ? (
+              editingId && (
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Roles asignados</Label>
+                  <TaskAssignmentRolesReadonly taskId={editingId} roleByPersonId={roleByPersonId} />
+                </div>
+              )
+            ) : !editingId ? (
               <>
                 <div className="space-y-2 md:col-span-2">
                   <Label>Personas asignadas (opcional)</Label>
@@ -2108,7 +2182,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                 />
               </div>
             )}
-           {editingId && (
+           {editingId && !isClient && (
              <div className="space-y-2">
                <Label>Creado por</Label>
                <Select value={form.createdBy} onValueChange={v => setForm(f => ({
@@ -2130,7 +2204,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
             }))}>
                <SelectTrigger><SelectValue placeholder="Categoría" /></SelectTrigger>
                <SelectContent>
-                 {CATEGORY_OPTIONS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                 {categoryOptions.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                </SelectContent>
              </Select>
            </div>

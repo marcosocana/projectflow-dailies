@@ -1,5 +1,6 @@
 import { memo, useMemo } from 'react';
 import { Users } from 'lucide-react';
+import RoleCircles from '@/components/RoleCircles';
 
 interface Member {
   id: string;
@@ -10,6 +11,8 @@ interface Member {
 interface TaskAssignmentCellProps {
   assignedIds: string[] | undefined;
   teamMembers: Member[];
+  /** Vista Cliente: se muestran roles (sin nombres) a partir de este mapa id de persona -> rol. */
+  roleByPersonId?: Record<string, string>;
 }
 
 const getInitials = (name: string): string => {
@@ -21,7 +24,7 @@ const getInitials = (name: string): string => {
   return (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase();
 };
 
-function TaskAssignmentCell({ assignedIds, teamMembers }: TaskAssignmentCellProps) {
+function TaskAssignmentCell({ assignedIds, teamMembers, roleByPersonId }: TaskAssignmentCellProps) {
   const assignedMembers = useMemo(
     () => (assignedIds || [])
       .map(id => teamMembers.find(m => m.id === id))
@@ -29,6 +32,10 @@ function TaskAssignmentCell({ assignedIds, teamMembers }: TaskAssignmentCellProp
     [assignedIds, teamMembers]
   );
   const assignedCount = assignedMembers.length;
+
+  if (roleByPersonId) {
+    return <RoleCircles roles={(assignedIds || []).map(id => roleByPersonId[id])} />;
+  }
 
   if (assignedCount === 0) {
     return <span className="text-muted-foreground">-</span>;

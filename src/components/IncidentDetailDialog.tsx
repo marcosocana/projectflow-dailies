@@ -11,9 +11,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { Trash2, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
+import TaskAssignmentRolesReadonly from '@/components/TaskAssignmentRolesReadonly';
+import { useProjectPeopleRoles } from '@/hooks/useProjectPeopleRoles';
 import { syncSingleAssignmentStatus } from '@/hooks/useSyncTaskStatus';
 import { useTaskAssignments } from '@/hooks/useTaskAssignments';
 import { recordIncidentDeleted, recordIncidentStatusChange } from '@/lib/incidentActivityLog';
+import { isCategoryAllowed, useProjectRole } from '@/contexts/ProjectRoleContext';
 import { INTERNAL_TASK_ID_MARKER, cleanInternalTaskIdMarker, extractInternalTaskNumber, formatIncidentReference, formatInternalTaskIdFromValue } from '@/lib/internalTaskIds';
 import {
   ASSIGNMENT_STATUS_OPTIONS,
@@ -122,6 +125,10 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
   const { getUrl } = useSignedUrl('project-files');
   const { toast } = useToast();
   const { assignments } = useTaskAssignments(incidentId);
+  const projectRole = useProjectRole();
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const roleByPersonId = useProjectPeopleRoles(selectedProjectId, projectRole.isClient);
+  const categoryOptions = CATEGORY_OPTIONS.filter((option) => isCategoryAllowed(projectRole, option.value));
 
   const [selected, setSelected] = useState<any | null>(null);
   const [createdByEmail, setCreatedByEmail] = useState<string>('');
@@ -158,7 +165,8 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
       // Extract project ID from incident (we need to get it first)
       if (incidentId) {
         const { data: incident } = await supabase.from('incidents').select('project_id').eq('id', incidentId).single();
-        if (incident) {
+        if (incident) setSelectedProjectId(incident.project_id);
+        if (incident && !projectRole.isClient) {
           const { data: members } = await supabase.from('people').select('*').eq('project_id', incident.project_id).order('name', { ascending: true });
           setTeamMembers(members || []);
         }
@@ -293,7 +301,18 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
       }
       const previousStatus = selected.status;
       const previousEnvironment = selected.status_environment;
-      await supabase.from('incidents').update(payload).eq('id', selected.id);
+      const { error: updateError } = await supabase.from('incidents').update(payload).eq('id', selected.id);
+      if (updateError) {
+        console.error('Error updating incident:', updateError);
+        toast({
+          title: 'No se pudo guardar',
+          description: projectRole.isClient
+            ? 'El cambio deja la tarea fuera de los tipos o épicas que tienes asignados.'
+            : updateError.message,
+          variant: 'destructive',
+        });
+        return;
+      }
       if (previousStatus !== payload.status || normalizeEnvironment(previousEnvironment) !== normalizeEnvironment(payload.status_environment)) {
         await recordIncidentStatusChange({
           projectId: selected.project_id,
@@ -458,7 +477,9 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
             {selected && (
               <div className="mt-2 text-sm space-y-1">
                 <div><span className="font-medium">Creado por:</span> {createdByEmail || 'Desconocido'}</div>
-                {assignedToName && <div><span className="font-medium">Asignado a:</span> {assignedToName}</div>}
+                {projectRole.isClient
+                  ? (roleByPersonId[selected.assigned_to] && <div><span className="font-medium">Asignado a:</span> {roleByPersonId[selected.assigned_to]}</div>)
+                  : (assignedToName && <div><span className="font-medium">Asignado a:</span> {assignedToName}</div>)}
               </div>
             )}
           </DialogDescription>
@@ -508,7 +529,7 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
 	                      return (
 	                      <SelectItem key={s.value} value={s.value}>
 	                        <div className="flex items-center gap-2">
-	                          <Badge variant="outline" className={`${getAppStatusTone(next.status)} text-[10px] px-1 py-0.5`}>
+	                          <Badge variant="outline" className={`${getAppStatusTone(s.value)} text-[10px] px-1 py-0.5`}>
 	                            {s.label}
 	                          </Badge>
 	                        </div>
@@ -527,16 +548,27 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                 <Select value={detailForm.category} onValueChange={(v) => setDetailForm((f) => ({ ...f, category: v }))}>
                   <SelectTrigger><SelectValue placeholder="Categoría" /></SelectTrigger>
                   <SelectContent>
-                    {CATEGORY_OPTIONS.map((c) => (<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
+                    {categoryOptions.map((c) => (<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label>Épica</Label>
-                <Input list="epic-suggestions" placeholder="Escribe o selecciona..." value={detailForm.epic} onChange={(e) => setDetailForm((f) => ({ ...f, epic: e.target.value }))} />
-                <datalist id="epic-suggestions">
-                  {epicOptions.map((opt) => (<option key={opt} value={opt} />))}
-                </datalist>
+                {projectRole.allowedEpics ? (
+                  <Select value={detailForm.epic} onValueChange={(v) => setDetailForm((f) => ({ ...f, epic: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                    <SelectContent>
+                      {projectRole.allowedEpics.map((opt) => (<SelectItem key={opt} value={opt}>{opt}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <>
+                    <Input list="epic-suggestions" placeholder="Escribe o selecciona..." value={detailForm.epic} onChange={(e) => setDetailForm((f) => ({ ...f, epic: e.target.value }))} />
+                    <datalist id="epic-suggestions">
+                      {epicOptions.map((opt) => (<option key={opt} value={opt} />))}
+                    </datalist>
+                  </>
+                )}
               </div>
               <div>
                 <Label>Fecha</Label>
@@ -564,7 +596,10 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                 </Select>
               </div>
               <div className="md:col-span-2">
-                <Label>Personas asignadas</Label>
+                <Label>{projectRole.isClient ? 'Roles asignados' : 'Personas asignadas'}</Label>
+                {projectRole.isClient ? (
+                  <TaskAssignmentRolesReadonly taskId={selected?.id ?? null} roleByPersonId={roleByPersonId} />
+                ) : (
                 <TaskAssignmentsManager 
                   taskId={selected?.id} 
                   teamMembers={teamMembers}
@@ -585,6 +620,7 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                     }
                   }}
                 />
+                )}
               </div>
               <div className="md:col-span-2">
                 <Label>Descripción</Label>

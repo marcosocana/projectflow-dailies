@@ -178,10 +178,21 @@ export const getIncidentStatusTone = (status: IncidentStatus | string | null | u
   return 'bg-gray-100 text-gray-800 border-gray-300';
 };
 
-export const getAppStatusTone = (status: IncidentStatus | TaskStatus | string | null | undefined) => {
+/**
+ * Color de un estado. Si se pasa el entorno, las resueltas se distinguen por entorno
+ * (de más claro a más oscuro: Local < DEV < PRE < PRO). Sin entorno, una resuelta
+ * cuenta como PRO, igual que en el resto de la lógica de estados.
+ */
+export const getAppStatusTone = (
+  rawStatus: IncidentStatus | TaskStatus | string | null | undefined,
+  environment?: string | null,
+) => {
+  const status = environment === undefined ? rawStatus : getStatusLogValue(rawStatus, environment);
   if (status === 'in_progress') return 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-transparent';
   if (status === 'resolved_LOCAL' || status === 'resolved_local') return 'bg-green-200 text-green-900 border-transparent';
-  if (status === 'resolved' || status === 'resolved_yesterday' || status === 'in_qa' || String(status || '').startsWith('resolved_')) return 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent';
+  if (status === 'resolved_DEV') return 'bg-green-300 text-green-900 border-transparent';
+  if (status === 'resolved_PRE' || status === 'in_qa') return 'bg-green-500 text-green-950 border-transparent';
+  if (status === 'resolved' || status === 'resolved_yesterday' || String(status || '').startsWith('resolved_')) return 'bg-green-700 text-white border-transparent';
   if (status === 'blocked') return 'bg-destructive text-destructive-foreground border-transparent';
   if (status === 'closed') return 'bg-muted text-muted-foreground border-transparent';
   return 'bg-muted text-muted-foreground border-transparent';
