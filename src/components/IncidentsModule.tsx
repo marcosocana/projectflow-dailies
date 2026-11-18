@@ -442,6 +442,8 @@ export default function IncidentsModule({
   // Estado para asignaciones múltiples durante creación
   const [createAssignments, setCreateAssignments] = useState<Array<{person: string, status: IncidentStatus, environment?: TaskEnvironment | null}>>([]);
   const [manualIncidentIdEnabled, setManualIncidentIdEnabled] = useState(true);
+  // Si el usuario escribe el ID a mano, deja de proponerse el siguiente número libre.
+  const [incidentIdTouched, setIncidentIdTouched] = useState(false);
   // Admin/Equipo: oculta las tareas internas (INT) para ver lo mismo que un cliente.
   const [excludeInternal, setExcludeInternal] = useState(false);
   const excludeInternalRef = useRef(false);
@@ -726,6 +728,7 @@ export default function IncidentsModule({
     }
   };
   const resetForm = () => {
+    setIncidentIdTouched(false);
     setForm({
       incidentNumber: '',
       name: '',
@@ -799,6 +802,23 @@ export default function IncidentsModule({
     if (error) throw error;
     return filePath;
   };
+
+  // Al crear una tarea con ID manual se propone el siguiente número libre de su tipo.
+  useEffect(() => {
+    if (!createOpen || editingId || !manualIncidentIdEnabled || incidentIdTouched) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await (supabase.rpc as any)('next_incident_number', {
+        _project_id: projectId,
+        _category: form.category
+      });
+      if (cancelled || error || typeof data !== 'number') return;
+      setForm(f => ({ ...f, incidentNumber: String(data) }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [createOpen, editingId, manualIncidentIdEnabled, incidentIdTouched, form.category, projectId]);
 
   const loadNextIncidentNumber = async () => {
     return (await loadNextInternalTaskId(projectId)).number;
@@ -2087,6 +2107,18 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
           <DialogDescription>Completa la información de la tarea</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto pr-2">
+          <div className="space-y-2 md:col-span-2">
+            <RequiredLabel>Tipo de tarea</RequiredLabel>
+            <Select value={form.category} onValueChange={v => setForm(f => ({
+              ...f,
+              category: v
+            }))}>
+              <SelectTrigger><SelectValue placeholder="Selecciona el tipo" /></SelectTrigger>
+              <SelectContent>
+                {categoryOptions.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">
               <RequiredLabel>ID</RequiredLabel>
@@ -2104,6 +2136,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                         incidentNumber: String(autoNumber),
                       }));
                     } else {
+                      setIncidentIdTouched(false);
                       setForm(f => ({ ...f, incidentNumber: '' }));
                     }
                   }}
@@ -2118,10 +2151,13 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                 maxLength={manualIncidentIdEnabled ? 6 : undefined}
                 placeholder={manualIncidentIdEnabled ? 'Máx. 6 dígitos' : '1'}
                 value={form.incidentNumber}
-                onChange={e => setForm(f => ({
-                  ...f,
-                  incidentNumber: formatManualId(e.target.value)
-                }))}
+                onChange={e => {
+                  setIncidentIdTouched(true);
+                  setForm(f => ({
+                    ...f,
+                    incidentNumber: formatManualId(e.target.value)
+                  }));
+                }}
                 readOnly={!manualIncidentIdEnabled}
                 required={manualIncidentIdEnabled}
               />
@@ -2296,18 +2332,6 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                </Select>
              </div>
            )}
-           <div className="space-y-2">
-             <Label>Categoría</Label>
-             <Select value={form.category} onValueChange={v => setForm(f => ({
-              ...f,
-              category: v
-            }))}>
-               <SelectTrigger><SelectValue placeholder="Categoría" /></SelectTrigger>
-               <SelectContent>
-                 {categoryOptions.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-               </SelectContent>
-             </Select>
-           </div>
           <div className="space-y-2 md:col-span-2">
             <Label>Descripción</Label>
             <Textarea value={form.description} onChange={e => setForm(f => ({

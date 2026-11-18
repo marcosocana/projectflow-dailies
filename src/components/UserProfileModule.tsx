@@ -14,12 +14,57 @@ interface UserProfileModuleProps {
 }
 
 export default function UserProfileModule({ projectId }: UserProfileModuleProps) {
-  const { user } = useAuth();
+  const { user, signIn, updatePassword } = useAuth();
   const { toast } = useToast();
   const { isClient } = useProjectRole();
   const [resetOpen, setResetOpen] = useState(false);
   const [resetPass, setResetPass] = useState('');
   const [resetting, setResetting] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user?.email) return;
+
+    if (newPassword.length < 6) {
+      toast({ title: 'Contraseña demasiado corta', description: 'Debe tener al menos 6 caracteres.', variant: 'destructive' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: 'Las contraseñas no coinciden', description: 'Revisa la nueva contraseña y su confirmación.', variant: 'destructive' });
+      return;
+    }
+    if (newPassword === currentPassword) {
+      toast({ title: 'Contraseña repetida', description: 'La nueva contraseña debe ser distinta de la actual.', variant: 'destructive' });
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      // Se comprueba la contraseña actual antes de permitir el cambio.
+      const { error: verifyError } = await signIn(user.email, currentPassword);
+      if (verifyError) {
+        toast({ title: 'Contraseña actual incorrecta', description: 'Revisa la contraseña actual e inténtalo de nuevo.', variant: 'destructive' });
+        return;
+      }
+
+      const { error } = await updatePassword(newPassword);
+      if (error) {
+        toast({ title: 'No se pudo cambiar la contraseña', description: error.message, variant: 'destructive' });
+        return;
+      }
+
+      toast({ title: 'Contraseña actualizada', description: 'Ya puedes usar tu nueva contraseña.' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,6 +146,60 @@ export default function UserProfileModule({ projectId }: UserProfileModuleProps)
               />
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Cambiar contraseña */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Cambiar contraseña</CardTitle>
+          <CardDescription>
+            Introduce tu contraseña actual y elige una nueva (mínimo 6 caracteres).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleChangePassword} className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Contraseña actual</Label>
+              <Input
+                id="current-password"
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="profile-new-password">Nueva contraseña</Label>
+              <Input
+                id="profile-new-password"
+                type="password"
+                autoComplete="new-password"
+                minLength={6}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="profile-confirm-password">Confirmar contraseña</Label>
+              <Input
+                id="profile-confirm-password"
+                type="password"
+                autoComplete="new-password"
+                minLength={6}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+            </div>
+            <div className="md:col-span-3">
+              <Button type="submit" disabled={changingPassword}>
+                {changingPassword ? 'Guardando...' : 'Cambiar contraseña'}
+              </Button>
+            </div>
+          </form>
         </CardContent>
       </Card>
 
