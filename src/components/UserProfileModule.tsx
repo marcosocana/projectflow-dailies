@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useProjectRole } from '@/contexts/ProjectRoleContext';
 
 interface UserProfileModuleProps {
   projectId: string;
@@ -15,6 +16,7 @@ interface UserProfileModuleProps {
 export default function UserProfileModule({ projectId }: UserProfileModuleProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { isClient } = useProjectRole();
   const [resetOpen, setResetOpen] = useState(false);
   const [resetPass, setResetPass] = useState('');
   const [resetting, setResetting] = useState(false);
@@ -131,12 +133,14 @@ export default function UserProfileModule({ projectId }: UserProfileModuleProps)
             </div>
           </section>
 
-          <section className="space-y-3">
-            <h3 className="text-lg font-semibold">Acciones</h3>
-            <Button variant="destructive" onClick={() => setResetOpen(true)}>
-              Resetar sistema
-            </Button>
-          </section>
+          {!isClient && (
+            <section className="space-y-3">
+              <h3 className="text-lg font-semibold">Acciones</h3>
+              <Button variant="destructive" onClick={() => setResetOpen(true)}>
+                Resetar sistema
+              </Button>
+            </section>
+          )}
         </CardContent>
       </Card>
 

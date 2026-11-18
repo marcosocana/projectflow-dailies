@@ -211,6 +211,8 @@ export type Database = {
           device: string | null
           environment: string | null
           epic: string | null
+          informed: boolean
+          requester: string | null
           evidence: string | null
           id: string
           incident_number: number
@@ -232,6 +234,8 @@ export type Database = {
           device?: string | null
           environment?: string | null
           epic?: string | null
+          informed?: boolean
+          requester?: string | null
           evidence?: string | null
           id?: string
           incident_number?: number
@@ -253,6 +257,8 @@ export type Database = {
           device?: string | null
           environment?: string | null
           epic?: string | null
+          informed?: boolean
+          requester?: string | null
           evidence?: string | null
           id?: string
           incident_number?: number

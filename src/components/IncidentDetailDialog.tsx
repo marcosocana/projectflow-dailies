@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Trash2, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import TaskAssignmentsManager from '@/components/TaskAssignmentsManager';
+import { Switch } from '@/components/ui/switch';
 import TaskAssignmentRolesReadonly from '@/components/TaskAssignmentRolesReadonly';
 import { useProjectPeopleRoles } from '@/hooks/useProjectPeopleRoles';
 import { syncSingleAssignmentStatus } from '@/hooks/useSyncTaskStatus';
@@ -146,6 +147,8 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     status: 'pending',
     category: 'incident',
     epic: '',
+    requester: '',
+    informed: false,
     additionalComments: '',
     env: '',
     statusEnv: '',
@@ -185,7 +188,7 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
     setDetailEvidenceFile(null);
     isInitialDetailLoad.current = true;
     setDetailForm({
-      incidentNumber: '', name: '', description: '', occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', epic: '', additionalComments: '', env: '', statusEnv: '', dev: '', evidenceLink: '', assignedTo: 'unassigned'
+      incidentNumber: '', name: '', description: '', occurredAt: new Date().toISOString(), status: 'pending', category: 'incident', epic: '', requester: '', informed: false, additionalComments: '', env: '', statusEnv: '', dev: '', evidenceLink: '', assignedTo: 'unassigned'
     });
   };
 
@@ -233,6 +236,8 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
           status: data.status === 'in_qa' ? 'resolved' : data.status || 'pending',
           category: getDisplayCategory(data),
           epic: data.epic || '',
+          requester: data.requester || '',
+          informed: !!data.informed,
           additionalComments: cleanAdditionalComments(data.additional_comments),
           env: pick(data.environment || '', ENV_OPTIONS),
           statusEnv: data.status === 'in_qa' ? 'PRE' : pick(data.status_environment || '', STATUS_ENV_OPTIONS),
@@ -287,6 +292,8 @@ export default function IncidentDetailDialog({ open, onOpenChange, incidentId, o
         category: categoryPayload.category,
         additional_comments: categoryPayload.additional_comments,
         epic: detailForm.epic,
+        requester: detailForm.requester.trim() || null,
+        informed: detailForm.informed,
         evidence: selected.evidence,
         assigned_to: detailForm.assignedTo === 'unassigned' ? null : detailForm.assignedTo,
       };
@@ -569,6 +576,14 @@ Comentarios adicionales: ${selected.additional_comments || 'N/A'}`;
                     </datalist>
                   </>
                 )}
+              </div>
+              <div>
+                <Label>Solicitante</Label>
+                <Input placeholder="Quién lo ha solicitado" value={detailForm.requester} onChange={(e) => setDetailForm((f) => ({ ...f, requester: e.target.value }))} />
+              </div>
+              <div className="flex items-center gap-2 self-end pb-2">
+                <Switch id="detail-informed" checked={detailForm.informed} onCheckedChange={(checked) => setDetailForm((f) => ({ ...f, informed: checked }))} />
+                <Label htmlFor="detail-informed">Informado</Label>
               </div>
               <div>
                 <Label>Fecha</Label>

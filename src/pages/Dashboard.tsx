@@ -276,7 +276,7 @@ const Dashboard = () => {
                 <SheetHeader>
                   <SheetTitle></SheetTitle>
                 </SheetHeader>
-                {canOpenAdmin && (
+                {canOpenAdmin && !isClient && (
                   <div className="mt-6">
                     <Button
                       variant="outline"
@@ -292,7 +292,7 @@ const Dashboard = () => {
                   </div>
                 )}
                 <div className="mt-6">
-                  {currentProject && !isClient && (
+                  {currentProject && (
                     <Suspense fallback={<ModuleLoading />}>
                       <UserProfileModule projectId={currentProject.id} />
                     </Suspense>

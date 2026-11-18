@@ -110,7 +110,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const MADRID_TIME_ZONE = 'Europe/Madrid';
-const INCIDENT_COLUMNS = 'id,project_id,incident_number,name,description,category,additional_comments,status,status_environment,environment,device,assigned_to,occurred_at,created_at,updated_at,created_by,evidence,order_position,epic';
+const INCIDENT_COLUMNS = 'id,project_id,incident_number,name,description,category,additional_comments,status,status_environment,environment,device,assigned_to,occurred_at,created_at,updated_at,created_by,evidence,order_position,epic,requester,informed';
 const PERSON_COLUMNS = 'id,project_id,name,role,color,user_id,order_position,created_at,updated_at';
 
 const formatManualId = (value: string | number | null | undefined) =>
@@ -182,16 +182,27 @@ const madridDateTimeLocalToIso = (value: string) => {
 };
 
 /* UI helpers */
+// Máximo de caracteres del nombre en el listado; el resto se corta con "..." y el hover muestra el texto completo.
+const NAME_MAX_CHARS = 116;
+const truncateName = (value: string | null | undefined) => {
+  const text = String(value ?? '');
+  return text.length > NAME_MAX_CHARS ? `${text.slice(0, NAME_MAX_CHARS).trimEnd()}...` : text;
+};
+
 function StatusBadge({
   status,
   environment,
+  short = false,
 }: {
   status: IncidentStatus;
   environment?: string | null;
+  short?: boolean;
 }) {
+  const key = getStatusLogValue(status, environment);
+  const fullLabel = getStatusLogLabel(key);
   return (
-    <Badge variant="outline" className={`${getAppStatusTone(status, environment ?? null)} border-transparent`}>
-      {getStatusLogLabel(getStatusLogValue(status, environment))}
+    <Badge variant="outline" title={fullLabel} className={`${getAppStatusTone(status, environment ?? null)} border-transparent`}>
+      {short ? KPI_STATUS_SHORT_LABELS[key] || fullLabel : fullLabel}
     </Badge>
   );
 }
@@ -392,6 +403,8 @@ export default function IncidentsModule({
     statusEnvironment: '',
     device: '',
     epic: '',
+    requester: '',
+    informed: false,
     occurredAt: new Date().toISOString(),
     status: 'pending',
     category: 'incident',
@@ -717,6 +730,8 @@ export default function IncidentsModule({
       statusEnvironment: '',
       device: 'N/A',
       epic: projectRole.allowedEpics?.length === 1 ? projectRole.allowedEpics[0] : '',
+      requester: '',
+      informed: false,
       occurredAt: new Date().toISOString(),
       status: 'pending',
       category: projectRole.allowedCategories?.[0] ?? 'incident',
@@ -839,6 +854,7 @@ export default function IncidentsModule({
           status_environment: form.status === 'resolved' || form.status === 'closed' ? normalizeEnvironment(form.statusEnvironment) || 'PRO' : null,
           device: deviceValue,
           epic: form.epic,
+          requester: form.requester.trim() || null,
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
           category: categoryPayload.category,
@@ -900,6 +916,8 @@ export default function IncidentsModule({
           environment: environmentValue,
           device: deviceValue,
           epic: form.epic,
+          requester: form.requester.trim() || null,
+          informed: form.informed,
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
           category: categoryPayload.category,
@@ -991,6 +1009,8 @@ export default function IncidentsModule({
           status_environment: form.status === 'resolved' || form.status === 'closed' ? normalizeEnvironment(form.statusEnvironment) || 'PRO' : null,
           device: form.device || '',
           epic: form.epic,
+          requester: form.requester.trim() || null,
+          informed: form.informed,
           occurred_at: new Date(form.occurredAt).toISOString(),
           status: form.status,
           category: categoryPayload.category,
@@ -1063,6 +1083,8 @@ export default function IncidentsModule({
       statusEnvironment: incident.status === 'in_qa' ? 'PRE' : incident.status_environment || '',
       device: incident.device || '',
       epic: incident.epic || '',
+      requester: incident.requester || '',
+      informed: !!incident.informed,
       occurredAt: incident.occurred_at ? new Date(incident.occurred_at).toISOString() : new Date().toISOString(),
       status: incident.status === 'in_qa' ? 'resolved' : incident.status || 'pending',
       category: getDisplayCategory(incident),
@@ -1500,7 +1522,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                     role="button"
                     aria-label="Filtrar global: Total"
                   >
-                    <div className="text-lg font-bold leading-5">{incidents.length}</div>
+                    <div className="text-lg font-bold leading-5">{totalIncidents + totalImprovements + totalCorrectiveImprovements}</div>
                     <Badge variant="outline" className="bg-accent text-accent-foreground border-transparent mt-1 text-[9px] px-1 py-0.5">Total</Badge>
                   </div>
                 );
@@ -1704,7 +1726,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                     <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('occurred_at')}>
                       Fecha {sortKey === 'occurred_at' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
-                    <TableHead className="w-32 cursor-pointer select-none" onClick={() => toggleSort('status')}>
+                    <TableHead className="w-24 cursor-pointer select-none" onClick={() => toggleSort('status')}>
                       Estado {sortKey === 'status' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
                     <TableHead className={`${isClient ? 'w-28' : 'w-16'} cursor-pointer select-none`} onClick={() => toggleSort('assigned_to')}>
@@ -1723,8 +1745,8 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                       </TableCell>
                       <TableCell className="font-mono w-20">{formatIncidentReference(i) ?? '—'}</TableCell>
                       <TableCell className="font-medium">
-                        <div className="break-words hyphens-auto leading-tight">
-                          {i.name}
+                        <div className="break-words hyphens-auto leading-tight" title={i.name}>
+                          {truncateName(i.name)}
                         </div>
                       </TableCell>
                       <TableCell className="w-44">
@@ -1734,7 +1756,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                       </TableCell>
                       <TableCell className="w-20">{i.device || '-'}</TableCell>
                       <TableCell>{new Date(i.occurred_at).toLocaleDateString('es-ES')}</TableCell>
-                      <TableCell className="w-32"><StatusBadge status={i.status} environment={i.status_environment} /></TableCell>
+                      <TableCell className="w-24"><StatusBadge short status={i.status} environment={i.status_environment} /></TableCell>
                       <TableCell className={isClient ? 'w-28' : 'w-16'}>
                         <TaskAssignmentCell assignedIds={assigneesByIncident[i.id]} teamMembers={teamMembers} roleByPersonId={isClient ? roleByPersonId : undefined} />
                       </TableCell>
@@ -2037,18 +2059,20 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
             <div className="flex items-center justify-between gap-3">
               <RequiredLabel>ID</RequiredLabel>
               <div className={`flex items-center gap-2 ${isClient ? 'hidden' : ''}`}>
-                <Label htmlFor="manual-incident-id" className="text-xs text-muted-foreground">Manual</Label>
+                <Label htmlFor="internal-incident-id" className="text-xs text-muted-foreground">Interna</Label>
                 <Switch
-                  id="manual-incident-id"
-                  checked={manualIncidentIdEnabled}
-                  onCheckedChange={async (checked) => {
-                    setManualIncidentIdEnabled(checked);
-                    if (!checked) {
+                  id="internal-incident-id"
+                  checked={!manualIncidentIdEnabled}
+                  onCheckedChange={async (internal) => {
+                    setManualIncidentIdEnabled(!internal);
+                    if (internal) {
                       const autoNumber = await loadNextIncidentNumber();
                       setForm(f => ({
                         ...f,
                         incidentNumber: String(autoNumber),
                       }));
+                    } else {
+                      setForm(f => ({ ...f, incidentNumber: '' }));
                     }
                   }}
                 />
@@ -2114,6 +2138,22 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
   </SelectContent>
             </Select>
           </div>
+          <div className="space-y-2">
+            <Label>Solicitante</Label>
+            <Input value={form.requester} placeholder="Quién lo ha solicitado" onChange={e => setForm(f => ({
+              ...f,
+              requester: e.target.value
+            }))} />
+          </div>
+          {editingId && (
+            <div className="flex items-center gap-2 self-end pb-2">
+              <Switch id="incident-informed" checked={form.informed} onCheckedChange={checked => setForm(f => ({
+                ...f,
+                informed: checked
+              }))} />
+              <Label htmlFor="incident-informed">Informado</Label>
+            </div>
+          )}
           <div className="space-y-2">
             <Label>Fecha (España)</Label>
             <Input type="datetime-local" value={getMadridDateTimeLocal(form.occurredAt)} onChange={e => {
