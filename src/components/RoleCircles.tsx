@@ -14,11 +14,11 @@ function RoleCircles({ roles }: RoleCirclesProps) {
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-1">
+    <div className="flex items-center justify-center -space-x-3">
       {groups.map(group => (
         <div
           key={group.key}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+          className="relative w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold ring-2 ring-background transition-transform hover:z-10 hover:scale-110"
           style={{ backgroundColor: group.color }}
           title={group.label}
         >

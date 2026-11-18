@@ -1765,7 +1765,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                   <col className="w-20" />
                   <col className="w-28" />
                   <col className="w-24" />
-                  <col className={isClient ? 'w-28' : 'w-16'} />
+                  <col className={isClient ? 'w-32' : 'w-16'} />
                   <col className="w-24" />
                 </colgroup>
                 <TableHeader>
@@ -1789,7 +1789,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                     <TableHead className="w-24 cursor-pointer select-none" onClick={() => toggleSort('status')}>
                       Estado {sortKey === 'status' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
-                    <TableHead className={`${isClient ? 'w-28' : 'w-16'} cursor-pointer select-none`} onClick={() => toggleSort('assigned_to')}>
+                    <TableHead className={`${isClient ? 'w-32' : 'w-16'} cursor-pointer select-none`} onClick={() => toggleSort('assigned_to')}>
                       Asign. {sortKey === 'assigned_to' ? (sortDir === 'asc' ? <ArrowUp className="inline h-4 w-4 ml-1" /> : <ArrowDown className="inline h-4 w-4 ml-1" />) : <ArrowUpDown className="inline h-4 w-4 ml-1" />}
                     </TableHead>
                     <TableHead className="w-24">Acciones</TableHead>
@@ -1817,7 +1817,7 @@ Estado: ${getStatusLogLabel(getStatusLogValue(incident.status, incident.status_e
                       <TableCell className="w-20">{i.device || '-'}</TableCell>
                       <TableCell>{new Date(i.occurred_at).toLocaleDateString('es-ES')}</TableCell>
                       <TableCell className="w-24"><StatusBadge short status={i.status} environment={i.status_environment} /></TableCell>
-                      <TableCell className={isClient ? 'w-28' : 'w-16'}>
+                      <TableCell className={isClient ? 'w-32' : 'w-16'}>
                         <TaskAssignmentCell assignedIds={assigneesByIncident[i.id]} teamMembers={teamMembers} roleByPersonId={isClient ? roleByPersonId : undefined} />
                       </TableCell>
                       <TableCell className="w-24">
